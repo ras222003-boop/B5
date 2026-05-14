@@ -1,13 +1,12 @@
 /*
- * Design: Warm Contemporary
- * Exam Demo page - Interactive exam simulation for visually impaired
+ * Real Exam Experience - Camera OCR + TTS + STT
+ * Uses real camera, real AI OCR, real speech synthesis and recognition
  */
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Camera,
   Volume2,
-  VolumeX,
   Mic,
   MicOff,
   ChevronRight,
@@ -16,141 +15,307 @@ import {
   FileDown,
   RotateCcw,
   Eye,
-  Bot,
   Loader2,
+  Upload,
+  ImageIcon,
+  AlertCircle,
 } from "lucide-react";
 import Layout from "@/components/Layout";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
+import { useCamera } from "@/hooks/useCamera";
+import { useTextToSpeech, useSpeechToText } from "@/hooks/useSpeech";
 
 interface Question {
   id: number;
   text: string;
   type: "multiple" | "text";
-  options?: string[];
-  answer?: string;
+  options: string[];
 }
 
-const sampleQuestions: Question[] = [
-  {
-    id: 1,
-    text: "ما هي عاصمة المملكة العربية السعودية؟",
-    type: "multiple",
-    options: ["الرياض", "جدة", "مكة المكرمة", "الدمام"],
-  },
-  {
-    id: 2,
-    text: "كم عدد أركان الإسلام؟",
-    type: "multiple",
-    options: ["ثلاثة", "أربعة", "خمسة", "ستة"],
-  },
-  {
-    id: 3,
-    text: "اكتب جملة مفيدة تتضمن كلمة (العلم).",
-    type: "text",
-  },
-  {
-    id: 4,
-    text: "ما هو أطول نهر في العالم؟",
-    type: "multiple",
-    options: ["نهر النيل", "نهر الأمازون", "نهر المسيسيبي", "نهر اليانغتسي"],
-  },
-  {
-    id: 5,
-    text: "اشرح أهمية القراءة في حياة الإنسان.",
-    type: "text",
-  },
-];
+interface ExamData {
+  examTitle: string;
+  questions: Question[];
+}
 
-type ExamStage = "scan" | "exam" | "review" | "export";
+type ExamStage = "scan" | "processing" | "exam" | "review" | "export";
 
 export default function ExamDemo() {
   const [stage, setStage] = useState<ExamStage>("scan");
+  const [examData, setExamData] = useState<ExamData | null>(null);
   const [currentQ, setCurrentQ] = useState(0);
   const [answers, setAnswers] = useState<Record<number, string>>({});
-  const [isScanning, setIsScanning] = useState(false);
-  const [isSpeaking, setIsSpeaking] = useState(false);
-  const [isListening, setIsListening] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
   const [textInput, setTextInput] = useState("");
+  const [capturedImage, setCapturedImage] = useState<string | null>(null);
+  const [ocrError, setOcrError] = useState<string | null>(null);
 
-  const question = sampleQuestions[currentQ];
-  const totalQuestions = sampleQuestions.length;
+  const { videoRef, canvasRef, isActive, error: cameraError, startCamera, stopCamera, captureImage } = useCamera();
+  const { speak, stop: stopSpeaking, isSpeaking } = useTextToSpeech();
+  const { startListening, stopListening, isListening, transcript, error: speechError, setTranscript } = useSpeechToText();
+
+  const question = examData?.questions[currentQ];
+  const totalQuestions = examData?.questions.length || 0;
   const answeredCount = Object.keys(answers).length;
 
-  const handleScan = () => {
-    setIsScanning(true);
-    toast.info("جاري مسح ورقة الاختبار...", { description: "يتم التعرف على الأسئلة بتقنية OCR" });
-    setTimeout(() => {
-      setIsScanning(false);
+  // Update text input when speech transcript changes
+  useEffect(() => {
+    if (transcript) {
+      setTextInput(transcript);
+    }
+  }, [transcript]);
+
+  // Speak question when navigating
+  const speakQuestion = useCallback(() => {
+    if (!question) return;
+    let text = `السؤال ${question.id}: ${question.text}`;
+    if (question.type === "multiple" && question.options.length > 0) {
+      text += ". الخيارات هي: ";
+      question.options.forEach((opt, i) => {
+        text += `${String.fromCharCode(1571 + i)}) ${opt}. `;
+      });
+    }
+    speak(text);
+  }, [question, speak]);
+
+  // Handle camera capture
+  const handleCapture = useCallback(() => {
+    const imageData = captureImage();
+    if (imageData) {
+      setCapturedImage(imageData);
+      stopCamera();
+      toast.success("تم التقاط الصورة بنجاح!");
+    }
+  }, [captureImage, stopCamera]);
+
+  // Handle file upload
+  const handleFileUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith("image/")) {
+      toast.error("يرجى اختيار ملف صورة");
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      setCapturedImage(reader.result as string);
+      stopCamera();
+      toast.success("تم تحميل الصورة بنجاح!");
+    };
+    reader.readAsDataURL(file);
+  }, [stopCamera]);
+
+  // Send image to OCR API
+  const processImage = useCallback(async () => {
+    if (!capturedImage) return;
+
+    setIsProcessing(true);
+    setOcrError(null);
+    setStage("processing");
+
+    try {
+      const response = await fetch("/api/ocr", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ imageBase64: capturedImage }),
+      });
+
+      if (!response.ok) {
+        const err = await response.json();
+        throw new Error(err.error || "فشل في معالجة الصورة");
+      }
+
+      const data: ExamData = await response.json();
+
+      if (!data.questions || data.questions.length === 0) {
+        throw new Error("لم يتم العثور على أسئلة في الصورة. تأكد من وضوح الصورة وحاول مرة أخرى.");
+      }
+
+      setExamData(data);
       setStage("exam");
-      toast.success("تم التعرف على الاختبار بنجاح!", { description: `تم اكتشاف ${totalQuestions} أسئلة` });
-    }, 3000);
-  };
+      toast.success(`تم التعرف على ${data.questions.length} أسئلة بنجاح!`, {
+        description: data.examTitle || "اختبار",
+      });
+
+      // Read the first question automatically
+      setTimeout(() => {
+        const q = data.questions[0];
+        let text = `مرحباً! تم التعرف على ${data.questions.length} أسئلة. السؤال الأول: ${q.text}`;
+        if (q.type === "multiple" && q.options.length > 0) {
+          text += ". الخيارات هي: ";
+          q.options.forEach((opt, i) => {
+            text += `${String.fromCharCode(1571 + i)}) ${opt}. `;
+          });
+        }
+        speak(text);
+      }, 500);
+    } catch (err: any) {
+      console.error("OCR Error:", err);
+      setOcrError(err.message);
+      setStage("scan");
+      toast.error("فشل في التعرف على الاختبار", { description: err.message });
+    } finally {
+      setIsProcessing(false);
+    }
+  }, [capturedImage, speak]);
 
   const handleAnswer = (answer: string) => {
+    if (!question) return;
     setAnswers((prev) => ({ ...prev, [question.id]: answer }));
-    toast.success(`تم تسجيل إجابة السؤال ${question.id}`);
+    speak(`تم تسجيل إجابتك: ${answer}`);
   };
 
   const handleTextAnswer = () => {
     if (textInput.trim()) {
       handleAnswer(textInput);
       setTextInput("");
+      setTranscript("");
     }
   };
 
   const handleVoiceInput = () => {
     if (isListening) {
-      setIsListening(false);
-      // Simulate voice recognition
-      const sampleAnswers = [
-        "العلم نور يهدي الإنسان إلى الطريق الصحيح",
-        "القراءة تنمي العقل وتوسع المدارك وتزيد من المعرفة",
-      ];
-      const randomAnswer = sampleAnswers[Math.floor(Math.random() * sampleAnswers.length)];
-      setTextInput(randomAnswer);
-      toast.info("تم تحويل الصوت إلى نص");
+      stopListening();
     } else {
-      setIsListening(true);
-      toast.info("جاري الاستماع... تحدث الآن");
-      setTimeout(() => {
-        setIsListening(false);
-        const sampleAnswers = [
-          "العلم نور يهدي الإنسان إلى الطريق الصحيح",
-          "القراءة تنمي العقل وتوسع المدارك وتزيد من المعرفة",
-        ];
-        const randomAnswer = sampleAnswers[Math.floor(Math.random() * sampleAnswers.length)];
-        setTextInput(randomAnswer);
-        toast.info("تم تحويل الصوت إلى نص");
-      }, 3000);
+      speak("تحدث الآن بإجابتك");
+      setTimeout(() => startListening(), 1500);
     }
   };
 
-  const speakQuestion = () => {
-    setIsSpeaking(true);
-    toast.info("جاري قراءة السؤال...", { description: question.text });
-    setTimeout(() => setIsSpeaking(false), 2000);
+  const goToQuestion = (index: number) => {
+    stopSpeaking();
+    setCurrentQ(index);
+    setTextInput(answers[examData!.questions[index].id] || "");
   };
 
-  const handleExport = () => {
-    toast.success("تم تصدير الاختبار بنجاح!", {
-      description: "تم إنشاء ملف PDF جاهز للطباعة",
-    });
+  const [pdfReady, setPdfReady] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
+  const [pdfBlobUrl, setPdfBlobUrl] = useState<string | null>(null);
+
+  const handleExport = async () => {
+    if (!examData) return;
+    setIsExporting(true);
+    try {
+      // Dynamically import jsPDF to avoid bundle bloat
+      const { default: jsPDF } = await import("jspdf");
+
+      const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+
+      // Load Arabic font from Google Fonts CDN as base64
+      // We'll use the built-in Helvetica and write Arabic via addFont workaround
+      // jsPDF doesn't natively support Arabic, so we use HTML rendering approach
+
+      const title = examData.examTitle || "اختبار";
+      const qs = examData.questions;
+
+      // Build clean HTML for PDF
+      const htmlContent = `
+<!DOCTYPE html>
+<html dir="rtl" lang="ar">
+<head>
+<meta charset="UTF-8">
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700&display=swap');
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: 'Tajawal', 'Arial', sans-serif; direction: rtl; padding: 30px; color: #1a1a1a; line-height: 1.8; font-size: 14px; }
+.header { text-align: center; margin-bottom: 30px; padding-bottom: 15px; border-bottom: 3px solid #d97706; }
+.header h1 { font-size: 24px; color: #92400e; margin-bottom: 6px; }
+.header .subtitle { font-size: 12px; color: #78716c; }
+.header .logo { font-size: 14px; color: #d97706; font-weight: 700; margin-bottom: 8px; }
+.stats { display: flex; justify-content: center; gap: 40px; margin-bottom: 25px; }
+.stat { text-align: center; }
+.stat-num { font-size: 22px; font-weight: 700; color: #d97706; }
+.stat-label { font-size: 11px; color: #78716c; }
+.question { margin-bottom: 20px; padding: 15px; border: 1px solid #e7e5e4; border-radius: 10px; background: #fafaf9; }
+.q-header { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+.q-num { background: #d97706; color: white; width: 28px; height: 28px; border-radius: 6px; display: inline-flex; align-items: center; justify-content: center; font-weight: 700; font-size: 13px; }
+.q-text { font-size: 15px; font-weight: 500; }
+.options { margin-top: 6px; padding-right: 36px; font-size: 13px; color: #57534e; }
+.answer { margin-top: 10px; padding: 10px; background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 6px; }
+.answer-label { font-size: 11px; color: #15803d; font-weight: 700; }
+.answer-text { font-size: 14px; color: #166534; }
+.no-answer { margin-top: 10px; padding: 10px; background: #fef2f2; border: 1px solid #fecaca; border-radius: 6px; font-size: 13px; color: #dc2626; }
+.footer { margin-top: 30px; padding-top: 15px; border-top: 2px solid #e7e5e4; text-align: center; color: #78716c; font-size: 11px; }
+</style>
+</head>
+<body>
+<div class="header">
+  <div class="logo">بصيرة - منصة الاختبارات الذكية</div>
+  <h1>${title}</h1>
+  <div class="subtitle">تاريخ التصدير: ${new Date().toLocaleDateString("ar-SA", { year: "numeric", month: "long", day: "numeric" })}</div>
+</div>
+<div class="stats">
+  <div class="stat"><div class="stat-num">${qs.length}</div><div class="stat-label">عدد الأسئلة</div></div>
+  <div class="stat"><div class="stat-num">${Object.keys(answers).length}</div><div class="stat-label">تمت الإجابة</div></div>
+</div>
+${qs.map((q) => `
+<div class="question">
+  <div class="q-header">
+    <span class="q-num">${q.id}</span>
+    <span class="q-text">${q.text}</span>
+  </div>
+  ${q.type === "multiple" && q.options?.length ? `<div class="options">${q.options.map((o, i) => `<div>${String.fromCharCode(1571 + i)}) ${o}</div>`).join("")}</div>` : ""}
+  ${answers[q.id] ? `<div class="answer"><div class="answer-label">الإجابة:</div><div class="answer-text">${answers[q.id]}</div></div>` : `<div class="no-answer">لم يتم الإجابة</div>`}
+</div>`).join("")}
+<div class="footer">تم إنشاء هذا الملف بواسطة منصة بصيرة - الاختبارات الذكية لذوي الإعاقة البصرية</div>
+</body>
+</html>`;
+
+      // Use an iframe to render the HTML and trigger print-to-PDF
+      const blob = new Blob([htmlContent], { type: "text/html;charset=utf-8" });
+      const blobUrl = URL.createObjectURL(blob);
+
+      // Clean up old blob URL
+      if (pdfBlobUrl) URL.revokeObjectURL(pdfBlobUrl);
+      setPdfBlobUrl(blobUrl);
+      setPdfReady(true);
+
+      toast.success("تم تصدير الاختبار بنجاح!", { description: "اضغط تحميل PDF لحفظ الملف" });
+      speak("تم تصدير الاختبار بنجاح. اضغط زر تحميل PDF لحفظ الملف.");
+    } catch (err: any) {
+      toast.error("فشل في تصدير الاختبار", { description: err.message });
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  const downloadPdf = () => {
+    if (!pdfBlobUrl) return;
+    // Open the HTML in a new window and trigger the browser's print-to-PDF
+    const printWindow = window.open(pdfBlobUrl, "_blank");
+    if (printWindow) {
+      printWindow.addEventListener("load", () => {
+        setTimeout(() => printWindow.print(), 300);
+      });
+    } else {
+      // Fallback: direct download as HTML
+      const a = document.createElement("a");
+      a.href = pdfBlobUrl;
+      a.download = `${examData?.examTitle || "اختبار"}_بصيرة.html`;
+      a.click();
+    }
   };
 
   const resetExam = () => {
+    stopSpeaking();
+    stopCamera();
     setStage("scan");
     setCurrentQ(0);
     setAnswers({});
     setTextInput("");
+    setCapturedImage(null);
+    setExamData(null);
+    setOcrError(null);
   };
 
   return (
     <Layout>
-      <section className="py-12 md:py-16">
+      <section className="py-8 md:py-12">
         <div className="container max-w-3xl">
-          {/* Stage: Scan */}
           <AnimatePresence mode="wait">
+            {/* ========== Stage: SCAN ========== */}
             {stage === "scan" && (
               <motion.div
                 key="scan"
@@ -158,55 +323,196 @@ export default function ExamDemo() {
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -20 }}
                 transition={{ duration: 0.4 }}
-                className="text-center py-16"
               >
-                <div className="w-24 h-24 rounded-3xl bg-amber-100 flex items-center justify-center mx-auto mb-8">
-                  <Camera className="w-12 h-12 text-amber-600" />
+                <div className="text-center mb-8">
+                  <div className="w-20 h-20 rounded-3xl bg-amber-100 flex items-center justify-center mx-auto mb-6">
+                    <Camera className="w-10 h-10 text-amber-600" />
+                  </div>
+                  <h1 className="text-3xl md:text-4xl font-bold mb-3">مسح ورقة الاختبار</h1>
+                  <p className="text-muted-foreground text-lg max-w-md mx-auto">
+                    وجّه الكاميرا نحو ورقة الاختبار أو ارفع صورة من جهازك
+                  </p>
                 </div>
-                <h1 className="text-3xl md:text-4xl font-bold mb-4">تجربة الاختبار</h1>
-                <p className="text-muted-foreground text-lg mb-8 max-w-md mx-auto">
-                  هذه تجربة تفاعلية لمحاكاة عملية أداء الاختبار عبر منصة بصيرة. اضغط على الزر لبدء مسح ورقة الاختبار.
-                </p>
-                <Button
-                  size="lg"
-                  onClick={handleScan}
-                  disabled={isScanning}
-                  className="bg-amber-600 hover:bg-amber-700 text-white rounded-xl px-10 h-14 text-lg font-medium shadow-lg shadow-amber-200/50 active:scale-[0.97] transition-all"
-                >
-                  {isScanning ? (
-                    <>
-                      <Loader2 className="w-5 h-5 ml-2 animate-spin" />
-                      جاري المسح...
-                    </>
-                  ) : (
-                    <>
-                      <Camera className="w-5 h-5 ml-2" />
-                      مسح ورقة الاختبار
-                    </>
-                  )}
-                </Button>
-                {isScanning && (
-                  <motion.div
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    className="mt-8"
-                  >
-                    <div className="w-full max-w-xs mx-auto h-2 bg-amber-100 rounded-full overflow-hidden">
-                      <motion.div
-                        initial={{ width: "0%" }}
-                        animate={{ width: "100%" }}
-                        transition={{ duration: 3, ease: "linear" }}
-                        className="h-full bg-amber-500 rounded-full"
-                      />
+
+                {ocrError && (
+                  <div className="mb-6 p-4 rounded-xl bg-red-50 border border-red-200 flex items-start gap-3">
+                    <AlertCircle className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
+                    <div>
+                      <p className="text-red-700 font-medium text-sm">فشل في التعرف على الاختبار</p>
+                      <p className="text-red-600 text-sm mt-1">{ocrError}</p>
                     </div>
-                    <p className="text-sm text-muted-foreground mt-3">جاري التعرف على الأسئلة...</p>
-                  </motion.div>
+                  </div>
                 )}
+
+                {/* Camera Preview */}
+                {isActive && !capturedImage && (
+                  <div className="mb-6 rounded-2xl overflow-hidden border-2 border-amber-300 shadow-lg relative">
+                    <video
+                      ref={videoRef}
+                      autoPlay
+                      playsInline
+                      muted
+                      className="w-full h-auto max-h-[400px] object-cover bg-black"
+                    />
+                    <canvas ref={canvasRef} className="hidden" />
+                    {/* Camera overlay guide */}
+                    <div className="absolute inset-4 border-2 border-white/40 rounded-xl pointer-events-none" />
+                    <div className="absolute bottom-4 left-0 right-0 flex justify-center gap-3">
+                      <Button
+                        onClick={handleCapture}
+                        className="bg-white text-amber-700 hover:bg-amber-50 rounded-full w-16 h-16 shadow-xl active:scale-[0.93] transition-all"
+                        aria-label="التقاط صورة"
+                      >
+                        <Camera className="w-7 h-7" />
+                      </Button>
+                      <Button
+                        variant="outline"
+                        onClick={stopCamera}
+                        className="bg-white/80 rounded-full w-12 h-12 shadow-lg"
+                        aria-label="إغلاق الكاميرا"
+                      >
+                        ✕
+                      </Button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Captured Image Preview */}
+                {capturedImage && (
+                  <div className="mb-6">
+                    <div className="rounded-2xl overflow-hidden border-2 border-green-300 shadow-lg relative">
+                      <img
+                        src={capturedImage}
+                        alt="صورة ورقة الاختبار الملتقطة"
+                        className="w-full h-auto max-h-[400px] object-contain bg-gray-50"
+                      />
+                      <div className="absolute top-3 right-3 px-3 py-1.5 rounded-full bg-green-500 text-white text-xs font-medium flex items-center gap-1">
+                        <CheckCircle className="w-3.5 h-3.5" />
+                        تم الالتقاط
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3 mt-4 justify-center">
+                      <Button
+                        variant="outline"
+                        onClick={() => { setCapturedImage(null); startCamera(); }}
+                        className="rounded-xl"
+                      >
+                        <RotateCcw className="w-4 h-4 ml-2" />
+                        إعادة التصوير
+                      </Button>
+                      <Button
+                        onClick={processImage}
+                        disabled={isProcessing}
+                        className="bg-amber-600 hover:bg-amber-700 text-white rounded-xl px-8 h-12 text-base font-medium shadow-lg shadow-amber-200/50 active:scale-[0.97] transition-all"
+                      >
+                        {isProcessing ? (
+                          <>
+                            <Loader2 className="w-5 h-5 ml-2 animate-spin" />
+                            جاري التحليل...
+                          </>
+                        ) : (
+                          <>
+                            <Eye className="w-5 h-5 ml-2" />
+                            تحليل الاختبار بالذكاء الاصطناعي
+                          </>
+                        )}
+                      </Button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Action Buttons */}
+                {!isActive && !capturedImage && (
+                  <div className="flex flex-col sm:flex-row items-center gap-4 justify-center">
+                    <Button
+                      size="lg"
+                      onClick={startCamera}
+                      className="bg-amber-600 hover:bg-amber-700 text-white rounded-xl px-8 h-14 text-lg font-medium shadow-lg shadow-amber-200/50 active:scale-[0.97] transition-all w-full sm:w-auto"
+                    >
+                      <Camera className="w-5 h-5 ml-2" />
+                      فتح الكاميرا
+                    </Button>
+
+                    <div className="relative w-full sm:w-auto">
+                      <input
+                        type="file"
+                        accept="image/*"
+                        capture="environment"
+                        onChange={handleFileUpload}
+                        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                        aria-label="رفع صورة من الجهاز"
+                      />
+                      <Button
+                        size="lg"
+                        variant="outline"
+                        className="rounded-xl px-8 h-14 text-lg font-medium border-2 w-full sm:w-auto pointer-events-none"
+                      >
+                        <Upload className="w-5 h-5 ml-2" />
+                        رفع صورة
+                      </Button>
+                    </div>
+                  </div>
+                )}
+
+                {cameraError && (
+                  <div className="mt-6 p-4 rounded-xl bg-red-50 border border-red-200 text-center">
+                    <AlertCircle className="w-6 h-6 text-red-500 mx-auto mb-2" />
+                    <p className="text-red-700 text-sm">{cameraError}</p>
+                  </div>
+                )}
+
+                {/* Instructions */}
+                <div className="mt-10 p-6 rounded-2xl bg-amber-50/50 border border-amber-100">
+                  <h3 className="font-bold text-amber-800 mb-3 flex items-center gap-2">
+                    <ImageIcon className="w-5 h-5" />
+                    نصائح لأفضل نتيجة
+                  </h3>
+                  <ul className="space-y-2 text-amber-700 text-sm">
+                    <li className="flex items-start gap-2">
+                      <CheckCircle className="w-4 h-4 mt-0.5 shrink-0" />
+                      <span>تأكد من إضاءة جيدة وعدم وجود ظلال على الورقة</span>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <CheckCircle className="w-4 h-4 mt-0.5 shrink-0" />
+                      <span>ضع الورقة على سطح مستوٍ وصوّرها من الأعلى</span>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <CheckCircle className="w-4 h-4 mt-0.5 shrink-0" />
+                      <span>تأكد من ظهور جميع الأسئلة في الصورة بوضوح</span>
+                    </li>
+                  </ul>
+                </div>
               </motion.div>
             )}
 
-            {/* Stage: Exam */}
-            {stage === "exam" && (
+            {/* ========== Stage: PROCESSING ========== */}
+            {stage === "processing" && (
+              <motion.div
+                key="processing"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -20 }}
+                transition={{ duration: 0.4 }}
+                className="text-center py-16"
+              >
+                <Loader2 className="w-16 h-16 text-amber-600 animate-spin mx-auto mb-6" />
+                <h2 className="text-2xl font-bold mb-3">جاري تحليل ورقة الاختبار...</h2>
+                <p className="text-muted-foreground mb-6">
+                  الذكاء الاصطناعي يقرأ الأسئلة ويستخرجها من الصورة
+                </p>
+                <div className="w-full max-w-xs mx-auto h-2 bg-amber-100 rounded-full overflow-hidden">
+                  <motion.div
+                    initial={{ width: "0%" }}
+                    animate={{ width: "90%" }}
+                    transition={{ duration: 15, ease: "linear" }}
+                    className="h-full bg-amber-500 rounded-full"
+                  />
+                </div>
+              </motion.div>
+            )}
+
+            {/* ========== Stage: EXAM ========== */}
+            {stage === "exam" && question && (
               <motion.div
                 key="exam"
                 initial={{ opacity: 0, y: 20 }}
@@ -214,6 +520,13 @@ export default function ExamDemo() {
                 exit={{ opacity: 0, y: -20 }}
                 transition={{ duration: 0.4 }}
               >
+                {/* Exam Title */}
+                {examData?.examTitle && (
+                  <div className="text-center mb-4">
+                    <h2 className="text-lg font-bold text-amber-700">{examData.examTitle}</h2>
+                  </div>
+                )}
+
                 {/* Progress */}
                 <div className="mb-6">
                   <div className="flex items-center justify-between mb-2">
@@ -244,22 +557,16 @@ export default function ExamDemo() {
                         {question.type === "multiple" ? "اختيار من متعدد" : "إجابة مقالية"}
                       </span>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={speakQuestion}
-                        className={`rounded-lg ${isSpeaking ? "bg-amber-100 border-amber-300" : ""}`}
-                        aria-label="قراءة السؤال بالصوت"
-                      >
-                        {isSpeaking ? (
-                          <Volume2 className="w-4 h-4 text-amber-600 animate-pulse" />
-                        ) : (
-                          <Volume2 className="w-4 h-4" />
-                        )}
-                        <span className="mr-1 text-xs">اقرأ</span>
-                      </Button>
-                    </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={isSpeaking ? stopSpeaking : speakQuestion}
+                      className={`rounded-lg ${isSpeaking ? "bg-amber-100 border-amber-300" : ""}`}
+                      aria-label={isSpeaking ? "إيقاف القراءة" : "قراءة السؤال بالصوت"}
+                    >
+                      <Volume2 className={`w-4 h-4 ${isSpeaking ? "text-amber-600 animate-pulse" : ""}`} />
+                      <span className="mr-1 text-xs">{isSpeaking ? "إيقاف" : "اقرأ"}</span>
+                    </Button>
                   </div>
 
                   {/* Question Body */}
@@ -267,7 +574,7 @@ export default function ExamDemo() {
                     <h2 className="text-xl md:text-2xl font-bold mb-6 leading-relaxed">{question.text}</h2>
 
                     {/* Multiple Choice */}
-                    {question.type === "multiple" && question.options && (
+                    {question.type === "multiple" && question.options.length > 0 && (
                       <div className="space-y-3">
                         {question.options.map((option, i) => {
                           const isSelected = answers[question.id] === option;
@@ -298,18 +605,18 @@ export default function ExamDemo() {
                     )}
 
                     {/* Text Answer */}
-                    {question.type === "text" && (
+                    {(question.type === "text" || (question.type === "multiple" && question.options.length === 0)) && (
                       <div className="space-y-4">
                         <div className="relative">
                           <textarea
-                            value={answers[question.id] || textInput}
+                            value={textInput || answers[question.id] || ""}
                             onChange={(e) => setTextInput(e.target.value)}
                             placeholder="اكتب إجابتك هنا أو استخدم الميكروفون..."
                             className="w-full h-32 p-4 rounded-xl border border-border bg-background text-base resize-none focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
-                            aria-label="حقل الإجابة المقالية"
+                            aria-label="حقل الإجابة"
                           />
                         </div>
-                        <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-3 flex-wrap">
                           <Button
                             variant="outline"
                             onClick={handleVoiceInput}
@@ -319,7 +626,7 @@ export default function ExamDemo() {
                             {isListening ? (
                               <>
                                 <MicOff className="w-4 h-4 ml-2" />
-                                إيقاف
+                                <span className="animate-pulse">جاري الاستماع...</span>
                               </>
                             ) : (
                               <>
@@ -337,6 +644,12 @@ export default function ExamDemo() {
                             تأكيد الإجابة
                           </Button>
                         </div>
+                        {speechError && (
+                          <p className="text-red-500 text-sm flex items-center gap-1">
+                            <AlertCircle className="w-4 h-4" />
+                            {speechError}
+                          </p>
+                        )}
                       </div>
                     )}
                   </div>
@@ -345,7 +658,7 @@ export default function ExamDemo() {
                   <div className="p-5 border-t border-border/30 flex items-center justify-between">
                     <Button
                       variant="outline"
-                      onClick={() => setCurrentQ(Math.max(0, currentQ - 1))}
+                      onClick={() => goToQuestion(Math.max(0, currentQ - 1))}
                       disabled={currentQ === 0}
                       className="rounded-xl active:scale-[0.97]"
                     >
@@ -355,10 +668,10 @@ export default function ExamDemo() {
 
                     {/* Question dots */}
                     <div className="hidden md:flex items-center gap-1.5">
-                      {sampleQuestions.map((q, i) => (
+                      {examData?.questions.map((q, i) => (
                         <button
                           key={q.id}
-                          onClick={() => setCurrentQ(i)}
+                          onClick={() => goToQuestion(i)}
                           className={`w-8 h-8 rounded-lg text-xs font-bold transition-all ${
                             i === currentQ
                               ? "bg-amber-600 text-white"
@@ -375,7 +688,7 @@ export default function ExamDemo() {
 
                     {currentQ < totalQuestions - 1 ? (
                       <Button
-                        onClick={() => setCurrentQ(currentQ + 1)}
+                        onClick={() => goToQuestion(currentQ + 1)}
                         className="bg-amber-600 hover:bg-amber-700 text-white rounded-xl active:scale-[0.97]"
                       >
                         التالي
@@ -395,8 +708,8 @@ export default function ExamDemo() {
               </motion.div>
             )}
 
-            {/* Stage: Review */}
-            {stage === "review" && (
+            {/* ========== Stage: REVIEW ========== */}
+            {stage === "review" && examData && (
               <motion.div
                 key="review"
                 initial={{ opacity: 0, y: 20 }}
@@ -412,7 +725,7 @@ export default function ExamDemo() {
                 </div>
 
                 <div className="space-y-4 mb-8">
-                  {sampleQuestions.map((q) => (
+                  {examData.questions.map((q) => (
                     <div
                       key={q.id}
                       className={`p-5 rounded-2xl border ${
@@ -425,12 +738,12 @@ export default function ExamDemo() {
                         }`}>
                           {q.id}
                         </div>
-                        <div className="flex-1">
+                        <div className="flex-1 min-w-0">
                           <p className="font-medium mb-2">{q.text}</p>
                           {answers[q.id] ? (
                             <p className="text-green-700 text-sm flex items-center gap-2">
-                              <CheckCircle className="w-4 h-4" />
-                              الإجابة: {answers[q.id]}
+                              <CheckCircle className="w-4 h-4 shrink-0" />
+                              <span>الإجابة: {answers[q.id]}</span>
                             </p>
                           ) : (
                             <p className="text-red-500 text-sm">لم يتم الإجابة</p>
@@ -439,7 +752,7 @@ export default function ExamDemo() {
                         <Button
                           variant="outline"
                           size="sm"
-                          onClick={() => { setCurrentQ(q.id - 1); setStage("exam"); }}
+                          onClick={() => { goToQuestion(examData.questions.findIndex(qq => qq.id === q.id)); setStage("exam"); }}
                           className="rounded-lg text-xs shrink-0"
                         >
                           تعديل
@@ -460,16 +773,20 @@ export default function ExamDemo() {
                   </Button>
                   <Button
                     onClick={() => { setStage("export"); handleExport(); }}
+                    disabled={isExporting}
                     className="bg-amber-600 hover:bg-amber-700 text-white rounded-xl px-8 active:scale-[0.97]"
                   >
-                    <FileDown className="w-4 h-4 ml-2" />
-                    تصدير PDF
+                    {isExporting ? (
+                      <><Loader2 className="w-4 h-4 ml-2 animate-spin" />جاري التصدير...</>
+                    ) : (
+                      <><FileDown className="w-4 h-4 ml-2" />تصدير PDF</>
+                    )}
                   </Button>
                 </div>
               </motion.div>
             )}
 
-            {/* Stage: Export */}
+            {/* ========== Stage: EXPORT ========== */}
             {stage === "export" && (
               <motion.div
                 key="export"
@@ -504,11 +821,12 @@ export default function ExamDemo() {
                     تجربة جديدة
                   </Button>
                   <Button
-                    onClick={() => toast.info("هذه نسخة تجريبية - في النسخة الكاملة سيتم تحميل ملف PDF")}
+                    onClick={downloadPdf}
+                    disabled={!pdfReady}
                     className="bg-amber-600 hover:bg-amber-700 text-white rounded-xl px-8 active:scale-[0.97]"
                   >
                     <FileDown className="w-4 h-4 ml-2" />
-                    تحميل PDF
+                    تحميل وطباعة PDF
                   </Button>
                 </div>
               </motion.div>
