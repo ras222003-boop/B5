@@ -9,11 +9,13 @@ import { motion, AnimatePresence } from "framer-motion";
 
 const navLinks = [
   { href: "/", label: "الرئيسية" },
-  { href: "/how-it-works", label: "آلية العمل" },
-  { href: "/features", label: "المميزات" },
-  { href: "/robotic-arm", label: "الذراع الروبوتية" },
+  { href: "/exam-demo", label: "مسح الاختبار" },
+  { href: "/online-exams", label: "اختبارات إلكترونية" },
   { href: "/assistant", label: "المساعد الرقمي" },
-  { href: "/exam-demo", label: "تجربة الاختبار" },
+  { href: "/features", label: "المميزات" },
+  { href: "/how-it-works", label: "آلية العمل" },
+  { href: "/robotic-arm", label: "الذراع الروبوتية" },
+  { href: "/teacher", label: "لوحة المعلم" },
 ];
 
 export default function Navbar() {
@@ -41,7 +43,7 @@ export default function Navbar() {
             <Link
               key={link.href}
               href={link.href}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
+              className={`px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
                 location === link.href
                   ? "bg-primary text-primary-foreground shadow-sm"
                   : "text-muted-foreground hover:text-foreground hover:bg-accent"

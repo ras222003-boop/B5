@@ -1,7 +1,8 @@
 /*
  * Design: Warm Contemporary - Amber/Cream
- * Home page with hero, features overview, how it works, and CTA
+ * Home page with hero, features overview, how it works, accessibility tools, and CTA
  */
+import { useState } from "react";
 import { motion } from "framer-motion";
 import { Link } from "wouter";
 import {
@@ -15,11 +16,22 @@ import {
   Sparkles,
   Shield,
   GraduationCap,
+  MessageCircle,
+  Headphones,
+  Keyboard,
+  Smartphone,
+  Globe,
+  Braille,
+  Eye,
+  Hand,
+  Monitor,
+  Zap,
 } from "lucide-react";
 import Layout from "@/components/Layout";
 import SectionHeading from "@/components/SectionHeading";
 import FeatureCard from "@/components/FeatureCard";
 import { Button } from "@/components/ui/button";
+import { useTextToSpeech } from "@/hooks/useSpeech";
 
 const heroImage = "https://d2xsxph8kpxj0f.cloudfront.net/310519663660690446/egP6Ccw5DpGVLQ8nQQhPRc/hero-basira-M6wXJFm4GuseyVsrmXf5Tu.webp";
 
@@ -32,7 +44,7 @@ const features = [
   {
     icon: Volume2,
     title: "تحويل النص إلى صوت",
-    description: "يتم قراءة الأسئلة بصوت عربي واضح وطبيعي، مع إمكانية التحكم بسرعة القراءة.",
+    description: "يتم قراءة الأسئلة بصوت عربي وإنجليزي واضح وطبيعي، مع إمكانية التحكم بسرعة القراءة.",
   },
   {
     icon: Mic,
@@ -46,8 +58,8 @@ const features = [
   },
   {
     icon: FileText,
-    title: "تصدير PDF",
-    description: "بعد الانتهاء، يتم تجميع إجاباتك في ملف PDF جاهز للطباعة أو الإرسال للمعلم.",
+    title: "تصدير PDF مع التصحيح",
+    description: "بعد الانتهاء، يتم تجميع إجاباتك مع نتائج التصحيح الذكي في ملف PDF جاهز للطباعة.",
   },
   {
     icon: Accessibility,
@@ -63,7 +75,98 @@ const stats = [
   { value: "PDF", label: "تصدير فوري" },
 ];
 
+// Accessibility tools & assistive programs supported
+const accessibilityTools = [
+  {
+    icon: Volume2,
+    name: "قارئ الشاشة",
+    nameEn: "Screen Reader",
+    desc: "متوافق مع NVDA وJAWS وVoiceOver وTalkBack",
+    color: "bg-blue-50 text-blue-700 border-blue-200",
+    iconColor: "text-blue-600",
+  },
+  {
+    icon: Keyboard,
+    name: "التنقل بلوحة المفاتيح",
+    nameEn: "Keyboard Navigation",
+    desc: "دعم كامل للتنقل بمفاتيح Tab والأسهم وEnter",
+    color: "bg-purple-50 text-purple-700 border-purple-200",
+    iconColor: "text-purple-600",
+  },
+  {
+    icon: Mic,
+    name: "التحكم الصوتي",
+    nameEn: "Voice Control",
+    desc: "أوامر صوتية بالعربية والإنجليزية للتنقل والإجابة",
+    color: "bg-amber-50 text-amber-700 border-amber-200",
+    iconColor: "text-amber-600",
+  },
+  {
+    icon: Smartphone,
+    name: "دعم الجوال واللوحي",
+    nameEn: "Mobile & Tablet",
+    desc: "متوافق مع iOS وAndroid وجميع أحجام الشاشات",
+    color: "bg-green-50 text-green-700 border-green-200",
+    iconColor: "text-green-600",
+  },
+  {
+    icon: Globe,
+    name: "ثنائي اللغة",
+    nameEn: "Bilingual",
+    desc: "دعم كامل للعربية والإنجليزية مع كشف تلقائي للغة",
+    color: "bg-teal-50 text-teal-700 border-teal-200",
+    iconColor: "text-teal-600",
+  },
+  {
+    icon: Eye,
+    name: "تكبير النص",
+    nameEn: "Text Zoom",
+    desc: "متوافق مع تكبير المتصفح وإعدادات إمكانية الوصول",
+    color: "bg-orange-50 text-orange-700 border-orange-200",
+    iconColor: "text-orange-600",
+  },
+  {
+    icon: Hand,
+    name: "التنقل اللمسي",
+    nameEn: "Touch Navigation",
+    desc: "أزرار كبيرة ومساحات لمس واسعة مناسبة لضعاف البصر",
+    color: "bg-rose-50 text-rose-700 border-rose-200",
+    iconColor: "text-rose-600",
+  },
+  {
+    icon: Monitor,
+    name: "وضع التباين العالي",
+    nameEn: "High Contrast",
+    desc: "متوافق مع وضع التباين العالي في أنظمة التشغيل",
+    color: "bg-slate-50 text-slate-700 border-slate-200",
+    iconColor: "text-slate-600",
+  },
+];
+
+// Screen readers compatibility
+const screenReaders = [
+  { name: "NVDA", platform: "Windows", free: true },
+  { name: "JAWS", platform: "Windows", free: false },
+  { name: "VoiceOver", platform: "iOS / macOS", free: true },
+  { name: "TalkBack", platform: "Android", free: true },
+  { name: "Narrator", platform: "Windows", free: true },
+  { name: "Orca", platform: "Linux", free: true },
+];
+
 export default function Home() {
+  const { speak, stop: stopSpeaking, isSpeaking } = useTextToSpeech();
+  const [readingSection, setReadingSection] = useState<string | null>(null);
+
+  const readAloud = (text: string, section: string) => {
+    if (isSpeaking && readingSection === section) {
+      stopSpeaking();
+      setReadingSection(null);
+    } else {
+      setReadingSection(section);
+      speak(text, 0.9, "ar");
+    }
+  };
+
   return (
     <Layout>
       {/* Hero Section */}
@@ -107,6 +210,21 @@ export default function Home() {
                     كيف تعمل؟
                   </Button>
                 </Link>
+                <button
+                  onClick={() => readAloud(
+                    "مرحباً بك في منصة بصيرة. هذه المنصة تُمكّن الطلاب من ذوي الإعاقة البصرية من أداء اختباراتهم بشكل مستقل. يمكنك مسح ورقة الاختبار بالكاميرا، وسيتم قراءة الأسئلة لك بالصوت، ثم تجيب بصوتك أو بالكتابة. اضغط على جرّب الآن للبدء.",
+                    "hero"
+                  )}
+                  className={`flex items-center gap-2 px-4 py-2 rounded-xl border-2 text-sm font-medium transition-all duration-200 ${
+                    isSpeaking && readingSection === "hero"
+                      ? "bg-red-50 border-red-300 text-red-700"
+                      : "border-amber-300 text-amber-700 hover:bg-amber-50"
+                  }`}
+                  aria-label="استمع لوصف المنصة"
+                >
+                  <Volume2 className="w-4 h-4" />
+                  {isSpeaking && readingSection === "hero" ? "إيقاف" : "استمع"}
+                </button>
               </div>
             </motion.div>
 
@@ -127,6 +245,35 @@ export default function Home() {
                 <div className="absolute inset-0 bg-gradient-to-t from-black/10 to-transparent" />
               </div>
             </motion.div>
+          </div>
+        </div>
+      </section>
+
+      {/* Voice Guide Banner - Prominent on Home */}
+      <section className="py-8 bg-gradient-to-r from-amber-600 to-amber-700">
+        <div className="container">
+          <div className="flex flex-col md:flex-row items-center justify-between gap-6">
+            <div className="flex items-center gap-4 text-white">
+              <div className="w-14 h-14 rounded-2xl bg-white/20 flex items-center justify-center shrink-0">
+                <MessageCircle className="w-7 h-7" />
+              </div>
+              <div>
+                <h2 className="text-xl font-bold">المرشد الصوتي متاح دائماً</h2>
+                <p className="text-amber-100 text-sm mt-1">
+                  اضغط على زر المرشد الصوتي في أسفل الشاشة للتنقل بالصوت أو الاستماع لوصف الصفحة
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-3 shrink-0">
+              <div className="flex items-center gap-2 bg-white/20 text-white px-4 py-2 rounded-xl text-sm">
+                <Mic className="w-4 h-4" />
+                <span>قل: "الاختبار" للانتقال</span>
+              </div>
+              <div className="flex items-center gap-2 bg-white/20 text-white px-4 py-2 rounded-xl text-sm">
+                <Volume2 className="w-4 h-4" />
+                <span>قل: "مساعدة" للإرشاد</span>
+              </div>
+            </div>
           </div>
         </div>
       </section>
@@ -165,6 +312,83 @@ export default function Home() {
               <FeatureCard key={feature.title} {...feature} index={i} />
             ))}
           </div>
+        </div>
+      </section>
+
+      {/* Accessibility Tools Section */}
+      <section className="py-20 md:py-28 bg-gradient-to-b from-slate-50/50 to-background">
+        <div className="container">
+          <SectionHeading
+            badge="إمكانية الوصول"
+            title="برامج المساعدة والمساندة"
+            description="منصة بصيرة مصممة لتكون متوافقة مع جميع برامج ومساعدات إمكانية الوصول المعتمدة عالمياً."
+          />
+
+          {/* Accessibility tools grid */}
+          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-12">
+            {accessibilityTools.map((tool, i) => (
+              <motion.div
+                key={tool.name}
+                initial={{ opacity: 0, y: 20 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                transition={{ duration: 0.4, delay: i * 0.05 }}
+                className={`p-5 rounded-2xl border-2 ${tool.color}`}
+              >
+                <div className={`w-10 h-10 rounded-xl bg-white/60 flex items-center justify-center mb-3`}>
+                  <tool.icon className={`w-5 h-5 ${tool.iconColor}`} />
+                </div>
+                <h3 className="font-bold text-sm mb-0.5">{tool.name}</h3>
+                <p className="text-xs opacity-70 mb-2">{tool.nameEn}</p>
+                <p className="text-xs leading-relaxed opacity-80">{tool.desc}</p>
+              </motion.div>
+            ))}
+          </div>
+
+          {/* Screen readers compatibility */}
+          <div className="bg-card border border-border/50 rounded-2xl p-6 md:p-8">
+            <div className="flex items-center gap-3 mb-6">
+              <div className="w-10 h-10 rounded-xl bg-amber-100 flex items-center justify-center">
+                <Headphones className="w-5 h-5 text-amber-600" />
+              </div>
+              <div>
+                <h3 className="font-bold text-lg">قارئات الشاشة المدعومة</h3>
+                <p className="text-muted-foreground text-sm">متوافق مع جميع قارئات الشاشة الرئيسية</p>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+              {screenReaders.map((sr) => (
+                <div key={sr.name} className="text-center p-4 rounded-xl bg-muted/50 border border-border/30">
+                  <div className="font-bold text-base mb-1">{sr.name}</div>
+                  <div className="text-xs text-muted-foreground mb-2">{sr.platform}</div>
+                  <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                    sr.free ? "bg-green-100 text-green-700" : "bg-blue-100 text-blue-700"
+                  }`}>
+                    {sr.free ? "مجاني" : "مدفوع"}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* WCAG compliance note */}
+          <motion.div
+            initial={{ opacity: 0, y: 15 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.5 }}
+            className="mt-6 flex flex-col md:flex-row items-center gap-4 p-5 rounded-2xl bg-amber-50 border border-amber-200"
+          >
+            <div className="w-12 h-12 rounded-xl bg-amber-600 text-white flex items-center justify-center shrink-0">
+              <Zap className="w-6 h-6" />
+            </div>
+            <div>
+              <h4 className="font-bold text-amber-800 mb-1">متوافق مع معايير WCAG 2.1</h4>
+              <p className="text-amber-700 text-sm leading-relaxed">
+                تلتزم المنصة بمعايير إمكانية الوصول العالمية (WCAG 2.1 Level AA)، مما يضمن تجربة شاملة لجميع المستخدمين بغض النظر عن قدراتهم.
+              </p>
+            </div>
+          </motion.div>
         </div>
       </section>
 
@@ -230,12 +454,19 @@ export default function Home() {
               <p className="text-amber-100 text-lg mb-8 max-w-xl mx-auto">
                 جرّب منصة بصيرة واكتشف كيف يمكن للتقنية أن تُمكّن ذوي الإعاقة البصرية من أداء اختباراتهم باستقلالية.
               </p>
-              <Link href="/exam-demo">
-                <Button size="lg" className="bg-white text-amber-700 hover:bg-amber-50 rounded-xl px-10 h-12 text-base font-bold shadow-lg hover:shadow-xl transition-all duration-200 active:scale-[0.97]">
-                  تجربة الاختبار
-                  <ArrowLeft className="w-5 h-5 mr-2" />
-                </Button>
-              </Link>
+              <div className="flex flex-wrap items-center justify-center gap-4">
+                <Link href="/exam-demo">
+                  <Button size="lg" className="bg-white text-amber-700 hover:bg-amber-50 rounded-xl px-10 h-12 text-base font-bold shadow-lg hover:shadow-xl transition-all duration-200 active:scale-[0.97]">
+                    تجربة الاختبار
+                    <ArrowLeft className="w-5 h-5 mr-2" />
+                  </Button>
+                </Link>
+                <Link href="/online-exams">
+                  <Button size="lg" variant="outline" className="border-white/50 text-white hover:bg-white/10 rounded-xl px-8 h-12 text-base font-medium transition-all duration-200 active:scale-[0.97]">
+                    الاختبارات الإلكترونية
+                  </Button>
+                </Link>
+              </div>
             </div>
           </motion.div>
         </div>

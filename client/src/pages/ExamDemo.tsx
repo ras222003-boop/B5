@@ -1,319 +1,271 @@
 /*
- * Real Exam Experience - Camera OCR + TTS + STT
- * Uses real camera, real AI OCR, real speech synthesis and recognition
+ * ExamDemo - Real exam experience with camera, OCR, TTS, STT, AI grading
+ * Supports Arabic & English, sequential option labels, click-to-read
  */
-import { useState, useEffect, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  Camera,
-  Volume2,
-  Mic,
-  MicOff,
-  ChevronRight,
-  ChevronLeft,
-  CheckCircle,
-  FileDown,
-  RotateCcw,
-  Eye,
-  Loader2,
-  Upload,
-  ImageIcon,
-  AlertCircle,
+  Camera, Upload, Loader2, Volume2, VolumeX, Mic, MicOff,
+  ChevronLeft, ChevronRight, Eye, FileDown, RotateCcw,
+  CheckCircle, XCircle, AlertCircle, ScanLine, Languages,
+  GraduationCap,
 } from "lucide-react";
-import Layout from "@/components/Layout";
 import { Button } from "@/components/ui/button";
-import { toast } from "sonner";
+import Layout from "@/components/Layout";
 import { useCamera } from "@/hooks/useCamera";
-import { useTextToSpeech, useSpeechToText } from "@/hooks/useSpeech";
+import { useTextToSpeech, useSpeechToText, detectLanguage } from "@/hooks/useSpeech";
 
-interface Question {
+type Question = {
   id: number;
   text: string;
   type: "multiple" | "text";
   options: string[];
-}
+};
 
-interface ExamData {
+type ExamData = {
   examTitle: string;
+  language: "ar" | "en";
   questions: Question[];
-}
+};
 
-type ExamStage = "scan" | "processing" | "exam" | "review" | "export";
+type GradingResult = {
+  questionId: number;
+  isCorrect: "correct" | "incorrect" | "partial" | "unanswered";
+  correctAnswer: string;
+  feedback: string;
+  score: number;
+};
+
+type GradingData = {
+  results: GradingResult[];
+  totalScore: number;
+  totalCorrect: number;
+  totalQuestions: number;
+  overallFeedback: string;
+};
+
+type Stage = "scan" | "exam" | "review" | "grading" | "export";
+
+const AR_LABELS = ["أ", "ب", "ج", "د", "هـ", "و", "ز", "ح"];
+const EN_LABELS = ["a", "b", "c", "d", "e", "f", "g", "h"];
 
 export default function ExamDemo() {
-  const [stage, setStage] = useState<ExamStage>("scan");
+  const [stage, setStage] = useState<Stage>("scan");
   const [examData, setExamData] = useState<ExamData | null>(null);
-  const [currentQ, setCurrentQ] = useState(0);
   const [answers, setAnswers] = useState<Record<number, string>>({});
+  const [currentQ, setCurrentQ] = useState(0);
   const [isProcessing, setIsProcessing] = useState(false);
-  const [textInput, setTextInput] = useState("");
+  const [isExporting, setIsExporting] = useState(false);
+  const [isGrading, setIsGrading] = useState(false);
+  const [gradingData, setGradingData] = useState<GradingData | null>(null);
+  const [pdfHtml, setPdfHtml] = useState<string>("");
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
-  const [ocrError, setOcrError] = useState<string | null>(null);
+  const [statusMsg, setStatusMsg] = useState("");
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const { videoRef, canvasRef, isActive, error: cameraError, startCamera, stopCamera, captureImage } = useCamera();
+  const { videoRef, canvasRef, isActive: cameraActive, isStarting: cameraStarting, error: cameraError, startCamera, stopCamera, captureImage } = useCamera();
   const { speak, stop: stopSpeaking, isSpeaking } = useTextToSpeech();
-  const { startListening, stopListening, isListening, transcript, error: speechError, setTranscript } = useSpeechToText();
+  const { startListening, stopListening, isListening, transcript, setTranscript, lang: sttLang, setLang: setSttLang } = useSpeechToText("ar");
 
-  const question = examData?.questions[currentQ];
+  const examLang = examData?.language || "ar";
+  const isArabic = examLang === "ar";
+  const labels = isArabic ? AR_LABELS : EN_LABELS;
   const totalQuestions = examData?.questions.length || 0;
   const answeredCount = Object.keys(answers).length;
+  const currentQuestion = examData?.questions[currentQ];
 
-  // Update text input when speech transcript changes
+  // Update STT language when exam language changes
   useEffect(() => {
-    if (transcript) {
-      setTextInput(transcript);
+    if (examData?.language) {
+      setSttLang(examData.language);
     }
-  }, [transcript]);
+  }, [examData?.language, setSttLang]);
 
-  // Speak question when navigating
-  const speakQuestion = useCallback(() => {
-    if (!question) return;
-    let text = `السؤال ${question.id}: ${question.text}`;
-    if (question.type === "multiple" && question.options.length > 0) {
-      text += ". الخيارات هي: ";
-      question.options.forEach((opt, i) => {
-        text += `${String.fromCharCode(1571 + i)}) ${opt}. `;
+  // Auto-fill answer from speech transcript
+  useEffect(() => {
+    if (transcript && currentQuestion && !isListening) {
+      setAnswers((prev) => ({ ...prev, [currentQuestion.id]: transcript }));
+    }
+  }, [transcript, isListening, currentQuestion]);
+
+  // Read question aloud when navigating
+  const readQuestion = useCallback((q: Question) => {
+    if (!q) return;
+    const prefix = isArabic ? `السؤال ${q.id}:` : `Question ${q.id}:`;
+    let fullText = `${prefix} ${q.text}`;
+    if (q.type === "multiple" && q.options.length > 0) {
+      const optLabels = isArabic ? AR_LABELS : EN_LABELS;
+      q.options.forEach((opt, i) => {
+        fullText += `. ${optLabels[i]}: ${opt}`;
       });
     }
-    speak(text);
-  }, [question, speak]);
+    speak(fullText, 0.9, examLang);
+  }, [speak, isArabic, examLang]);
 
-  // Handle camera capture
-  const handleCapture = useCallback(() => {
-    const imageData = captureImage();
-    if (imageData) {
-      setCapturedImage(imageData);
-      stopCamera();
-      toast.success("تم التقاط الصورة بنجاح!");
+  const goToQuestion = useCallback((index: number) => {
+    if (index >= 0 && index < totalQuestions) {
+      setCurrentQ(index);
     }
-  }, [captureImage, stopCamera]);
+  }, [totalQuestions]);
 
-  // Handle file upload
+  // Process image with OCR
+  const processImage = useCallback(async (imageData: string) => {
+    setIsProcessing(true);
+    setStatusMsg(isArabic ? "جاري تحليل ورقة الاختبار..." : "Analyzing exam paper...");
+
+    try {
+      const resp = await fetch("/api/ocr", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ imageBase64: imageData }),
+      });
+
+      if (!resp.ok) throw new Error("OCR failed");
+
+      const data = await resp.json();
+      if (!data.questions || data.questions.length === 0) {
+        setStatusMsg("لم يتم العثور على أسئلة في الصورة. حاول مرة أخرى بصورة أوضح.");
+        setIsProcessing(false);
+        return;
+      }
+
+      setExamData(data);
+      setAnswers({});
+      setCurrentQ(0);
+      setGradingData(null);
+      setStage("exam");
+
+      // Announce exam loaded
+      const lang = data.language || "ar";
+      const msg = lang === "ar"
+        ? `تم تحميل الاختبار: ${data.examTitle || "اختبار"}. يحتوي على ${data.questions.length} أسئلة. اضغط على أي سؤال لسماعه.`
+        : `Exam loaded: ${data.examTitle || "Exam"}. Contains ${data.questions.length} questions. Tap any question to hear it.`;
+      speak(msg, 0.9, lang);
+    } catch (err: any) {
+      console.error("OCR error:", err);
+      setStatusMsg("حدث خطأ في تحليل الصورة. حاول مرة أخرى.");
+    } finally {
+      setIsProcessing(false);
+    }
+  }, [speak, isArabic]);
+
+  // Capture from camera
+  const handleCapture = useCallback(() => {
+    const img = captureImage();
+    if (img) {
+      setCapturedImage(img);
+      stopCamera();
+      processImage(img);
+    }
+  }, [captureImage, stopCamera, processImage]);
+
+  // Upload from file
   const handleFileUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    if (!file.type.startsWith("image/")) {
-      toast.error("يرجى اختيار ملف صورة");
-      return;
-    }
-
     const reader = new FileReader();
     reader.onload = () => {
-      setCapturedImage(reader.result as string);
-      stopCamera();
-      toast.success("تم تحميل الصورة بنجاح!");
+      const result = reader.result as string;
+      setCapturedImage(result);
+      processImage(result);
     };
     reader.readAsDataURL(file);
-  }, [stopCamera]);
+    e.target.value = "";
+  }, [processImage]);
 
-  // Send image to OCR API
-  const processImage = useCallback(async () => {
-    if (!capturedImage) return;
-
-    setIsProcessing(true);
-    setOcrError(null);
-    setStage("processing");
+  // AI Auto-grade
+  const handleGrade = useCallback(async () => {
+    if (!examData) return;
+    setIsGrading(true);
+    setStatusMsg(isArabic ? "جاري التصحيح التلقائي بالذكاء الاصطناعي..." : "AI auto-grading in progress...");
 
     try {
-      const response = await fetch("/api/ocr", {
+      const resp = await fetch("/api/grade", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ imageBase64: capturedImage }),
+        body: JSON.stringify({
+          examTitle: examData.examTitle,
+          questions: examData.questions,
+          answers,
+          language: examLang,
+        }),
       });
 
-      if (!response.ok) {
-        const err = await response.json();
-        throw new Error(err.error || "فشل في معالجة الصورة");
-      }
+      if (!resp.ok) throw new Error("Grading failed");
 
-      const data: ExamData = await response.json();
+      const data: GradingData = await resp.json();
+      setGradingData(data);
+      setStage("grading");
 
-      if (!data.questions || data.questions.length === 0) {
-        throw new Error("لم يتم العثور على أسئلة في الصورة. تأكد من وضوح الصورة وحاول مرة أخرى.");
-      }
-
-      setExamData(data);
-      setStage("exam");
-      toast.success(`تم التعرف على ${data.questions.length} أسئلة بنجاح!`, {
-        description: data.examTitle || "اختبار",
-      });
-
-      // Read the first question automatically
-      setTimeout(() => {
-        const q = data.questions[0];
-        let text = `مرحباً! تم التعرف على ${data.questions.length} أسئلة. السؤال الأول: ${q.text}`;
-        if (q.type === "multiple" && q.options.length > 0) {
-          text += ". الخيارات هي: ";
-          q.options.forEach((opt, i) => {
-            text += `${String.fromCharCode(1571 + i)}) ${opt}. `;
-          });
-        }
-        speak(text);
-      }, 500);
+      const msg = isArabic
+        ? `تم التصحيح. النتيجة: ${data.totalScore} بالمئة. ${data.totalCorrect} إجابة صحيحة من ${data.totalQuestions}.`
+        : `Grading complete. Score: ${data.totalScore}%. ${data.totalCorrect} correct out of ${data.totalQuestions}.`;
+      speak(msg, 0.9, examLang);
     } catch (err: any) {
-      console.error("OCR Error:", err);
-      setOcrError(err.message);
-      setStage("scan");
-      toast.error("فشل في التعرف على الاختبار", { description: err.message });
+      console.error("Grading error:", err);
+      setStatusMsg(isArabic ? "حدث خطأ في التصحيح. حاول مرة أخرى." : "Grading error. Try again.");
     } finally {
-      setIsProcessing(false);
+      setIsGrading(false);
     }
-  }, [capturedImage, speak]);
+  }, [examData, answers, examLang, isArabic, speak]);
 
-  const handleAnswer = (answer: string) => {
-    if (!question) return;
-    setAnswers((prev) => ({ ...prev, [question.id]: answer }));
-    speak(`تم تسجيل إجابتك: ${answer}`);
-  };
-
-  const handleTextAnswer = () => {
-    if (textInput.trim()) {
-      handleAnswer(textInput);
-      setTextInput("");
-      setTranscript("");
-    }
-  };
-
-  const handleVoiceInput = () => {
-    if (isListening) {
-      stopListening();
-    } else {
-      speak("تحدث الآن بإجابتك");
-      setTimeout(() => startListening(), 1500);
-    }
-  };
-
-  const goToQuestion = (index: number) => {
-    stopSpeaking();
-    setCurrentQ(index);
-    setTextInput(answers[examData!.questions[index].id] || "");
-  };
-
-  const [pdfReady, setPdfReady] = useState(false);
-  const [isExporting, setIsExporting] = useState(false);
-  const [pdfBlobUrl, setPdfBlobUrl] = useState<string | null>(null);
-
-  const handleExport = async () => {
+  // Export PDF with grading
+  const handleExport = useCallback(async () => {
     if (!examData) return;
     setIsExporting(true);
+
     try {
-      // Dynamically import jsPDF to avoid bundle bloat
-      const { default: jsPDF } = await import("jspdf");
+      const resp = await fetch("/api/generate-pdf", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          examTitle: examData.examTitle,
+          questions: examData.questions,
+          answers,
+          grading: gradingData,
+          language: examLang,
+        }),
+      });
 
-      const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+      if (!resp.ok) throw new Error("PDF generation failed");
 
-      // Load Arabic font from Google Fonts CDN as base64
-      // We'll use the built-in Helvetica and write Arabic via addFont workaround
-      // jsPDF doesn't natively support Arabic, so we use HTML rendering approach
-
-      const title = examData.examTitle || "اختبار";
-      const qs = examData.questions;
-
-      // Build clean HTML for PDF
-      const htmlContent = `
-<!DOCTYPE html>
-<html dir="rtl" lang="ar">
-<head>
-<meta charset="UTF-8">
-<style>
-@import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700&display=swap');
-* { margin: 0; padding: 0; box-sizing: border-box; }
-body { font-family: 'Tajawal', 'Arial', sans-serif; direction: rtl; padding: 30px; color: #1a1a1a; line-height: 1.8; font-size: 14px; }
-.header { text-align: center; margin-bottom: 30px; padding-bottom: 15px; border-bottom: 3px solid #d97706; }
-.header h1 { font-size: 24px; color: #92400e; margin-bottom: 6px; }
-.header .subtitle { font-size: 12px; color: #78716c; }
-.header .logo { font-size: 14px; color: #d97706; font-weight: 700; margin-bottom: 8px; }
-.stats { display: flex; justify-content: center; gap: 40px; margin-bottom: 25px; }
-.stat { text-align: center; }
-.stat-num { font-size: 22px; font-weight: 700; color: #d97706; }
-.stat-label { font-size: 11px; color: #78716c; }
-.question { margin-bottom: 20px; padding: 15px; border: 1px solid #e7e5e4; border-radius: 10px; background: #fafaf9; }
-.q-header { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
-.q-num { background: #d97706; color: white; width: 28px; height: 28px; border-radius: 6px; display: inline-flex; align-items: center; justify-content: center; font-weight: 700; font-size: 13px; }
-.q-text { font-size: 15px; font-weight: 500; }
-.options { margin-top: 6px; padding-right: 36px; font-size: 13px; color: #57534e; }
-.answer { margin-top: 10px; padding: 10px; background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 6px; }
-.answer-label { font-size: 11px; color: #15803d; font-weight: 700; }
-.answer-text { font-size: 14px; color: #166534; }
-.no-answer { margin-top: 10px; padding: 10px; background: #fef2f2; border: 1px solid #fecaca; border-radius: 6px; font-size: 13px; color: #dc2626; }
-.footer { margin-top: 30px; padding-top: 15px; border-top: 2px solid #e7e5e4; text-align: center; color: #78716c; font-size: 11px; }
-</style>
-</head>
-<body>
-<div class="header">
-  <div class="logo">بصيرة - منصة الاختبارات الذكية</div>
-  <h1>${title}</h1>
-  <div class="subtitle">تاريخ التصدير: ${new Date().toLocaleDateString("ar-SA", { year: "numeric", month: "long", day: "numeric" })}</div>
-</div>
-<div class="stats">
-  <div class="stat"><div class="stat-num">${qs.length}</div><div class="stat-label">عدد الأسئلة</div></div>
-  <div class="stat"><div class="stat-num">${Object.keys(answers).length}</div><div class="stat-label">تمت الإجابة</div></div>
-</div>
-${qs.map((q) => `
-<div class="question">
-  <div class="q-header">
-    <span class="q-num">${q.id}</span>
-    <span class="q-text">${q.text}</span>
-  </div>
-  ${q.type === "multiple" && q.options?.length ? `<div class="options">${q.options.map((o, i) => `<div>${String.fromCharCode(1571 + i)}) ${o}</div>`).join("")}</div>` : ""}
-  ${answers[q.id] ? `<div class="answer"><div class="answer-label">الإجابة:</div><div class="answer-text">${answers[q.id]}</div></div>` : `<div class="no-answer">لم يتم الإجابة</div>`}
-</div>`).join("")}
-<div class="footer">تم إنشاء هذا الملف بواسطة منصة بصيرة - الاختبارات الذكية لذوي الإعاقة البصرية</div>
-</body>
-</html>`;
-
-      // Use an iframe to render the HTML and trigger print-to-PDF
-      const blob = new Blob([htmlContent], { type: "text/html;charset=utf-8" });
-      const blobUrl = URL.createObjectURL(blob);
-
-      // Clean up old blob URL
-      if (pdfBlobUrl) URL.revokeObjectURL(pdfBlobUrl);
-      setPdfBlobUrl(blobUrl);
-      setPdfReady(true);
-
-      toast.success("تم تصدير الاختبار بنجاح!", { description: "اضغط تحميل PDF لحفظ الملف" });
-      speak("تم تصدير الاختبار بنجاح. اضغط زر تحميل PDF لحفظ الملف.");
+      const data = await resp.json();
+      setPdfHtml(data.html);
+      setStage("export");
     } catch (err: any) {
-      toast.error("فشل في تصدير الاختبار", { description: err.message });
+      console.error("Export error:", err);
     } finally {
       setIsExporting(false);
     }
-  };
+  }, [examData, answers, gradingData, examLang]);
 
-  const downloadPdf = () => {
-    if (!pdfBlobUrl) return;
-    // Open the HTML in a new window and trigger the browser's print-to-PDF
-    const printWindow = window.open(pdfBlobUrl, "_blank");
-    if (printWindow) {
-      printWindow.addEventListener("load", () => {
-        setTimeout(() => printWindow.print(), 300);
-      });
-    } else {
-      // Fallback: direct download as HTML
-      const a = document.createElement("a");
-      a.href = pdfBlobUrl;
-      a.download = `${examData?.examTitle || "اختبار"}_بصيرة.html`;
-      a.click();
+  const downloadPdf = useCallback(() => {
+    if (!pdfHtml) return;
+    const w = window.open("", "_blank");
+    if (w) {
+      w.document.write(pdfHtml);
+      w.document.close();
+      setTimeout(() => w.print(), 500);
     }
-  };
+  }, [pdfHtml]);
 
-  const resetExam = () => {
-    stopSpeaking();
-    stopCamera();
+  const resetExam = useCallback(() => {
     setStage("scan");
-    setCurrentQ(0);
-    setAnswers({});
-    setTextInput("");
-    setCapturedImage(null);
     setExamData(null);
-    setOcrError(null);
-  };
+    setAnswers({});
+    setCurrentQ(0);
+    setGradingData(null);
+    setPdfHtml("");
+    setCapturedImage(null);
+    setStatusMsg("");
+    stopSpeaking();
+  }, [stopSpeaking]);
 
   return (
     <Layout>
-      <section className="py-8 md:py-12">
-        <div className="container max-w-3xl">
+      <section className="py-12 md:py-20 min-h-[80vh]">
+        <div className="container max-w-4xl">
           <AnimatePresence mode="wait">
             {/* ========== Stage: SCAN ========== */}
             {stage === "scan" && (
@@ -324,195 +276,135 @@ ${qs.map((q) => `
                 exit={{ opacity: 0, y: -20 }}
                 transition={{ duration: 0.4 }}
               >
-                <div className="text-center mb-8">
+                <div className="text-center mb-10">
                   <div className="w-20 h-20 rounded-3xl bg-amber-100 flex items-center justify-center mx-auto mb-6">
-                    <Camera className="w-10 h-10 text-amber-600" />
+                    <ScanLine className="w-10 h-10 text-amber-600" />
                   </div>
                   <h1 className="text-3xl md:text-4xl font-bold mb-3">مسح ورقة الاختبار</h1>
-                  <p className="text-muted-foreground text-lg max-w-md mx-auto">
-                    وجّه الكاميرا نحو ورقة الاختبار أو ارفع صورة من جهازك
+                  <p className="text-muted-foreground text-lg max-w-lg mx-auto">
+                    وجّه الكاميرا نحو ورقة الاختبار أو ارفع صورة لها. يدعم العربية والإنجليزية.
                   </p>
                 </div>
 
-                {ocrError && (
-                  <div className="mb-6 p-4 rounded-xl bg-red-50 border border-red-200 flex items-start gap-3">
-                    <AlertCircle className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
-                    <div>
-                      <p className="text-red-700 font-medium text-sm">فشل في التعرف على الاختبار</p>
-                      <p className="text-red-600 text-sm mt-1">{ocrError}</p>
+                {/* Camera View */}
+                <div className="relative rounded-2xl overflow-hidden bg-slate-900 mb-6 aspect-[4/3] max-w-2xl mx-auto">
+                  {cameraActive ? (
+                    <>
+                      <video
+                        ref={videoRef}
+                        autoPlay
+                        playsInline
+                        muted
+                        className="w-full h-full object-cover"
+                      />
+                      {/* Scan overlay */}
+                      <div className="absolute inset-0 pointer-events-none">
+                        <div className="absolute inset-8 border-2 border-white/40 rounded-xl" />
+                        <div className="absolute top-8 left-8 w-8 h-8 border-t-4 border-l-4 border-amber-400 rounded-tl-lg" />
+                        <div className="absolute top-8 right-8 w-8 h-8 border-t-4 border-r-4 border-amber-400 rounded-tr-lg" />
+                        <div className="absolute bottom-8 left-8 w-8 h-8 border-b-4 border-l-4 border-amber-400 rounded-bl-lg" />
+                        <div className="absolute bottom-8 right-8 w-8 h-8 border-b-4 border-r-4 border-amber-400 rounded-br-lg" />
+                      </div>
+                    </>
+                  ) : capturedImage ? (
+                    <img src={capturedImage} alt="صورة الاختبار" className="w-full h-full object-contain" />
+                  ) : (
+                    <div className="w-full h-full flex flex-col items-center justify-center text-white/60 gap-4 p-8">
+                      <Camera className="w-16 h-16" />
+                      <p className="text-center text-lg">اضغط على "فتح الكاميرا" أو "رفع صورة"</p>
+                      {cameraError && (
+                        <div className="bg-red-500/20 text-red-300 px-4 py-2 rounded-xl text-sm text-center max-w-sm">
+                          {cameraError}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  <canvas ref={canvasRef} className="hidden" />
+                </div>
+
+                {/* Processing status */}
+                {isProcessing && (
+                  <div className="text-center mb-6">
+                    <div className="inline-flex items-center gap-3 bg-amber-50 text-amber-700 px-6 py-3 rounded-xl">
+                      <Loader2 className="w-5 h-5 animate-spin" />
+                      <span className="font-medium">{statusMsg || "جاري التحليل..."}</span>
                     </div>
                   </div>
                 )}
 
-                {/* Camera Preview */}
-                {isActive && !capturedImage && (
-                  <div className="mb-6 rounded-2xl overflow-hidden border-2 border-amber-300 shadow-lg relative">
-                    <video
-                      ref={videoRef}
-                      autoPlay
-                      playsInline
-                      muted
-                      className="w-full h-auto max-h-[400px] object-cover bg-black"
-                    />
-                    <canvas ref={canvasRef} className="hidden" />
-                    {/* Camera overlay guide */}
-                    <div className="absolute inset-4 border-2 border-white/40 rounded-xl pointer-events-none" />
-                    <div className="absolute bottom-4 left-0 right-0 flex justify-center gap-3">
+                {statusMsg && !isProcessing && (
+                  <div className="text-center mb-6">
+                    <div className="inline-flex items-center gap-3 bg-red-50 text-red-700 px-6 py-3 rounded-xl">
+                      <AlertCircle className="w-5 h-5" />
+                      <span>{statusMsg}</span>
+                    </div>
+                  </div>
+                )}
+
+                {/* Action buttons */}
+                <div className="flex flex-wrap items-center justify-center gap-4">
+                  {!cameraActive ? (
+                    <Button
+                      onClick={startCamera}
+                      disabled={isProcessing || cameraStarting}
+                      className="bg-amber-600 hover:bg-amber-700 text-white rounded-xl px-8 h-12 text-base active:scale-[0.97]"
+                      aria-label="فتح الكاميرا لمسح ورقة الاختبار"
+                    >
+                      {cameraStarting ? (
+                        <><Loader2 className="w-5 h-5 ml-2 animate-spin" />جاري فتح الكاميرا...</>
+                      ) : (
+                        <><Camera className="w-5 h-5 ml-2" />فتح الكاميرا</>
+                      )}
+                    </Button>
+                  ) : (
+                    <>
                       <Button
                         onClick={handleCapture}
-                        className="bg-white text-amber-700 hover:bg-amber-50 rounded-full w-16 h-16 shadow-xl active:scale-[0.93] transition-all"
-                        aria-label="التقاط صورة"
-                      >
-                        <Camera className="w-7 h-7" />
-                      </Button>
-                      <Button
-                        variant="outline"
-                        onClick={stopCamera}
-                        className="bg-white/80 rounded-full w-12 h-12 shadow-lg"
-                        aria-label="إغلاق الكاميرا"
-                      >
-                        ✕
-                      </Button>
-                    </div>
-                  </div>
-                )}
-
-                {/* Captured Image Preview */}
-                {capturedImage && (
-                  <div className="mb-6">
-                    <div className="rounded-2xl overflow-hidden border-2 border-green-300 shadow-lg relative">
-                      <img
-                        src={capturedImage}
-                        alt="صورة ورقة الاختبار الملتقطة"
-                        className="w-full h-auto max-h-[400px] object-contain bg-gray-50"
-                      />
-                      <div className="absolute top-3 right-3 px-3 py-1.5 rounded-full bg-green-500 text-white text-xs font-medium flex items-center gap-1">
-                        <CheckCircle className="w-3.5 h-3.5" />
-                        تم الالتقاط
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-3 mt-4 justify-center">
-                      <Button
-                        variant="outline"
-                        onClick={() => { setCapturedImage(null); startCamera(); }}
-                        className="rounded-xl"
-                      >
-                        <RotateCcw className="w-4 h-4 ml-2" />
-                        إعادة التصوير
-                      </Button>
-                      <Button
-                        onClick={processImage}
                         disabled={isProcessing}
-                        className="bg-amber-600 hover:bg-amber-700 text-white rounded-xl px-8 h-12 text-base font-medium shadow-lg shadow-amber-200/50 active:scale-[0.97] transition-all"
+                        className="bg-green-600 hover:bg-green-700 text-white rounded-xl px-8 h-12 text-base active:scale-[0.97]"
+                        aria-label="التقاط صورة ورقة الاختبار"
                       >
                         {isProcessing ? (
-                          <>
-                            <Loader2 className="w-5 h-5 ml-2 animate-spin" />
-                            جاري التحليل...
-                          </>
+                          <><Loader2 className="w-5 h-5 ml-2 animate-spin" />جاري التحليل...</>
                         ) : (
-                          <>
-                            <Eye className="w-5 h-5 ml-2" />
-                            تحليل الاختبار بالذكاء الاصطناعي
-                          </>
+                          <><Camera className="w-5 h-5 ml-2" />التقاط الصورة</>
                         )}
                       </Button>
-                    </div>
-                  </div>
-                )}
-
-                {/* Action Buttons */}
-                {!isActive && !capturedImage && (
-                  <div className="flex flex-col sm:flex-row items-center gap-4 justify-center">
-                    <Button
-                      size="lg"
-                      onClick={startCamera}
-                      className="bg-amber-600 hover:bg-amber-700 text-white rounded-xl px-8 h-14 text-lg font-medium shadow-lg shadow-amber-200/50 active:scale-[0.97] transition-all w-full sm:w-auto"
-                    >
-                      <Camera className="w-5 h-5 ml-2" />
-                      فتح الكاميرا
-                    </Button>
-
-                    <div className="relative w-full sm:w-auto">
-                      <input
-                        type="file"
-                        accept="image/*"
-                        capture="environment"
-                        onChange={handleFileUpload}
-                        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                        aria-label="رفع صورة من الجهاز"
-                      />
                       <Button
-                        size="lg"
+                        onClick={stopCamera}
                         variant="outline"
-                        className="rounded-xl px-8 h-14 text-lg font-medium border-2 w-full sm:w-auto pointer-events-none"
+                        className="rounded-xl h-12"
                       >
-                        <Upload className="w-5 h-5 ml-2" />
-                        رفع صورة
+                        إلغاء
                       </Button>
-                    </div>
-                  </div>
-                )}
+                    </>
+                  )}
 
-                {cameraError && (
-                  <div className="mt-6 p-4 rounded-xl bg-red-50 border border-red-200 text-center">
-                    <AlertCircle className="w-6 h-6 text-red-500 mx-auto mb-2" />
-                    <p className="text-red-700 text-sm">{cameraError}</p>
-                  </div>
-                )}
-
-                {/* Instructions */}
-                <div className="mt-10 p-6 rounded-2xl bg-amber-50/50 border border-amber-100">
-                  <h3 className="font-bold text-amber-800 mb-3 flex items-center gap-2">
-                    <ImageIcon className="w-5 h-5" />
-                    نصائح لأفضل نتيجة
-                  </h3>
-                  <ul className="space-y-2 text-amber-700 text-sm">
-                    <li className="flex items-start gap-2">
-                      <CheckCircle className="w-4 h-4 mt-0.5 shrink-0" />
-                      <span>تأكد من إضاءة جيدة وعدم وجود ظلال على الورقة</span>
-                    </li>
-                    <li className="flex items-start gap-2">
-                      <CheckCircle className="w-4 h-4 mt-0.5 shrink-0" />
-                      <span>ضع الورقة على سطح مستوٍ وصوّرها من الأعلى</span>
-                    </li>
-                    <li className="flex items-start gap-2">
-                      <CheckCircle className="w-4 h-4 mt-0.5 shrink-0" />
-                      <span>تأكد من ظهور جميع الأسئلة في الصورة بوضوح</span>
-                    </li>
-                  </ul>
-                </div>
-              </motion.div>
-            )}
-
-            {/* ========== Stage: PROCESSING ========== */}
-            {stage === "processing" && (
-              <motion.div
-                key="processing"
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -20 }}
-                transition={{ duration: 0.4 }}
-                className="text-center py-16"
-              >
-                <Loader2 className="w-16 h-16 text-amber-600 animate-spin mx-auto mb-6" />
-                <h2 className="text-2xl font-bold mb-3">جاري تحليل ورقة الاختبار...</h2>
-                <p className="text-muted-foreground mb-6">
-                  الذكاء الاصطناعي يقرأ الأسئلة ويستخرجها من الصورة
-                </p>
-                <div className="w-full max-w-xs mx-auto h-2 bg-amber-100 rounded-full overflow-hidden">
-                  <motion.div
-                    initial={{ width: "0%" }}
-                    animate={{ width: "90%" }}
-                    transition={{ duration: 15, ease: "linear" }}
-                    className="h-full bg-amber-500 rounded-full"
+                  <Button
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={isProcessing}
+                    variant="outline"
+                    className="rounded-xl px-8 h-12 text-base border-2 active:scale-[0.97]"
+                    aria-label="رفع صورة ورقة الاختبار من الجهاز"
+                  >
+                    <Upload className="w-5 h-5 ml-2" />
+                    رفع صورة
+                  </Button>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*"
+                    capture="environment"
+                    onChange={handleFileUpload}
+                    className="hidden"
+                    aria-hidden="true"
                   />
                 </div>
               </motion.div>
             )}
 
             {/* ========== Stage: EXAM ========== */}
-            {stage === "exam" && question && (
+            {stage === "exam" && examData && currentQuestion && (
               <motion.div
                 key="exam"
                 initial={{ opacity: 0, y: 20 }}
@@ -520,190 +412,190 @@ ${qs.map((q) => `
                 exit={{ opacity: 0, y: -20 }}
                 transition={{ duration: 0.4 }}
               >
-                {/* Exam Title */}
-                {examData?.examTitle && (
-                  <div className="text-center mb-4">
-                    <h2 className="text-lg font-bold text-amber-700">{examData.examTitle}</h2>
+                {/* Exam header */}
+                <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
+                  <div>
+                    <h1 className="text-2xl font-bold">{examData.examTitle || (isArabic ? "اختبار" : "Exam")}</h1>
+                    <p className="text-muted-foreground text-sm">
+                      {isArabic ? `السؤال ${currentQ + 1} من ${totalQuestions}` : `Question ${currentQ + 1} of ${totalQuestions}`}
+                    </p>
                   </div>
-                )}
-
-                {/* Progress */}
-                <div className="mb-6">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-sm font-medium">
-                      السؤال {currentQ + 1} من {totalQuestions}
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs bg-amber-100 text-amber-700 px-3 py-1 rounded-full font-medium flex items-center gap-1">
+                      <Languages className="w-3 h-3" />
+                      {isArabic ? "عربي" : "English"}
                     </span>
-                    <span className="text-sm text-muted-foreground">
-                      {answeredCount} إجابة من {totalQuestions}
+                    <span className="text-xs bg-green-100 text-green-700 px-3 py-1 rounded-full font-medium">
+                      {answeredCount}/{totalQuestions}
                     </span>
-                  </div>
-                  <div className="w-full h-2 bg-amber-100 rounded-full overflow-hidden">
-                    <div
-                      className="h-full bg-amber-500 rounded-full transition-all duration-300"
-                      style={{ width: `${((currentQ + 1) / totalQuestions) * 100}%` }}
-                    />
                   </div>
                 </div>
 
-                {/* Question Card */}
-                <div className="rounded-2xl border border-border/50 bg-card shadow-sm overflow-hidden">
-                  {/* Question Header */}
-                  <div className="p-5 border-b border-border/30 bg-amber-50/50 flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-xl bg-amber-600 flex items-center justify-center text-white font-bold">
-                        {question.id}
-                      </div>
-                      <span className="font-medium text-sm">
-                        {question.type === "multiple" ? "اختيار من متعدد" : "إجابة مقالية"}
-                      </span>
+                {/* Progress bar */}
+                <div className="w-full h-2 bg-muted rounded-full mb-8 overflow-hidden">
+                  <motion.div
+                    className="h-full bg-amber-500 rounded-full"
+                    initial={{ width: 0 }}
+                    animate={{ width: `${((currentQ + 1) / totalQuestions) * 100}%` }}
+                    transition={{ duration: 0.3 }}
+                  />
+                </div>
+
+                {/* Question card - click to read */}
+                <div
+                  className="bg-card rounded-2xl border border-border/50 p-6 md:p-8 mb-6 cursor-pointer hover:border-amber-300 transition-colors"
+                  onClick={() => readQuestion(currentQuestion)}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") readQuestion(currentQuestion); }}
+                  aria-label={isArabic ? "اضغط لسماع السؤال" : "Click to hear the question"}
+                >
+                  <div className="flex items-start gap-4 mb-4">
+                    <div className="w-10 h-10 rounded-xl bg-amber-600 text-white flex items-center justify-center font-bold text-lg shrink-0">
+                      {currentQuestion.id}
                     </div>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={isSpeaking ? stopSpeaking : speakQuestion}
-                      className={`rounded-lg ${isSpeaking ? "bg-amber-100 border-amber-300" : ""}`}
-                      aria-label={isSpeaking ? "إيقاف القراءة" : "قراءة السؤال بالصوت"}
+                    <div className="flex-1">
+                      <p className="text-lg md:text-xl font-medium leading-relaxed">{currentQuestion.text}</p>
+                      <p className="text-xs text-muted-foreground mt-2 flex items-center gap-1">
+                        <Volume2 className="w-3 h-3" />
+                        {isArabic ? "اضغط لسماع السؤال" : "Tap to hear the question"}
+                      </p>
+                    </div>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); isSpeaking ? stopSpeaking() : readQuestion(currentQuestion); }}
+                      className={`w-10 h-10 rounded-xl flex items-center justify-center transition-colors shrink-0 ${
+                        isSpeaking ? "bg-red-100 text-red-600" : "bg-amber-100 text-amber-600 hover:bg-amber-200"
+                      }`}
+                      aria-label={isSpeaking ? (isArabic ? "إيقاف القراءة" : "Stop reading") : (isArabic ? "قراءة السؤال" : "Read question")}
                     >
-                      <Volume2 className={`w-4 h-4 ${isSpeaking ? "text-amber-600 animate-pulse" : ""}`} />
-                      <span className="mr-1 text-xs">{isSpeaking ? "إيقاف" : "اقرأ"}</span>
-                    </Button>
+                      {isSpeaking ? <VolumeX className="w-5 h-5" /> : <Volume2 className="w-5 h-5" />}
+                    </button>
                   </div>
 
-                  {/* Question Body */}
-                  <div className="p-6 md:p-8">
-                    <h2 className="text-xl md:text-2xl font-bold mb-6 leading-relaxed">{question.text}</h2>
-
-                    {/* Multiple Choice */}
-                    {question.type === "multiple" && question.options.length > 0 && (
-                      <div className="space-y-3">
-                        {question.options.map((option, i) => {
-                          const isSelected = answers[question.id] === option;
-                          return (
-                            <button
-                              key={option}
-                              onClick={() => handleAnswer(option)}
-                              className={`w-full text-right p-4 rounded-xl border-2 transition-all duration-200 active:scale-[0.98] ${
-                                isSelected
-                                  ? "border-amber-500 bg-amber-50 text-amber-800"
-                                  : "border-border hover:border-amber-200 hover:bg-amber-50/30"
-                              }`}
-                              aria-label={`الخيار ${String.fromCharCode(1571 + i)}: ${option}`}
-                            >
-                              <div className="flex items-center gap-3">
-                                <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-sm font-bold ${
-                                  isSelected ? "bg-amber-500 text-white" : "bg-amber-100 text-amber-600"
-                                }`}>
-                                  {String.fromCharCode(1571 + i)}
-                                </div>
-                                <span className="font-medium">{option}</span>
-                                {isSelected && <CheckCircle className="w-5 h-5 text-amber-600 mr-auto" />}
-                              </div>
-                            </button>
-                          );
-                        })}
-                      </div>
-                    )}
-
-                    {/* Text Answer */}
-                    {(question.type === "text" || (question.type === "multiple" && question.options.length === 0)) && (
-                      <div className="space-y-4">
-                        <div className="relative">
-                          <textarea
-                            value={textInput || answers[question.id] || ""}
-                            onChange={(e) => setTextInput(e.target.value)}
-                            placeholder="اكتب إجابتك هنا أو استخدم الميكروفون..."
-                            className="w-full h-32 p-4 rounded-xl border border-border bg-background text-base resize-none focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
-                            aria-label="حقل الإجابة"
-                          />
-                        </div>
-                        <div className="flex items-center gap-3 flex-wrap">
-                          <Button
-                            variant="outline"
-                            onClick={handleVoiceInput}
-                            className={`rounded-xl ${isListening ? "bg-red-50 border-red-300 text-red-500" : ""}`}
-                            aria-label={isListening ? "إيقاف الاستماع" : "إدخال صوتي"}
-                          >
-                            {isListening ? (
-                              <>
-                                <MicOff className="w-4 h-4 ml-2" />
-                                <span className="animate-pulse">جاري الاستماع...</span>
-                              </>
-                            ) : (
-                              <>
-                                <Mic className="w-4 h-4 ml-2" />
-                                إدخال صوتي
-                              </>
-                            )}
-                          </Button>
-                          <Button
-                            onClick={handleTextAnswer}
-                            disabled={!textInput.trim()}
-                            className="bg-amber-600 hover:bg-amber-700 text-white rounded-xl active:scale-[0.97]"
-                          >
-                            <CheckCircle className="w-4 h-4 ml-2" />
-                            تأكيد الإجابة
-                          </Button>
-                        </div>
-                        {speechError && (
-                          <p className="text-red-500 text-sm flex items-center gap-1">
-                            <AlertCircle className="w-4 h-4" />
-                            {speechError}
-                          </p>
-                        )}
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Navigation */}
-                  <div className="p-5 border-t border-border/30 flex items-center justify-between">
-                    <Button
-                      variant="outline"
-                      onClick={() => goToQuestion(Math.max(0, currentQ - 1))}
-                      disabled={currentQ === 0}
-                      className="rounded-xl active:scale-[0.97]"
-                    >
-                      <ChevronRight className="w-4 h-4 ml-1" />
-                      السابق
-                    </Button>
-
-                    {/* Question dots */}
-                    <div className="hidden md:flex items-center gap-1.5">
-                      {examData?.questions.map((q, i) => (
+                  {/* Multiple choice options with labels */}
+                  {currentQuestion.type === "multiple" && currentQuestion.options.length > 0 && (
+                    <div className="space-y-3 mt-6">
+                      {currentQuestion.options.map((option, i) => (
                         <button
-                          key={q.id}
-                          onClick={() => goToQuestion(i)}
-                          className={`w-8 h-8 rounded-lg text-xs font-bold transition-all ${
-                            i === currentQ
-                              ? "bg-amber-600 text-white"
-                              : answers[q.id]
-                              ? "bg-amber-100 text-amber-700"
-                              : "bg-muted text-muted-foreground"
+                          key={i}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setAnswers((prev) => ({ ...prev, [currentQuestion.id]: option }));
+                            speak(`${labels[i]}: ${option}`, 0.9, examLang);
+                          }}
+                          className={`w-full text-start p-4 rounded-xl border-2 transition-all duration-200 flex items-center gap-3 active:scale-[0.98] ${
+                            answers[currentQuestion.id] === option
+                              ? "border-amber-500 bg-amber-50 text-amber-900"
+                              : "border-border hover:border-amber-200 hover:bg-amber-50/30"
                           }`}
-                          aria-label={`الانتقال للسؤال ${q.id}`}
+                          aria-label={`${isArabic ? "الخيار" : "Option"} ${labels[i]}: ${option}`}
                         >
-                          {q.id}
+                          <span className={`w-9 h-9 rounded-lg flex items-center justify-center font-bold text-sm shrink-0 ${
+                            answers[currentQuestion.id] === option
+                              ? "bg-amber-600 text-white"
+                              : "bg-muted text-muted-foreground"
+                          }`}>
+                            {labels[i]}
+                          </span>
+                          <span className="flex-1">{option}</span>
+                          {answers[currentQuestion.id] === option && (
+                            <CheckCircle className="w-5 h-5 text-amber-600 shrink-0" />
+                          )}
                         </button>
                       ))}
                     </div>
+                  )}
 
-                    {currentQ < totalQuestions - 1 ? (
-                      <Button
-                        onClick={() => goToQuestion(currentQ + 1)}
-                        className="bg-amber-600 hover:bg-amber-700 text-white rounded-xl active:scale-[0.97]"
+                  {/* Text answer input */}
+                  {currentQuestion.type === "text" && (
+                    <div className="mt-6 space-y-3">
+                      <textarea
+                        value={answers[currentQuestion.id] || ""}
+                        onChange={(e) => setAnswers((prev) => ({ ...prev, [currentQuestion.id]: e.target.value }))}
+                        onClick={(e) => e.stopPropagation()}
+                        placeholder={isArabic ? "اكتب إجابتك هنا أو استخدم الميكروفون..." : "Type your answer here or use the microphone..."}
+                        className="w-full min-h-[120px] p-4 rounded-xl border-2 border-border bg-background text-foreground resize-none focus:outline-none focus:border-amber-500 transition-colors"
+                        dir="auto"
+                        aria-label={isArabic ? "حقل الإجابة" : "Answer field"}
+                      />
+                      <div className="flex items-center gap-3">
+                        <Button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (isListening) {
+                              stopListening();
+                            } else {
+                              setTranscript("");
+                              startListening(examLang);
+                            }
+                          }}
+                          variant={isListening ? "destructive" : "outline"}
+                          className="rounded-xl"
+                          aria-label={isListening ? (isArabic ? "إيقاف التسجيل" : "Stop recording") : (isArabic ? "تسجيل صوتي" : "Voice input")}
+                        >
+                          {isListening ? <MicOff className="w-4 h-4 ml-2" /> : <Mic className="w-4 h-4 ml-2" />}
+                          {isListening ? (isArabic ? "إيقاف" : "Stop") : (isArabic ? "إجابة صوتية" : "Voice answer")}
+                        </Button>
+                        {isListening && (
+                          <span className="text-sm text-red-500 animate-pulse flex items-center gap-1">
+                            <span className="w-2 h-2 bg-red-500 rounded-full" />
+                            {isArabic ? "جاري التسجيل..." : "Recording..."}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Navigation */}
+                <div className="flex items-center justify-between gap-4">
+                  <Button
+                    onClick={() => goToQuestion(currentQ - 1)}
+                    disabled={currentQ === 0}
+                    variant="outline"
+                    className="rounded-xl active:scale-[0.97]"
+                  >
+                    <ChevronRight className="w-4 h-4 ml-1" />
+                    {isArabic ? "السابق" : "Previous"}
+                  </Button>
+
+                  {/* Question dots */}
+                  <div className="hidden md:flex items-center gap-1.5 flex-wrap justify-center">
+                    {examData.questions.map((q, i) => (
+                      <button
+                        key={q.id}
+                        onClick={() => goToQuestion(i)}
+                        className={`w-8 h-8 rounded-lg text-xs font-bold transition-all ${
+                          i === currentQ
+                            ? "bg-amber-600 text-white"
+                            : answers[q.id]
+                            ? "bg-amber-100 text-amber-700"
+                            : "bg-muted text-muted-foreground"
+                        }`}
+                        aria-label={`${isArabic ? "السؤال" : "Question"} ${q.id}`}
                       >
-                        التالي
-                        <ChevronLeft className="w-4 h-4 mr-1" />
-                      </Button>
-                    ) : (
-                      <Button
-                        onClick={() => setStage("review")}
-                        className="bg-green-600 hover:bg-green-700 text-white rounded-xl active:scale-[0.97]"
-                      >
-                        <Eye className="w-4 h-4 ml-2" />
-                        مراجعة
-                      </Button>
-                    )}
+                        {q.id}
+                      </button>
+                    ))}
                   </div>
+
+                  {currentQ < totalQuestions - 1 ? (
+                    <Button
+                      onClick={() => goToQuestion(currentQ + 1)}
+                      className="bg-amber-600 hover:bg-amber-700 text-white rounded-xl active:scale-[0.97]"
+                    >
+                      {isArabic ? "التالي" : "Next"}
+                      <ChevronLeft className="w-4 h-4 mr-1" />
+                    </Button>
+                  ) : (
+                    <Button
+                      onClick={() => setStage("review")}
+                      className="bg-green-600 hover:bg-green-700 text-white rounded-xl active:scale-[0.97]"
+                    >
+                      <Eye className="w-4 h-4 ml-2" />
+                      {isArabic ? "مراجعة" : "Review"}
+                    </Button>
+                  )}
                 </div>
               </motion.div>
             )}
@@ -718,9 +610,11 @@ ${qs.map((q) => `
                 transition={{ duration: 0.4 }}
               >
                 <div className="text-center mb-8">
-                  <h1 className="text-3xl font-bold mb-2">مراجعة الإجابات</h1>
+                  <h1 className="text-3xl font-bold mb-2">{isArabic ? "مراجعة الإجابات" : "Review Answers"}</h1>
                   <p className="text-muted-foreground">
-                    راجع إجاباتك قبل التصدير. أجبت على {answeredCount} من {totalQuestions} أسئلة.
+                    {isArabic
+                      ? `راجع إجاباتك قبل التصحيح. أجبت على ${answeredCount} من ${totalQuestions} أسئلة.`
+                      : `Review your answers before grading. Answered ${answeredCount} of ${totalQuestions} questions.`}
                   </p>
                 </div>
 
@@ -728,9 +622,18 @@ ${qs.map((q) => `
                   {examData.questions.map((q) => (
                     <div
                       key={q.id}
-                      className={`p-5 rounded-2xl border ${
+                      className={`p-5 rounded-2xl border cursor-pointer hover:shadow-md transition-shadow ${
                         answers[q.id] ? "border-green-200 bg-green-50/30" : "border-red-200 bg-red-50/30"
                       }`}
+                      onClick={() => {
+                        const prefix = isArabic ? `السؤال ${q.id}` : `Question ${q.id}`;
+                        const answerText = answers[q.id]
+                          ? (isArabic ? `الإجابة: ${answers[q.id]}` : `Answer: ${answers[q.id]}`)
+                          : (isArabic ? "لم يتم الإجابة" : "Not answered");
+                        speak(`${prefix}: ${q.text}. ${answerText}`, 0.9, examLang);
+                      }}
+                      role="button"
+                      tabIndex={0}
                     >
                       <div className="flex items-start gap-3">
                         <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 text-sm font-bold ${
@@ -743,43 +646,200 @@ ${qs.map((q) => `
                           {answers[q.id] ? (
                             <p className="text-green-700 text-sm flex items-center gap-2">
                               <CheckCircle className="w-4 h-4 shrink-0" />
-                              <span>الإجابة: {answers[q.id]}</span>
+                              <span>{isArabic ? "الإجابة" : "Answer"}: {answers[q.id]}</span>
                             </p>
                           ) : (
-                            <p className="text-red-500 text-sm">لم يتم الإجابة</p>
+                            <p className="text-red-500 text-sm">{isArabic ? "لم يتم الإجابة" : "Not answered"}</p>
                           )}
                         </div>
                         <Button
                           variant="outline"
                           size="sm"
-                          onClick={() => { goToQuestion(examData.questions.findIndex(qq => qq.id === q.id)); setStage("exam"); }}
+                          onClick={(e) => { e.stopPropagation(); goToQuestion(examData.questions.findIndex(qq => qq.id === q.id)); setStage("exam"); }}
                           className="rounded-lg text-xs shrink-0"
                         >
-                          تعديل
+                          {isArabic ? "تعديل" : "Edit"}
                         </Button>
                       </div>
                     </div>
                   ))}
                 </div>
 
-                <div className="flex items-center gap-4 justify-center">
+                <div className="flex items-center gap-4 justify-center flex-wrap">
                   <Button
                     variant="outline"
                     onClick={() => setStage("exam")}
                     className="rounded-xl"
                   >
                     <ChevronRight className="w-4 h-4 ml-1" />
-                    العودة للاختبار
+                    {isArabic ? "العودة للاختبار" : "Back to Exam"}
+                  </Button>
+                  <Button
+                    onClick={handleGrade}
+                    disabled={isGrading}
+                    className="bg-blue-600 hover:bg-blue-700 text-white rounded-xl px-8 active:scale-[0.97]"
+                  >
+                    {isGrading ? (
+                      <><Loader2 className="w-4 h-4 ml-2 animate-spin" />{isArabic ? "جاري التصحيح..." : "Grading..."}</>
+                    ) : (
+                      <><GraduationCap className="w-4 h-4 ml-2" />{isArabic ? "تصحيح تلقائي بالذكاء الاصطناعي" : "AI Auto-Grade"}</>
+                    )}
                   </Button>
                   <Button
                     onClick={() => { setStage("export"); handleExport(); }}
                     disabled={isExporting}
+                    variant="outline"
+                    className="rounded-xl"
+                  >
+                    {isExporting ? (
+                      <><Loader2 className="w-4 h-4 ml-2 animate-spin" />{isArabic ? "جاري التصدير..." : "Exporting..."}</>
+                    ) : (
+                      <><FileDown className="w-4 h-4 ml-2" />{isArabic ? "تصدير بدون تصحيح" : "Export without grading"}</>
+                    )}
+                  </Button>
+                </div>
+              </motion.div>
+            )}
+
+            {/* ========== Stage: GRADING ========== */}
+            {stage === "grading" && examData && gradingData && (
+              <motion.div
+                key="grading"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -20 }}
+                transition={{ duration: 0.4 }}
+              >
+                {/* Score header */}
+                <div className="text-center mb-8">
+                  <motion.div
+                    initial={{ scale: 0.8 }}
+                    animate={{ scale: 1 }}
+                    transition={{ duration: 0.5, type: "spring" }}
+                    className={`w-28 h-28 rounded-full flex items-center justify-center mx-auto mb-4 ${
+                      gradingData.totalScore >= 50 ? "bg-green-100" : "bg-red-100"
+                    }`}
+                  >
+                    <span className={`text-4xl font-bold ${
+                      gradingData.totalScore >= 50 ? "text-green-600" : "text-red-600"
+                    }`}>
+                      {gradingData.totalScore}%
+                    </span>
+                  </motion.div>
+                  <h1 className="text-3xl font-bold mb-2">{isArabic ? "نتيجة التصحيح" : "Grading Results"}</h1>
+                  <p className="text-muted-foreground">
+                    {isArabic
+                      ? `${gradingData.totalCorrect} إجابة صحيحة من ${gradingData.totalQuestions}`
+                      : `${gradingData.totalCorrect} correct out of ${gradingData.totalQuestions}`}
+                  </p>
+                  {gradingData.overallFeedback && (
+                    <div className="mt-4 p-4 bg-amber-50 border border-amber-200 rounded-xl text-amber-800 text-sm max-w-lg mx-auto">
+                      {gradingData.overallFeedback}
+                    </div>
+                  )}
+                </div>
+
+                {/* Graded questions */}
+                <div className="space-y-4 mb-8">
+                  {examData.questions.map((q) => {
+                    const result = gradingData.results.find(r => r.questionId === q.id);
+                    if (!result) return null;
+
+                    const statusColors = {
+                      correct: "border-green-300 bg-green-50/50",
+                      incorrect: "border-red-300 bg-red-50/50",
+                      partial: "border-yellow-300 bg-yellow-50/50",
+                      unanswered: "border-gray-300 bg-gray-50/50",
+                    };
+
+                    const statusIcons = {
+                      correct: <CheckCircle className="w-5 h-5 text-green-600" />,
+                      incorrect: <XCircle className="w-5 h-5 text-red-600" />,
+                      partial: <AlertCircle className="w-5 h-5 text-yellow-600" />,
+                      unanswered: <AlertCircle className="w-5 h-5 text-gray-400" />,
+                    };
+
+                    const statusLabels = {
+                      correct: isArabic ? "صحيح" : "Correct",
+                      incorrect: isArabic ? "خاطئ" : "Incorrect",
+                      partial: isArabic ? "جزئي" : "Partial",
+                      unanswered: isArabic ? "لم يُجب" : "Unanswered",
+                    };
+
+                    return (
+                      <div
+                        key={q.id}
+                        className={`p-5 rounded-2xl border-2 cursor-pointer hover:shadow-md transition-shadow ${statusColors[result.isCorrect]}`}
+                        onClick={() => {
+                          const status = statusLabels[result.isCorrect];
+                          const msg = isArabic
+                            ? `السؤال ${q.id}: ${q.text}. النتيجة: ${status}. ${result.feedback}. الإجابة الصحيحة: ${result.correctAnswer}`
+                            : `Question ${q.id}: ${q.text}. Result: ${status}. ${result.feedback}. Correct answer: ${result.correctAnswer}`;
+                          speak(msg, 0.85, examLang);
+                        }}
+                        role="button"
+                        tabIndex={0}
+                      >
+                        <div className="flex items-start gap-3">
+                          <div className="w-8 h-8 rounded-lg bg-amber-600 text-white flex items-center justify-center shrink-0 text-sm font-bold">
+                            {q.id}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="font-medium mb-2">{q.text}</p>
+
+                            {/* Student answer */}
+                            {answers[q.id] && (
+                              <div className={`text-sm mb-2 flex items-center gap-2 ${
+                                result.isCorrect === "correct" ? "text-green-700" : "text-red-600"
+                              }`}>
+                                {statusIcons[result.isCorrect]}
+                                <span>{isArabic ? "إجابتك" : "Your answer"}: {answers[q.id]}</span>
+                              </div>
+                            )}
+
+                            {/* Correct answer (if wrong) */}
+                            {result.isCorrect !== "correct" && result.correctAnswer && (
+                              <div className="text-sm text-green-700 flex items-center gap-2 mb-2">
+                                <CheckCircle className="w-4 h-4 shrink-0" />
+                                <span>{isArabic ? "الإجابة الصحيحة" : "Correct answer"}: {result.correctAnswer}</span>
+                              </div>
+                            )}
+
+                            {/* Feedback */}
+                            {result.feedback && (
+                              <p className="text-xs text-blue-700 bg-blue-50 px-3 py-1.5 rounded-lg mt-1">
+                                {result.feedback}
+                              </p>
+                            )}
+                          </div>
+                          <div className="flex flex-col items-center gap-1 shrink-0">
+                            {statusIcons[result.isCorrect]}
+                            <span className="text-xs font-medium">{statusLabels[result.isCorrect]}</span>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                <div className="flex items-center gap-4 justify-center flex-wrap">
+                  <Button
+                    variant="outline"
+                    onClick={() => setStage("review")}
+                    className="rounded-xl"
+                  >
+                    <ChevronRight className="w-4 h-4 ml-1" />
+                    {isArabic ? "العودة للمراجعة" : "Back to Review"}
+                  </Button>
+                  <Button
+                    onClick={() => { handleExport(); }}
+                    disabled={isExporting}
                     className="bg-amber-600 hover:bg-amber-700 text-white rounded-xl px-8 active:scale-[0.97]"
                   >
                     {isExporting ? (
-                      <><Loader2 className="w-4 h-4 ml-2 animate-spin" />جاري التصدير...</>
+                      <><Loader2 className="w-4 h-4 ml-2 animate-spin" />{isArabic ? "جاري التصدير..." : "Exporting..."}</>
                     ) : (
-                      <><FileDown className="w-4 h-4 ml-2" />تصدير PDF</>
+                      <><FileDown className="w-4 h-4 ml-2" />{isArabic ? "تصدير PDF مع التصحيح" : "Export PDF with Grading"}</>
                     )}
                   </Button>
                 </div>
@@ -804,29 +864,34 @@ ${qs.map((q) => `
                 >
                   <CheckCircle className="w-12 h-12 text-green-600" />
                 </motion.div>
-                <h1 className="text-3xl font-bold mb-4">تم تصدير الاختبار بنجاح!</h1>
+                <h1 className="text-3xl font-bold mb-4">
+                  {isArabic ? "تم تصدير الاختبار بنجاح!" : "Exam exported successfully!"}
+                </h1>
                 <p className="text-muted-foreground text-lg mb-4 max-w-md mx-auto">
-                  تم إنشاء ملف PDF يحتوي على جميع إجاباتك بشكل منظم ومطابق لنموذج الاختبار.
+                  {gradingData
+                    ? (isArabic
+                      ? `تم إنشاء ملف PDF يحتوي على إجاباتك مع نتائج التصحيح التلقائي (${gradingData.totalScore}%).`
+                      : `PDF created with your answers and AI grading results (${gradingData.totalScore}%).`)
+                    : (isArabic
+                      ? "تم إنشاء ملف PDF يحتوي على جميع إجاباتك بشكل منظم."
+                      : "PDF created with all your answers organized.")}
                 </p>
-                <p className="text-sm text-muted-foreground mb-8">
-                  يمكن للمعلم طباعة الملف مباشرة أو مراجعته إلكترونياً.
-                </p>
-                <div className="flex items-center gap-4 justify-center">
+                <div className="flex items-center gap-4 justify-center flex-wrap">
                   <Button
                     variant="outline"
                     onClick={resetExam}
                     className="rounded-xl"
                   >
                     <RotateCcw className="w-4 h-4 ml-2" />
-                    تجربة جديدة
+                    {isArabic ? "تجربة جديدة" : "New Exam"}
                   </Button>
                   <Button
                     onClick={downloadPdf}
-                    disabled={!pdfReady}
+                    disabled={!pdfHtml}
                     className="bg-amber-600 hover:bg-amber-700 text-white rounded-xl px-8 active:scale-[0.97]"
                   >
                     <FileDown className="w-4 h-4 ml-2" />
-                    تحميل وطباعة PDF
+                    {isArabic ? "تحميل وطباعة PDF" : "Download & Print PDF"}
                   </Button>
                 </div>
               </motion.div>

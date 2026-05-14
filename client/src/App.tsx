@@ -10,6 +10,9 @@ import Features from "./pages/Features";
 import RoboticArm from "./pages/RoboticArm";
 import DigitalAssistant from "./pages/DigitalAssistant";
 import ExamDemo from "./pages/ExamDemo";
+import OnlineExams from "./pages/OnlineExams";
+import TeacherPanel from "./pages/TeacherPanel";
+import VoiceGuide from "./components/VoiceGuide";
 
 function Router() {
   return (
@@ -20,6 +23,8 @@ function Router() {
       <Route path="/robotic-arm" component={RoboticArm} />
       <Route path="/assistant" component={DigitalAssistant} />
       <Route path="/exam-demo" component={ExamDemo} />
+      <Route path="/online-exams" component={OnlineExams} />
+      <Route path="/teacher" component={TeacherPanel} />
       <Route path="/404" component={NotFound} />
       <Route component={NotFound} />
     </Switch>
@@ -33,6 +38,7 @@ function App() {
         <TooltipProvider>
           <Toaster />
           <Router />
+          <VoiceGuide />
         </TooltipProvider>
       </ThemeProvider>
     </ErrorBoundary>
