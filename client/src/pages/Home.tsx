@@ -21,7 +21,6 @@ import {
   Keyboard,
   Smartphone,
   Globe,
-  Braille,
   Eye,
   Hand,
   Monitor,
