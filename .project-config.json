@@ -1,0 +1,35 @@
+{
+  "build_command": "pnpm run build",
+  "capabilities": [],
+  "dev_command": "pnpm run dev",
+  "env_vars": {},
+  "experiments": null,
+  "git_remote": {
+    "repo_url": "s3://vida-prod-gitrepo/webdev-git/310519663660690446/egP6Ccw5DpGVLQ8nQQhPRc",
+    "access_key_id": "ASIAZV3A2ECZPINIICSI",
+    "secret_access_key": "bTwsP+55XvntHt3pVSc85KOQD31grJ8by3KOHQ1L",
+    "session_token": "IQoJb3JpZ2luX2VjEJz//////////wEaCXVzLWVhc3QtMSJHMEUCIFkndQgX9Erq3n1wjc2Zh7M2ypyCkoaUwe7dFZk35rPqAiEAqHdN1uHjfASGKBs1aASJuvgG3d1s+g3Aqq+bX2b9UTkq9gMIZBAEGgw2NjUzODYwOTg4NjYiDB0TkJmZBrtqE+UiUyrTA/ZxpZYUKaqETChdNCABHKL1UKzzPYt2e5M5nxTtZy8EH4X//GxJ5uJgQNspSMyIrA66zCswpzbhEsEZ+pKBHydcRSlK0qErs4tCnRBFTJzuAivtmfWnXPILownQ34FVIXZGbGPUhop7SGgJrvUADvH4hlk2JIkEIrTVTX4a6qh2HYXn7vIOgJG5ni4IkIQK1ljxXRwbbmnRTl3uniicWY3NmDHJMqIH+wvnW+f7eN+JabyF2YxuMlW22WG09ymuc+m/AEAPjBWDViZu+w8/od2P5CtE8phZlafhajvGyWriTJ9ddJ8vJESXLrhALcy3evd4SoDWKv7VMicXw2578qtGaBL/gdmLXq+ZBfucbKfoVn/dKdskl0eI84wk/yPaEvVnYognPWPUY5jqFscJEumjJjwgzXfSG4YgtUHRXIT4umzNOwodQnBdChfxfUSbhRnBbA12+dxAGU1cw0ePA/5ys0cv4z/kFGp77ssXSIDsmtysEi32Dc/ECTc5HizDCdJ3Qbc918IosPpk1tWMmGriZ/GrdKqsV1MWf7au2GLLhD73SQUx//4bOOHXcee389h1HQuNaBTJBmSEwaSEmRR71BBXFh/2gp4DwfXkmxJnKBPPMIm6mNAGOp0BjgKAt4qDAH4jprLwFW5NRqGPoTCYtvL+r6hi/H/VY/cna7mi+kqa7XuTFSGQHuWpbf/PAewCpqALmJjlqims4l7zkwtIj75Csf/0o17hn5luYUYl4Rvmgw+66FgT2UJZuC3dinwX38ZkB93zmXVeZGuslz3S5LrgSIk80qy/oCHlA4gZ0ZVBY3prcXdvipLdMcm1jCwKtKIbZHVp6Q==",
+    "expiration": "2026-05-15T07:05:45.000Z"
+  },
+  "name": "basira-accessible-exams",
+  "path": "/home/ubuntu/basira-accessible-exams",
+  "port": 3000,
+  "secrets": {
+    "BUILT_IN_FORGE_API_KEY": "Hq5JAFXFw9f57diss63MsR",
+    "BUILT_IN_FORGE_API_URL": "https://forge.manus.ai",
+    "JWT_SECRET": "cJcMVmnShtA7Xoq5iVTvuP",
+    "OAUTH_SERVER_URL": "https://api.manus.im",
+    "OWNER_NAME": "Raed",
+    "OWNER_OPEN_ID": "hDWMojKBViaRoyCqTDHA4f",
+    "VITE_ANALYTICS_ENDPOINT": "https://manus-analytics.com",
+    "VITE_ANALYTICS_WEBSITE_ID": "70d4fd47-853f-4585-9d0e-e269673cf24c",
+    "VITE_APP_ID": "egP6Ccw5DpGVLQ8nQQhPRc",
+    "VITE_APP_LOGO": "",
+    "VITE_APP_TITLE": "بصيرة للاختبارات الذكية",
+    "VITE_FRONTEND_FORGE_API_KEY": "K8eWL6ZX8VKLgdaLLfCtHn",
+    "VITE_FRONTEND_FORGE_API_URL": "https://forge.manus.ai",
+    "VITE_OAUTH_PORTAL_URL": "https://manus.im"
+  },
+  "template_id": "web-static",
+  "test_command": "pnpm test"
+}
