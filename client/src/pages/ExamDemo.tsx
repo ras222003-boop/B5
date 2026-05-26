@@ -393,8 +393,7 @@ export default function ExamDemo() {
                   <input
                     ref={fileInputRef}
                     type="file"
-                    accept="image/*"
-                    capture="environment"
+                    accept="image/jpeg,image/png,image/webp,image/jpg"
                     onChange={handleFileUpload}
                     className="hidden"
                     aria-hidden="true"
