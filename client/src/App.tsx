@@ -9,6 +9,7 @@ import HowItWorks from "./pages/HowItWorks";
 import Features from "./pages/Features";
 import RoboticArm from "./pages/RoboticArm";
 import DigitalAssistant from "./pages/DigitalAssistant";
+import AIGuide from "./pages/AIGuide";
 import ExamDemo from "./pages/ExamDemo";
 import OnlineExams from "./pages/OnlineExams";
 import TeacherPanel from "./pages/TeacherPanel";
@@ -22,6 +23,7 @@ function Router() {
       <Route path="/features" component={Features} />
       <Route path="/robotic-arm" component={RoboticArm} />
       <Route path="/assistant" component={DigitalAssistant} />
+      <Route path="/ai-guide" component={AIGuide} />
       <Route path="/exam-demo" component={ExamDemo} />
       <Route path="/online-exams" component={OnlineExams} />
       <Route path="/teacher" component={TeacherPanel} />
