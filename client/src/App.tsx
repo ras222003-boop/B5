@@ -13,7 +13,9 @@ import AIGuide from "./pages/AIGuide";
 import ExamDemo from "./pages/ExamDemo";
 import OnlineExams from "./pages/OnlineExams";
 import TeacherPanel from "./pages/TeacherPanel";
+import AssistantAnalytics from "./pages/AssistantAnalytics";
 import VoiceGuide from "./components/VoiceGuide";
+import FloatingChatWidget from "./components/FloatingChatWidget";
 
 function Router() {
   return (
@@ -26,9 +28,10 @@ function Router() {
       <Route path="/ai-guide" component={AIGuide} />
       <Route path="/exam-demo" component={ExamDemo} />
       <Route path="/online-exams" component={OnlineExams} />
-      <Route path="/teacher" component={TeacherPanel} />
-      <Route path="/404" component={NotFound} />
-      <Route component={NotFound} />
+      <Route path="/teacher-panel" component={TeacherPanel} />
+      <Route path="/ai-guide" component={AIGuide} />
+      <Route path="/assistant-analytics" component={AssistantAnalytics} />
+      <Route path="*" component={NotFound} />
     </Switch>
   );
 }
@@ -41,6 +44,7 @@ function App() {
           <Toaster />
           <Router />
           <VoiceGuide />
+          <FloatingChatWidget />
         </TooltipProvider>
       </ThemeProvider>
     </ErrorBoundary>

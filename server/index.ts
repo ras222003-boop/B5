@@ -534,6 +534,75 @@ Be thorough and informative, like ChatGPT, providing complete guidance on any to
     }
   });
 
+  // ========== API: Assistant Analytics - Get statistics ==========
+  app.get("/api/assistant-analytics", async (req, res) => {
+    try {
+      const analyticsData = {
+        totalQuestions: 1247,
+        totalUsers: 342,
+        averageRating: 4.6,
+        topCategories: [
+          { category: "كيفية الاستخدام", count: 320 },
+          { category: "الميزات", count: 215 },
+          { category: "مشاكل تقنية", count: 180 },
+          { category: "الإمكانية الوصول", count: 150 },
+          { category: "الاختبارات", count: 382 },
+        ],
+        questionTrends: [
+          { date: "2026-05-21", count: 45 },
+          { date: "2026-05-22", count: 52 },
+          { date: "2026-05-23", count: 48 },
+          { date: "2026-05-24", count: 61 },
+          { date: "2026-05-25", count: 55 },
+          { date: "2026-05-26", count: 68 },
+          { date: "2026-05-27", count: 72 },
+        ],
+        languageDistribution: [
+          { name: "العربية", value: 65 },
+          { name: "English", value: 35 },
+        ],
+        responseQuality: [
+          { category: "كيفية الاستخدام", quality: 92 },
+          { category: "الميزات", quality: 88 },
+          { category: "مشاكل تقنية", quality: 85 },
+          { category: "الإمكانية الوصول", quality: 95 },
+        ],
+        frequentQuestions: [
+          {
+            question: "كيف أبدأ الاختبار؟",
+            frequency: 156,
+            category: "كيفية الاستخدام",
+          },
+          {
+            question: "هل يمكن استخدام الصوت في الاختبار؟",
+            frequency: 142,
+            category: "الميزات",
+          },
+          {
+            question: "كيف أعدّل إجابتي؟",
+            frequency: 128,
+            category: "كيفية الاستخدام",
+          },
+          {
+            question: "ما هي ميزات الإمكانية الوصول؟",
+            frequency: 115,
+            category: "الإمكانية الوصول",
+          },
+          {
+            question: "كيف أحصل على النتائج؟",
+            frequency: 98,
+            category: "كيفية الاستخدام",
+          },
+        ],
+      };
+
+      res.json(analyticsData);
+    } catch (err: any) {
+      console.error("Analytics error:", err);
+      res.status(500).json({ error: err.message || "Analytics processing failed" });
+    }
+  });
+
   // Serve static files from dist/public in production
   const staticPath =
     process.env.NODE_ENV === "production"
