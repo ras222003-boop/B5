@@ -11,7 +11,7 @@ export function detectLanguage(text: string): "ar" | "en" {
 
 /**
  * Hook for Text-to-Speech using Web Speech API
- * Supports Arabic and English with auto-detection
+ * Supports Arabic and English with explicit language control for clarity
  */
 export function useTextToSpeech() {
   const [isSpeaking, setIsSpeaking] = useState(false);
@@ -26,16 +26,34 @@ export function useTextToSpeech() {
     const utterance = new SpeechSynthesisUtterance(text);
     const lang = forceLang || detectLanguage(text);
     utterance.lang = lang === "ar" ? "ar-SA" : "en-US";
-    utterance.rate = rate;
-    utterance.pitch = 1;
+    
+    // Optimize for clarity: slower rate for Arabic, normal for English
+    if (lang === "ar") {
+      utterance.rate = rate * 0.95; // Slightly slower for Arabic clarity
+      utterance.pitch = 1.05; // Slightly higher pitch for better clarity
+    } else {
+      utterance.rate = rate;
+      utterance.pitch = 1;
+    }
     utterance.volume = 1;
 
-    // Try to find a matching voice
+    // Try to find a high-quality matching voice
     const voices = window.speechSynthesis.getVoices();
     const langPrefix = lang === "ar" ? "ar" : "en";
-    const matchingVoice =
-      voices.find((v) => v.lang.startsWith(langPrefix) && v.localService) ||
-      voices.find((v) => v.lang.startsWith(langPrefix));
+    
+    // Prefer local service voices for better quality
+    let matchingVoice = voices.find((v) => v.lang.startsWith(langPrefix) && v.localService);
+    
+    // If no local voice, try to find the best available voice
+    if (!matchingVoice) {
+      matchingVoice = voices.find((v) => v.lang.startsWith(langPrefix) && !v.lang.includes("-"));
+    }
+    
+    // Last resort: any matching voice
+    if (!matchingVoice) {
+      matchingVoice = voices.find((v) => v.lang.startsWith(langPrefix));
+    }
+    
     if (matchingVoice) {
       utterance.voice = matchingVoice;
     }
@@ -64,6 +82,22 @@ export function useTextToSpeech() {
 }
 
 /**
+ * Hook for Text-to-Speech with explicit language selection UI
+ * Allows users to choose between Arabic and English for maximum clarity
+ */
+export function useTextToSpeechWithLanguage() {
+  const [selectedLang, setSelectedLang] = useState<"ar" | "en" | "auto">("auto");
+  const { speak: baseSpeech, stop, isSpeaking } = useTextToSpeech();
+
+  const speak = useCallback((text: string, rate?: number, forceLang?: "ar" | "en") => {
+    const lang = forceLang || (selectedLang === "auto" ? detectLanguage(text) : selectedLang);
+    baseSpeech(text, rate, lang);
+  }, [baseSpeech, selectedLang]);
+
+  return { speak, stop, isSpeaking, selectedLang, setSelectedLang };
+}
+
+/**
  * Hook for Speech-to-Text using Web Speech API
  * Supports Arabic and English
  */
@@ -82,7 +116,10 @@ export function useSpeechToText(defaultLang: "ar" | "en" = "ar") {
       (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
 
     if (!SpeechRecognition) {
-      setError("المتصفح لا يدعم التعرف على الصوت. جرب Chrome أو Edge.");
+      const errorMsg = defaultLang === "ar" 
+        ? "المتصفح لا يدعم التعرف على الصوت. جرب Chrome أو Edge."
+        : "Browser doesn't support speech recognition. Try Chrome or Edge.";
+      setError(errorMsg);
       return;
     }
 
@@ -115,15 +152,29 @@ export function useSpeechToText(defaultLang: "ar" | "en" = "ar") {
 
     recognition.onerror = (event: any) => {
       console.error("Speech recognition error:", event.error);
-      if (event.error === "not-allowed") {
-        setError("يرجى السماح بالوصول إلى الميكروفون");
-      } else if (event.error === "no-speech") {
-        setError("لم يتم اكتشاف كلام. حاول مرة أخرى");
-      } else if (event.error === "audio-capture") {
-        setError("لم يتم العثور على ميكروفون. تأكد من توصيله");
+      const activeLang = overrideLang || lang;
+      let errorMsg = "حدث خطأ في التعرف على الصوت";
+      
+      if (activeLang === "ar") {
+        if (event.error === "not-allowed") {
+          errorMsg = "يرجى السماح بالوصول إلى الميكروفون";
+        } else if (event.error === "no-speech") {
+          errorMsg = "لم يتم اكتشاف كلام. حاول مرة أخرى";
+        } else if (event.error === "audio-capture") {
+          errorMsg = "لم يتم العثور على ميكروفون. تأكد من توصيله";
+        }
       } else {
-        setError("حدث خطأ في التعرف على الصوت");
+        if (event.error === "not-allowed") {
+          errorMsg = "Please allow access to the microphone";
+        } else if (event.error === "no-speech") {
+          errorMsg = "No speech detected. Try again.";
+        } else if (event.error === "audio-capture") {
+          errorMsg = "Microphone not found. Please check your connection.";
+        } else {
+          errorMsg = "Speech recognition error occurred";
+        }
       }
+      setError(errorMsg);
       setIsListening(false);
     };
 
