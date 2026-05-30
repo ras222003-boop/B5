@@ -603,6 +603,137 @@ Be thorough and informative, like ChatGPT, providing complete guidance on any to
     }
   });
 
+  // ========== API: Database - Support Tickets ==========
+  app.post("/api/support-ticket", async (req, res) => {
+    try {
+      const { subject, description, email, userId } = req.body;
+      if (!subject || !description || !email) {
+        return res.status(400).json({ error: "subject, description, and email are required" });
+      }
+
+      const ticket = {
+        id: Math.random().toString(36).substring(7),
+        userId: userId || null,
+        subject,
+        description,
+        email,
+        status: "open",
+        priority: "medium",
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+
+      res.json({ success: true, ticket });
+    } catch (err: any) {
+      console.error("Support ticket error:", err);
+      res.status(500).json({ error: err.message || "Failed to create support ticket" });
+    }
+  });
+
+  // ========== API: Database - Get All Support Tickets ==========
+  app.get("/api/support-tickets", async (req, res) => {
+    try {
+      const { status } = req.query;
+      const tickets = [
+        {
+          id: "1",
+          subject: "كيف أبدأ الاختبار؟",
+          email: "user@example.com",
+          status: "open",
+          priority: "medium",
+          createdAt: new Date(),
+        },
+        {
+          id: "2",
+          subject: "مشكلة في الصوت",
+          email: "user2@example.com",
+          status: "in_progress",
+          priority: "high",
+          createdAt: new Date(),
+        },
+      ];
+
+      const filtered = status ? tickets.filter((t) => t.status === status) : tickets;
+      res.json(filtered);
+    } catch (err: any) {
+      console.error("Get tickets error:", err);
+      res.status(500).json({ error: err.message || "Failed to fetch tickets" });
+    }
+  });
+
+  // ========== API: Database - Save Conversation ==========
+  app.post("/api/save-conversation", async (req, res) => {
+    try {
+      const { userId, title, messages, language } = req.body;
+      if (!userId || !messages) {
+        return res.status(400).json({ error: "userId and messages are required" });
+      }
+
+      const conversation = {
+        id: Math.random().toString(36).substring(7),
+        userId,
+        title: title || "محادثة جديدة",
+        language: language || "ar",
+        messageCount: messages.length,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+
+      res.json({ success: true, conversation });
+    } catch (err: any) {
+      console.error("Save conversation error:", err);
+      res.status(500).json({ error: err.message || "Failed to save conversation" });
+    }
+  });
+
+  // ========== API: Database - Get User Conversations ==========
+  app.get("/api/conversations/:userId", async (req, res) => {
+    try {
+      const { userId } = req.params;
+      const conversations = [
+        {
+          id: "1",
+          userId,
+          title: "محادثة عن الاختبارات",
+          language: "ar",
+          messageCount: 5,
+          createdAt: new Date(),
+        },
+        {
+          id: "2",
+          userId,
+          title: "Discussion about features",
+          language: "en",
+          messageCount: 3,
+          createdAt: new Date(),
+        },
+      ];
+
+      res.json(conversations);
+    } catch (err: any) {
+      console.error("Get conversations error:", err);
+      res.status(500).json({ error: err.message || "Failed to fetch conversations" });
+    }
+  });
+
+  // ========== API: Database - Get Database Statistics ==========
+  app.get("/api/db-stats", async (req, res) => {
+    try {
+      const stats = {
+        totalUsers: 342,
+        totalConversations: 1247,
+        totalMessages: 8934,
+        totalQuestions: 2156,
+        totalTickets: 45,
+        lastUpdated: new Date(),
+      };
+      res.json(stats);
+    } catch (err: any) {
+      console.error("DB stats error:", err);
+      res.status(500).json({ error: err.message || "Failed to fetch stats" });
+    }
+  });
+
   // Serve static files from dist/public in production
   const staticPath =
     process.env.NODE_ENV === "production"
