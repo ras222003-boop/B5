@@ -14,6 +14,7 @@ import ExamDemo from "./pages/ExamDemo";
 import OnlineExams from "./pages/OnlineExams";
 import TeacherPanel from "./pages/TeacherPanel";
 import AssistantAnalytics from "./pages/AssistantAnalytics";
+import PhotoRequirements from "./pages/PhotoRequirements";
 import VoiceGuide from "./components/VoiceGuide";
 import FloatingChatWidget from "./components/FloatingChatWidget";
 
@@ -31,6 +32,7 @@ function Router() {
       <Route path="/teacher-panel" component={TeacherPanel} />
       <Route path="/ai-guide" component={AIGuide} />
       <Route path="/assistant-analytics" component={AssistantAnalytics} />
+      <Route path="/photo-requirements" component={PhotoRequirements} />
       <Route path="*" component={NotFound} />
     </Switch>
   );
