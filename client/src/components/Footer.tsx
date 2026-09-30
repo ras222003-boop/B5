@@ -2,7 +2,8 @@
  * Design: Warm Contemporary - Footer with amber accents
  */
 import { Link } from "wouter";
-import { Eye, Mail, Phone, MapPin } from "lucide-react";
+import { Mail, Phone, MapPin } from "lucide-react";
+import BrandLogo from "./BrandLogo";
 
 export default function Footer() {
   return (
@@ -12,9 +13,7 @@ export default function Footer() {
           {/* Brand */}
           <div className="space-y-4">
             <div className="flex items-center gap-2">
-              <div className="w-10 h-10 rounded-xl bg-amber-600 flex items-center justify-center">
-                <Eye className="w-5 h-5 text-white" />
-              </div>
+              <BrandLogo className="w-12 h-12 rounded-full ring-1 ring-amber-300/70" />
               <span className="text-xl font-bold text-white">بصيرة</span>
             </div>
             <p className="text-slate-400 text-sm leading-relaxed">

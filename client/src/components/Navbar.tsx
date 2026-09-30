@@ -4,8 +4,9 @@
  */
 import { useState } from "react";
 import { Link, useLocation } from "wouter";
-import { Menu, X, Eye } from "lucide-react";
+import { Menu, X } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
+import BrandLogo from "./BrandLogo";
 
 const navLinks = [
   { href: "/", label: "الرئيسية" },
@@ -31,9 +32,10 @@ export default function Navbar() {
       <div className="container flex items-center justify-between h-16 md:h-18">
         {/* Logo */}
         <Link href="/" className="flex items-center gap-2 group" aria-label="بصيرة - الصفحة الرئيسية">
-          <div className="w-10 h-10 rounded-xl bg-primary flex items-center justify-center shadow-md group-hover:shadow-lg transition-shadow duration-200">
-            <Eye className="w-5 h-5 text-primary-foreground" />
-          </div>
+          <BrandLogo
+            alt=""
+            className="w-11 h-11 rounded-full ring-1 ring-amber-300/70 shadow-md transition-shadow duration-200 group-hover:shadow-lg"
+          />
           <span className="text-xl font-bold text-foreground">بصيرة</span>
         </Link>
 
