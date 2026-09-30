@@ -50,39 +50,39 @@
 }
 
 :root {
-  --radius: 0.75rem;
-  --background: oklch(0.99 0.005 80);
-  --foreground: oklch(0.2 0.02 50);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.2 0.02 50);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.2 0.02 50);
-  --primary: oklch(0.65 0.17 55);
-  --primary-foreground: oklch(1 0 0);
-  --secondary: oklch(0.96 0.01 80);
-  --secondary-foreground: oklch(0.35 0.03 50);
-  --muted: oklch(0.95 0.01 80);
-  --muted-foreground: oklch(0.5 0.02 50);
-  --accent: oklch(0.95 0.02 80);
-  --accent-foreground: oklch(0.2 0.02 50);
+  --radius: 1rem;
+  --background: oklch(0.13 0.008 80);
+  --foreground: oklch(0.96 0.015 85);
+  --card: oklch(0.18 0.012 75);
+  --card-foreground: oklch(0.96 0.015 85);
+  --popover: oklch(0.16 0.011 75);
+  --popover-foreground: oklch(0.96 0.015 85);
+  --primary: oklch(0.82 0.14 82);
+  --primary-foreground: oklch(0.16 0.015 75);
+  --secondary: oklch(0.23 0.015 75);
+  --secondary-foreground: oklch(0.93 0.018 85);
+  --muted: oklch(0.22 0.011 75);
+  --muted-foreground: oklch(0.73 0.018 85);
+  --accent: oklch(0.29 0.035 80);
+  --accent-foreground: oklch(0.98 0.018 85);
   --destructive: oklch(0.58 0.22 27);
   --destructive-foreground: oklch(1 0 0);
-  --border: oklch(0.91 0.01 80);
-  --input: oklch(0.91 0.01 80);
-  --ring: oklch(0.65 0.17 55);
-  --chart-1: oklch(0.65 0.17 55);
-  --chart-2: oklch(0.55 0.15 220);
-  --chart-3: oklch(0.7 0.15 140);
-  --chart-4: oklch(0.6 0.2 310);
-  --chart-5: oklch(0.75 0.12 60);
-  --sidebar: oklch(0.98 0.005 80);
-  --sidebar-foreground: oklch(0.2 0.02 50);
-  --sidebar-primary: oklch(0.65 0.17 55);
-  --sidebar-primary-foreground: oklch(1 0 0);
-  --sidebar-accent: oklch(0.95 0.02 80);
-  --sidebar-accent-foreground: oklch(0.2 0.02 50);
-  --sidebar-border: oklch(0.91 0.01 80);
-  --sidebar-ring: oklch(0.65 0.17 55);
+  --border: oklch(0.34 0.035 80);
+  --input: oklch(0.27 0.016 75);
+  --ring: oklch(0.82 0.14 82);
+  --chart-1: oklch(0.82 0.14 82);
+  --chart-2: oklch(0.72 0.1 65);
+  --chart-3: oklch(0.68 0.11 155);
+  --chart-4: oklch(0.68 0.13 295);
+  --chart-5: oklch(0.8 0.09 98);
+  --sidebar: oklch(0.16 0.011 75);
+  --sidebar-foreground: oklch(0.96 0.015 85);
+  --sidebar-primary: oklch(0.82 0.14 82);
+  --sidebar-primary-foreground: oklch(0.16 0.015 75);
+  --sidebar-accent: oklch(0.25 0.02 75);
+  --sidebar-accent-foreground: oklch(0.96 0.015 85);
+  --sidebar-border: oklch(0.34 0.035 80);
+  --sidebar-ring: oklch(0.82 0.14 82);
 }
 
 @layer base {
@@ -93,6 +93,11 @@
     @apply bg-background text-foreground;
     font-family: "Tajawal", sans-serif;
     direction: rtl;
+    min-width: 320px;
+    background-image:
+      radial-gradient(circle at 12% 4%, oklch(0.38 0.09 80 / 0.2), transparent 24rem),
+      radial-gradient(circle at 90% 32%, oklch(0.28 0.06 75 / 0.17), transparent 30rem);
+    background-attachment: fixed;
   }
   button:not(:disabled),
   [role="button"]:not([aria-disabled="true"]),
@@ -139,8 +144,49 @@
 
 /* Accessibility enhancements */
 :focus-visible {
-  outline: 3px solid oklch(0.65 0.17 55);
+  outline: 3px solid oklch(0.85 0.14 82);
   outline-offset: 2px;
+}
+
+::selection {
+  background: oklch(0.82 0.14 82);
+  color: oklch(0.16 0.015 75);
+}
+
+.aurum-welcome {
+  background:
+    radial-gradient(circle at 50% 35%, rgb(131 91 17 / 0.24), transparent 18rem),
+    linear-gradient(135deg, #050505 0%, #0d0c09 52%, #050505 100%);
+}
+
+.aurum-welcome__panel {
+  background: linear-gradient(145deg, rgb(25 23 17 / 0.98), rgb(8 8 7 / 0.98));
+}
+
+.aurum-welcome__halo {
+  position: absolute;
+  border: 1px solid rgb(251 191 36 / 0.18);
+  border-radius: 9999px;
+  pointer-events: none;
+}
+
+.aurum-welcome__halo--one {
+  width: min(78vw, 58rem);
+  aspect-ratio: 1;
+  animation: aurum-orbit 16s linear infinite;
+}
+
+.aurum-welcome__halo--two {
+  width: min(58vw, 38rem);
+  aspect-ratio: 1;
+  border-color: rgb(253 230 138 / 0.18);
+  animation: aurum-orbit 12s linear infinite reverse;
+}
+
+@keyframes aurum-orbit {
+  from { transform: rotate(0deg) scale(1); }
+  50% { transform: rotate(180deg) scale(1.04); }
+  to { transform: rotate(360deg) scale(1); }
 }
 
 /* Smooth scrolling */

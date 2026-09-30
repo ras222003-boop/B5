@@ -8,6 +8,7 @@ const __dirname = path.dirname(__filename);
 
 const FORGE_API_URL = (process.env.BUILT_IN_FORGE_API_URL || "https://forge.manus.ai").replace(/\/+$/, "");
 const FORGE_API_KEY = process.env.BUILT_IN_FORGE_API_KEY || "";
+const DEFAULT_LLM_MODEL = process.env.MANUS_LLM_MODEL || "gemini-3-flash-preview";
 
 /**
  * Call the LLM via Forge API
@@ -16,7 +17,7 @@ async function invokeLLM(messages: Array<{ role: string; content: any }>, option
   const url = `${FORGE_API_URL}/v1/chat/completions`;
   const body: any = {
     messages,
-    model: "anthropic/claude-sonnet-4-20250514",
+    model: DEFAULT_LLM_MODEL,
   };
   if (options?.response_format) {
     body.response_format = options.response_format;
@@ -42,6 +43,10 @@ async function invokeLLM(messages: Array<{ role: string; content: any }>, option
 async function startServer() {
   const app = express();
   const server = createServer(app);
+
+  app.get("/api/health", (_req, res) => {
+    res.status(200).json({ status: "ok" });
+  });
 
   // Parse JSON bodies up to 20MB for image data
   app.use(express.json({ limit: "20mb" }));
@@ -159,7 +164,7 @@ async function startServer() {
       }
 
       // Build language-specific system prompt for clarity
-      const systemPrompt = language === "en" 
+      const systemPrompt = language === "en"
         ? `You are an intelligent digital assistant named "Basira Assistant", specialized in helping visually impaired students take their exams.
 
 Your tasks:
@@ -747,10 +752,10 @@ Be thorough and informative, like ChatGPT, providing complete guidance on any to
     res.sendFile(path.join(staticPath, "index.html"));
   });
 
-  const port = process.env.PORT || 3000;
+  const port = Number(process.env.PORT || 3000);
 
-  server.listen(port, () => {
-    console.log(`Server running on http://localhost:${port}/`);
+  server.listen(port, "0.0.0.0", () => {
+    console.log(`Server running on http://0.0.0.0:${port}/`);
   });
 }
 

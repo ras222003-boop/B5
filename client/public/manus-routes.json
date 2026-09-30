@@ -1,0 +1,16 @@
+{
+  "routes": [
+    { "path": "/", "title": "الرئيسية" },
+    { "path": "/how-it-works", "title": "آلية العمل" },
+    { "path": "/features", "title": "المميزات" },
+    { "path": "/robotic-arm", "title": "الذراع الروبوتية" },
+    { "path": "/assistant", "title": "المساعد الرقمي" },
+    { "path": "/ai-guide", "title": "دليل الذكاء الاصطناعي" },
+    { "path": "/exam-demo", "title": "تجربة الاختبار" },
+    { "path": "/online-exams", "title": "الاختبارات الإلكترونية" },
+    { "path": "/teacher", "title": "لوحة المعلم" },
+    { "path": "/teacher-panel", "title": "لوحة المعلم" },
+    { "path": "/assistant-analytics", "title": "تحليلات المساعد" },
+    { "path": "/photo-requirements", "title": "متطلبات الصورة" }
+  ]
+}

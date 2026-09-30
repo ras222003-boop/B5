@@ -165,7 +165,7 @@ export default function FloatingChatWidget() {
         whileHover={{ scale: 1.1 }}
         whileTap={{ scale: 0.95 }}
         onClick={() => setIsOpen(true)}
-        className="fixed bottom-6 right-6 w-14 h-14 rounded-full bg-blue-600 hover:bg-blue-700 text-white shadow-lg flex items-center justify-center z-50 transition-all"
+        className="fixed bottom-6 right-6 z-50 flex h-14 w-14 items-center justify-center rounded-full bg-amber-300 text-[#17130d] shadow-[0_12px_30px_rgba(245,190,80,0.28)] transition-all hover:bg-amber-200"
         aria-label={currentLang === "ar" ? "فتح المساعد" : "Open assistant"}
       >
         <MessageCircle className="w-6 h-6" />
@@ -178,11 +178,11 @@ export default function FloatingChatWidget() {
       initial={{ opacity: 0, scale: 0.8, y: 20 }}
       animate={{ opacity: 1, scale: 1, y: 0 }}
       exit={{ opacity: 0, scale: 0.8, y: 20 }}
-      className={`fixed bottom-6 right-6 z-50 ${isMinimized ? "w-80" : "w-96"} bg-white rounded-2xl shadow-2xl border border-border/50 overflow-hidden flex flex-col`}
+      className={`fixed bottom-6 right-6 z-50 ${isMinimized ? "w-80" : "w-96"} flex flex-col overflow-hidden rounded-2xl border border-amber-200/20 bg-card shadow-2xl`}
       style={{ maxHeight: isMinimized ? "auto" : "600px" }}
     >
       {/* Header */}
-      <div className="p-4 bg-gradient-to-r from-blue-600 to-blue-700 text-white flex items-center justify-between">
+      <div className="flex items-center justify-between bg-gradient-to-r from-[#16130b] via-[#4a340d] to-[#16130b] p-4 text-white">
         <div className="flex items-center gap-2">
           <div className="w-8 h-8 rounded-lg bg-white/20 flex items-center justify-center">
             <MessageCircle className="w-4 h-4" />
@@ -223,7 +223,7 @@ export default function FloatingChatWidget() {
       {/* Messages */}
       {!isMinimized && (
         <>
-          <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-gradient-to-b from-background to-blue-50/20">
+          <div className="flex-1 space-y-4 overflow-y-auto bg-gradient-to-b from-background to-amber-300/5 p-4">
             {messages.map((msg) => (
               <motion.div
                 key={msg.id}
@@ -233,7 +233,7 @@ export default function FloatingChatWidget() {
               >
                 <div
                   className={`w-6 h-6 rounded-lg flex items-center justify-center shrink-0 text-xs font-bold ${
-                    msg.role === "assistant" ? "bg-blue-100 text-blue-600" : "bg-slate-200 text-slate-600"
+                    msg.role === "assistant" ? "bg-amber-300/15 text-amber-300" : "bg-stone-700 text-stone-200"
                   }`}
                 >
                   {msg.role === "assistant" ? "A" : "U"}
@@ -242,7 +242,7 @@ export default function FloatingChatWidget() {
                   className={`max-w-[70%] p-3 rounded-xl text-sm leading-relaxed ${
                     msg.role === "assistant"
                       ? "bg-card border border-border/50 text-foreground rounded-tl-none"
-                      : "bg-blue-600 text-white rounded-tr-none"
+                      : "bg-amber-300 text-[#17130d] rounded-tr-none"
                   }`}
                 >
                   {msg.content}
@@ -251,8 +251,8 @@ export default function FloatingChatWidget() {
             ))}
             {isLoading && (
               <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex gap-2">
-                <div className="w-6 h-6 rounded-lg flex items-center justify-center shrink-0 bg-blue-100">
-                  <Loader2 className="w-3 h-3 animate-spin text-blue-600" />
+                <div className="w-6 h-6 rounded-lg flex items-center justify-center shrink-0 bg-amber-300/15">
+                  <Loader2 className="w-3 h-3 animate-spin text-amber-300" />
                 </div>
                 <div className="bg-card border border-border/50 rounded-xl rounded-tl-none p-3">
                   <div className="flex gap-1">
@@ -291,12 +291,12 @@ export default function FloatingChatWidget() {
                 }}
                 placeholder={currentLang === "ar" ? "اسأل عن أي شيء..." : "Ask anything..."}
                 disabled={isLoading}
-                className="flex-1 h-10 px-3 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
+                className="flex-1 h-10 rounded-lg border border-border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-amber-300 disabled:opacity-50"
               />
               <Button
                 onClick={() => sendMessage(input)}
                 disabled={!input.trim() || isLoading}
-                className="bg-blue-600 hover:bg-blue-700 text-white rounded-lg shrink-0 h-10 w-10"
+                className="h-10 w-10 shrink-0 rounded-lg bg-amber-300 text-[#17130d] hover:bg-amber-200"
               >
                 {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
               </Button>
@@ -309,9 +309,9 @@ export default function FloatingChatWidget() {
                   setAutoSpeak(!autoSpeak);
                   if (autoSpeak) stopSpeaking();
                 }}
-                className={`text-xs ${autoSpeak ? "bg-blue-100 border-blue-300" : ""}`}
+                className={`text-xs ${autoSpeak ? "border-amber-300/40 bg-amber-300/15" : ""}`}
               >
-                {autoSpeak ? <Volume2 className="w-3 h-3 mr-1 text-blue-600" /> : <VolumeX className="w-3 h-3 mr-1" />}
+                {autoSpeak ? <Volume2 className="w-3 h-3 mr-1 text-amber-300" /> : <VolumeX className="w-3 h-3 mr-1" />}
                 {autoSpeak ? (currentLang === "ar" ? "صوت مفعّل" : "Sound on") : currentLang === "ar" ? "صوت متوقف" : "Sound off"}
               </Button>
             </div>

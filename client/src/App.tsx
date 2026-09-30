@@ -1,8 +1,10 @@
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { useState } from "react";
 import NotFound from "@/pages/NotFound";
 import { Route, Switch } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
+import WelcomeScreen from "./components/WelcomeScreen";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import Home from "./pages/Home";
 import HowItWorks from "./pages/HowItWorks";
@@ -29,6 +31,7 @@ function Router() {
       <Route path="/ai-guide" component={AIGuide} />
       <Route path="/exam-demo" component={ExamDemo} />
       <Route path="/online-exams" component={OnlineExams} />
+      <Route path="/teacher" component={TeacherPanel} />
       <Route path="/teacher-panel" component={TeacherPanel} />
       <Route path="/ai-guide" component={AIGuide} />
       <Route path="/assistant-analytics" component={AssistantAnalytics} />
@@ -39,17 +42,22 @@ function Router() {
 }
 
 function App() {
+  const [isWelcomeVisible, setIsWelcomeVisible] = useState(true);
+
   return (
-    <ErrorBoundary>
-      <ThemeProvider defaultTheme="light">
-        <TooltipProvider>
-          <Toaster />
-          <Router />
-          <VoiceGuide />
-          <FloatingChatWidget />
-        </TooltipProvider>
-      </ThemeProvider>
-    </ErrorBoundary>
+    <>
+      <ErrorBoundary>
+        <ThemeProvider defaultTheme="light">
+          <TooltipProvider>
+            <Toaster />
+            <Router />
+            <VoiceGuide />
+            <FloatingChatWidget />
+          </TooltipProvider>
+        </ThemeProvider>
+      </ErrorBoundary>
+      {isWelcomeVisible && <WelcomeScreen onDismiss={() => setIsWelcomeVisible(false)} />}
+    </>
   );
 }
 

@@ -17,7 +17,7 @@ export default function SectionHeading({ badge, title, description, centered = t
       className={`mb-12 md:mb-16 ${centered ? "text-center" : ""}`}
     >
       {badge && (
-        <span className="inline-block px-4 py-1.5 rounded-full bg-amber-100 text-amber-700 text-sm font-medium mb-4">
+        <span className="mb-4 inline-block rounded-full border border-amber-300/30 bg-amber-300/10 px-4 py-1.5 text-sm font-bold text-amber-200">
           {badge}
         </span>
       )}

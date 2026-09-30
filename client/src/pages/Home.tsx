@@ -27,6 +27,7 @@ import {
   Zap,
 } from "lucide-react";
 import Layout from "@/components/Layout";
+import BrandLogo from "@/components/BrandLogo";
 import SectionHeading from "@/components/SectionHeading";
 import FeatureCard from "@/components/FeatureCard";
 import { Button } from "@/components/ui/button";
@@ -169,11 +170,11 @@ export default function Home() {
   return (
     <Layout>
       {/* Hero Section */}
-      <section className="relative overflow-hidden py-20 md:py-28 lg:py-32">
+      <section className="relative overflow-hidden border-b border-amber-200/10 bg-[#0a0a08] py-20 md:py-28 lg:py-32">
         {/* Background decoration */}
         <div className="absolute inset-0 -z-10">
-          <div className="absolute top-0 left-0 w-96 h-96 bg-amber-100/40 rounded-full blur-3xl -translate-x-1/2 -translate-y-1/2" />
-          <div className="absolute bottom-0 right-0 w-96 h-96 bg-amber-50/60 rounded-full blur-3xl translate-x-1/3 translate-y-1/3" />
+          <div className="absolute top-0 left-0 h-96 w-96 -translate-x-1/2 -translate-y-1/2 rounded-full bg-amber-300/15 blur-3xl" />
+          <div className="absolute bottom-0 right-0 h-96 w-96 translate-x-1/3 translate-y-1/3 rounded-full bg-amber-700/15 blur-3xl" />
         </div>
 
         <div className="container">
@@ -185,27 +186,27 @@ export default function Home() {
               transition={{ duration: 0.7, ease: [0.23, 1, 0.32, 1] }}
               className="order-2 lg:order-1"
             >
-              <span className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-amber-100 text-amber-700 text-sm font-medium mb-6">
+              <span className="mb-6 inline-flex items-center gap-2 rounded-full border border-amber-300/30 bg-amber-300/10 px-4 py-1.5 text-sm font-bold text-amber-200">
                 <Sparkles className="w-4 h-4" />
-                منصة ذكية لذوي الإعاقة البصرية
+                منصة بصيرة بهوية Aurum Nexus
               </span>
-              <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold text-foreground leading-tight mb-6">
-                اختبر <span className="text-amber-600">باستقلالية</span>
+              <h1 className="mb-6 text-4xl font-black leading-tight text-foreground md:text-5xl lg:text-6xl">
+                اختبر <span className="text-amber-300">باستقلالية</span>
                 <br />
                 دون الحاجة لمرافق
               </h1>
-              <p className="text-lg md:text-xl text-muted-foreground leading-relaxed mb-8 max-w-lg">
+              <p className="mb-8 max-w-lg text-lg leading-relaxed text-stone-300 md:text-xl">
                 منصة بصيرة تُمكّن الطلاب من ذوي الإعاقة البصرية من أداء اختباراتهم بشكل مستقل عبر الذكاء الاصطناعي والتقنيات المساعدة.
               </p>
               <div className="flex flex-wrap gap-4">
                 <Link href="/exam-demo">
-                  <Button size="lg" className="bg-amber-600 hover:bg-amber-700 text-white rounded-xl px-8 h-12 text-base font-medium shadow-lg shadow-amber-200/50 hover:shadow-amber-300/50 transition-all duration-200 active:scale-[0.97]">
+                  <Button size="lg" className="h-12 rounded-xl bg-amber-300 px-8 text-base font-extrabold text-[#16130d] shadow-[0_14px_30px_rgba(245,190,80,0.2)] transition-all duration-200 hover:bg-amber-200 active:scale-[0.97]">
                     جرّب الآن
                     <ArrowLeft className="w-5 h-5 mr-2" />
                   </Button>
                 </Link>
                 <Link href="/how-it-works">
-                  <Button size="lg" variant="outline" className="rounded-xl px-8 h-12 text-base font-medium border-2 hover:bg-amber-50 transition-all duration-200 active:scale-[0.97]">
+                  <Button size="lg" variant="outline" className="h-12 rounded-xl border-amber-300/45 px-8 text-base font-bold text-amber-100 transition-all duration-200 hover:bg-amber-300/10 hover:text-amber-50 active:scale-[0.97]">
                     كيف تعمل؟
                   </Button>
                 </Link>
@@ -217,7 +218,7 @@ export default function Home() {
                   className={`flex items-center gap-2 px-4 py-2 rounded-xl border-2 text-sm font-medium transition-all duration-200 ${
                     isSpeaking && readingSection === "hero"
                       ? "bg-red-50 border-red-300 text-red-700"
-                      : "border-amber-300 text-amber-700 hover:bg-amber-50"
+                      : "border-amber-300/50 text-amber-200 hover:bg-amber-300/10"
                   }`}
                   aria-label="استمع لوصف المنصة"
                 >
@@ -234,7 +235,7 @@ export default function Home() {
               transition={{ duration: 0.7, delay: 0.2, ease: [0.23, 1, 0.32, 1] }}
               className="order-1 lg:order-2"
             >
-              <div className="relative rounded-3xl overflow-hidden shadow-2xl shadow-amber-200/30">
+              <div className="relative overflow-hidden rounded-3xl border border-amber-200/25 shadow-[0_28px_70px_rgba(0,0,0,0.5)]">
                 <img
                   src={heroImage}
                   alt="طالب كفيف يستخدم منصة بصيرة لأداء اختبار عبر الجهاز اللوحي"
@@ -242,6 +243,10 @@ export default function Home() {
                   loading="eager"
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/10 to-transparent" />
+                <div className="absolute bottom-5 left-5 flex items-center gap-2 rounded-xl border border-amber-200/30 bg-black/70 px-3 py-2 text-xs font-bold tracking-[0.14em] text-amber-100 backdrop-blur">
+                  <BrandLogo alt="" className="h-6 w-6 rounded-md" />
+                  AURUM NEXUS
+                </div>
               </div>
             </motion.div>
           </div>
@@ -249,7 +254,7 @@ export default function Home() {
       </section>
 
       {/* Voice Guide Banner - Prominent on Home */}
-      <section className="py-8 bg-gradient-to-r from-amber-600 to-amber-700">
+      <section className="border-y border-amber-200/15 bg-gradient-to-r from-[#14120b] via-[#3d2b0d] to-[#14120b] py-8">
         <div className="container">
           <div className="flex flex-col md:flex-row items-center justify-between gap-6">
             <div className="flex items-center gap-4 text-white">
@@ -278,7 +283,7 @@ export default function Home() {
       </section>
 
       {/* Stats Section */}
-      <section className="py-12 bg-amber-50/50 border-y border-amber-100/50">
+      <section className="border-y border-amber-200/10 bg-black/20 py-12">
         <div className="container">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
             {stats.map((stat, i) => (
@@ -290,7 +295,7 @@ export default function Home() {
                 transition={{ duration: 0.4, delay: i * 0.1 }}
                 className="text-center"
               >
-                <div className="text-3xl md:text-4xl font-bold text-amber-600 mb-1">{stat.value}</div>
+                <div className="mb-1 text-3xl font-bold text-amber-300 md:text-4xl">{stat.value}</div>
                 <div className="text-sm text-muted-foreground">{stat.label}</div>
               </motion.div>
             ))}
@@ -315,7 +320,7 @@ export default function Home() {
       </section>
 
       {/* Accessibility Tools Section */}
-      <section className="py-20 md:py-28 bg-gradient-to-b from-slate-50/50 to-background">
+      <section className="bg-gradient-to-b from-black/25 to-background py-20 md:py-28">
         <div className="container">
           <SectionHeading
             badge="إمكانية الوصول"
@@ -392,7 +397,7 @@ export default function Home() {
       </section>
 
       {/* Goals Section */}
-      <section className="py-20 md:py-28 bg-gradient-to-b from-amber-50/30 to-background">
+      <section className="bg-gradient-to-b from-amber-300/5 to-background py-20 md:py-28">
         <div className="container">
           <SectionHeading
             badge="أهدافنا"
@@ -443,7 +448,7 @@ export default function Home() {
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
             transition={{ duration: 0.6 }}
-            className="relative rounded-3xl bg-gradient-to-br from-amber-600 to-amber-700 p-12 md:p-16 text-center overflow-hidden"
+            className="relative overflow-hidden rounded-3xl border border-amber-300/30 bg-gradient-to-br from-[#15130c] via-[#39280d] to-[#0b0a08] p-12 text-center shadow-[0_24px_60px_rgba(0,0,0,0.3)] md:p-16"
           >
             <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGNpcmNsZSBjeD0iMjAiIGN5PSIyMCIgcj0iMSIgZmlsbD0icmdiYSgyNTUsMjU1LDI1NSwwLjEpIi8+PC9zdmc+')] opacity-50" />
             <div className="relative z-10">
@@ -455,7 +460,7 @@ export default function Home() {
               </p>
               <div className="flex flex-wrap items-center justify-center gap-4">
                 <Link href="/exam-demo">
-                  <Button size="lg" className="bg-white text-amber-700 hover:bg-amber-50 rounded-xl px-10 h-12 text-base font-bold shadow-lg hover:shadow-xl transition-all duration-200 active:scale-[0.97]">
+                  <Button size="lg" className="h-12 rounded-xl bg-amber-300 px-10 text-base font-extrabold text-[#16130d] shadow-lg transition-all duration-200 hover:bg-amber-200 hover:shadow-xl active:scale-[0.97]">
                     تجربة الاختبار
                     <ArrowLeft className="w-5 h-5 mr-2" />
                   </Button>
