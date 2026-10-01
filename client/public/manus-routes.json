@@ -1,8 +1,15 @@
 {
   "routes": [
     { "path": "/", "title": "الرئيسية" },
+    { "path": "/about", "title": "من نحن" },
+    { "path": "/terms", "title": "الشروط والأحكام" },
+    { "path": "/privacy", "title": "سياسة الخصوصية" },
+    { "path": "/refund-policy", "title": "سياسة الإلغاء والاسترداد" },
+    { "path": "/contact", "title": "تواصل معنا" },
+    { "path": "/support", "title": "الدعم الفني" },
+    { "path": "/account", "title": "إنشاء حساب وتسجيل دخول" },
     { "path": "/how-it-works", "title": "آلية العمل" },
-    { "path": "/features", "title": "المميزات" },
+    { "path": "/features", "title": "المميزات والخدمات" },
     { "path": "/robotic-arm", "title": "الذراع الروبوتية" },
     { "path": "/assistant", "title": "المساعد الرقمي" },
     { "path": "/ai-guide", "title": "دليل الذكاء الاصطناعي" },

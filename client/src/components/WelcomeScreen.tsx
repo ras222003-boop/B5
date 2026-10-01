@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from "react";
-import { ArrowLeft, Sparkles } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { ArrowLeft, Sparkles, Volume2 } from "lucide-react";
 import { motion, useReducedMotion } from "framer-motion";
 import BrandLogo from "./BrandLogo";
 
@@ -8,87 +8,88 @@ interface WelcomeScreenProps {
 }
 
 export default function WelcomeScreen({ onDismiss }: WelcomeScreenProps) {
-  const shouldReduceMotion = useReducedMotion();
-  const continueButtonRef = useRef<HTMLButtonElement>(null);
-  const [isLeaving, setIsLeaving] = useState(false);
-
-  const dismiss = () => {
-    if (isLeaving) return;
-
-    setIsLeaving(true);
-    window.setTimeout(onDismiss, shouldReduceMotion ? 0 : 260);
-  };
+  const reduceMotion = useReducedMotion();
+  const [leaving, setLeaving] = useState(false);
+  const leaveRef = useRef(false);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const close = useCallback(() => {
+    if (leaveRef.current) return;
+    leaveRef.current = true;
+    setLeaving(true);
+    window.setTimeout(() => {
+      onDismiss();
+      document.querySelector<HTMLElement>("main")?.focus();
+    }, reduceMotion ? 0 : 460);
+  }, [onDismiss, reduceMotion]);
 
   useEffect(() => {
-    const focusTimer = window.setTimeout(() => continueButtonRef.current?.focus(), 120);
-    const dismissTimer = window.setTimeout(dismiss, 5200);
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") dismiss();
+    buttonRef.current?.focus();
+    const timer = window.setTimeout(close, reduceMotion ? 2600 : 7600);
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") close();
+      if (event.key === "Tab") {
+        event.preventDefault();
+        buttonRef.current?.focus();
+      }
     };
-
-    window.addEventListener("keydown", handleKeyDown);
-
+    document.addEventListener("keydown", onKeyDown);
     return () => {
-      window.clearTimeout(focusTimer);
-      window.clearTimeout(dismissTimer);
-      window.removeEventListener("keydown", handleKeyDown);
+      window.clearTimeout(timer);
+      document.removeEventListener("keydown", onKeyDown);
     };
-  }, []);
+  }, [close, reduceMotion]);
+
+  const reveal = (delay: number) => reduceMotion
+    ? { initial: false as const, animate: { opacity: 1 } }
+    : { initial: { opacity: 0, y: 24 }, animate: { opacity: 1, y: 0 }, transition: { duration: 0.7, delay, ease: [0.16, 1, 0.3, 1] as const } };
 
   return (
-    <motion.section
-      aria-describedby="welcome-message"
-      aria-labelledby="welcome-title"
-      aria-modal="true"
-      className="aurum-welcome fixed inset-0 z-[100] flex items-center justify-center px-5 py-8 text-center"
-      exit={{ opacity: 0 }}
-      initial={{ opacity: 0 }}
-      animate={{ opacity: isLeaving ? 0 : 1 }}
-      transition={{ duration: shouldReduceMotion ? 0 : 0.26 }}
+    <motion.div
       role="dialog"
+      aria-modal="true"
+      aria-labelledby="welcome-title"
+      aria-describedby="welcome-description"
+      className="aurum-welcome fixed inset-0 z-[100] isolate grid place-items-center overflow-hidden px-5 py-8 text-center"
+      initial={false}
+      animate={{ opacity: leaving ? 0 : 1 }}
+      transition={{ duration: reduceMotion ? 0 : 0.46 }}
     >
-      <div className="aurum-welcome__halo aurum-welcome__halo--one" aria-hidden="true" />
-      <div className="aurum-welcome__halo aurum-welcome__halo--two" aria-hidden="true" />
-
-      <motion.div
-        className="aurum-welcome__panel relative w-full max-w-lg overflow-hidden rounded-[2rem] border border-amber-300/35 px-7 py-9 shadow-2xl sm:px-12 sm:py-12"
-        initial={shouldReduceMotion ? false : { opacity: 0, y: 18, scale: 0.98 }}
-        animate={isLeaving ? { opacity: 0, y: -8, scale: 0.99 } : { opacity: 1, y: 0, scale: 1 }}
-        transition={{ duration: shouldReduceMotion ? 0 : 0.45, ease: [0.22, 1, 0.36, 1] }}
-      >
-        <div className="absolute inset-x-10 top-0 h-px bg-gradient-to-r from-transparent via-amber-200 to-transparent" aria-hidden="true" />
-        <div className="relative mx-auto mb-7 w-36 sm:w-40">
-          <div className="absolute -inset-5 rounded-full bg-amber-300/20 blur-2xl" aria-hidden="true" />
-          <BrandLogo
-            alt="شعار Aurum Nexus"
-            className="relative aspect-square w-full rounded-3xl ring-1 ring-amber-200/70 shadow-[0_0_40px_rgba(245,190,80,0.28)]"
-            fetchPriority="high"
-          />
-        </div>
-
-        <div className="inline-flex items-center gap-2 rounded-full border border-amber-300/30 bg-amber-300/10 px-4 py-1.5 text-xs font-bold tracking-[0.17em] text-amber-200">
-          <Sparkles className="h-3.5 w-3.5" aria-hidden="true" />
+      <div aria-hidden="true" className="aurum-stage pointer-events-none absolute inset-0">
+        <div className="aurum-stage__orbit aurum-stage__orbit--outer" />
+        <div className="aurum-stage__orbit aurum-stage__orbit--inner" />
+        <div className="aurum-stage__ray aurum-stage__ray--one" />
+        <div className="aurum-stage__ray aurum-stage__ray--two" />
+        <div className="aurum-stage__glow" />
+      </div>
+      <div className="relative z-10 mx-auto flex w-full max-w-2xl flex-col items-center">
+        <motion.div {...reveal(0.15)} className="mb-8 flex items-center gap-3 text-[0.65rem] font-bold uppercase tracking-[0.4em] text-amber-200 sm:text-xs">
+          <span className="h-px w-7 bg-amber-300/50 sm:w-14" />
           AURUM NEXUS
+          <span className="h-px w-7 bg-amber-300/50 sm:w-14" />
+        </motion.div>
+        <motion.div {...reveal(0.35)} className="aurum-stage__mark relative mb-9 aspect-square w-40 rounded-full sm:w-56">
+          <span className="absolute -inset-5 rounded-full border border-amber-300/30" aria-hidden="true" />
+          <BrandLogo alt="شعار شركة Aurum Nexus" className="relative h-full w-full rounded-full border border-amber-100/30 shadow-[0_0_85px_rgba(226,164,48,0.25)]" fetchPriority="high" />
+        </motion.div>
+        <motion.p {...reveal(0.7)} className="mb-3 flex items-center gap-2 text-sm font-semibold text-amber-200">
+          <Sparkles aria-hidden="true" className="h-4 w-4" /> تجربة تعليمية أكثر استقلالًا
+        </motion.p>
+        <motion.h1 {...reveal(0.9)} id="welcome-title" className="text-5xl font-black leading-tight text-white sm:text-7xl">
+          أهلًا بك في <span className="aurum-stage__gold">بصيرة</span>
+        </motion.h1>
+        <motion.p {...reveal(1.12)} id="welcome-description" className="mt-5 max-w-xl text-base leading-8 text-stone-300 sm:text-lg">
+          اقرأ أسئلتك، استمع إليها، وأجب بطريقتك. أدوات مساعدة صُممت لتجعل الاختبار أوضح وأسهل وصولًا.
+        </motion.p>
+        <motion.div {...reveal(1.4)} className="mt-9 flex flex-col items-center gap-4">
+          <button ref={buttonRef} type="button" onClick={close} className="inline-flex min-h-12 items-center justify-center gap-3 rounded-xl bg-amber-300 px-9 py-3 font-extrabold text-[#15120d] shadow-[0_15px_55px_rgba(226,164,48,0.2)] transition-colors hover:bg-amber-200 focus-visible:outline focus-visible:outline-3 focus-visible:outline-offset-4 focus-visible:outline-amber-100">
+            ادخل المنصة <ArrowLeft aria-hidden="true" className="h-5 w-5" />
+          </button>
+          <p className="flex items-center gap-2 text-xs text-stone-400"><Volume2 aria-hidden="true" className="h-4 w-4" /> اضغط الزر أو Esc للتخطي؛ يبدأ الموقع تلقائيًا بعد لحظات.</p>
+        </motion.div>
+        <div aria-hidden="true" className="aurum-stage__progress mt-9 h-0.5 w-48 overflow-hidden rounded-full bg-amber-200/20 sm:w-60">
+          <div className="h-full w-full origin-right bg-amber-300" style={{ animationDuration: reduceMotion ? "2.6s" : "7.6s" }} />
         </div>
-        <p className="mt-6 text-sm font-medium text-amber-100/75">مرحبًا بك في</p>
-        <h1 id="welcome-title" className="mt-1 text-4xl font-black tracking-tight text-white sm:text-5xl">
-          بصيرة
-        </h1>
-        <p id="welcome-message" className="mx-auto mt-4 max-w-sm text-base leading-8 text-stone-300">
-          منصة الاختبارات الذكية التي تمنحك تجربة مستقلة وواضحة ومدعومة بالتقنيات المساعدة.
-        </p>
-
-        <button
-          ref={continueButtonRef}
-          type="button"
-          onClick={dismiss}
-          className="mt-8 inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-amber-300 px-6 py-3 text-sm font-extrabold text-[#16130d] shadow-[0_10px_30px_rgba(245,190,80,0.25)] transition hover:bg-amber-200 focus-visible:outline focus-visible:outline-3 focus-visible:outline-offset-4 focus-visible:outline-amber-100"
-        >
-          الدخول إلى المنصة
-          <ArrowLeft className="h-4 w-4" aria-hidden="true" />
-        </button>
-        <p className="mt-4 text-xs text-stone-400">سيتم الانتقال تلقائيًا خلال لحظات. اضغط Esc للتخطي.</p>
-      </motion.div>
-    </motion.section>
+      </div>
+    </motion.div>
   );
 }

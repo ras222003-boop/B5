@@ -66,6 +66,11 @@ const features = [
     title: "واجهة سهلة الوصول",
     description: "واجهة مصممة خصيصاً للمكفوفين مع دعم كامل للأوامر الصوتية والتنقل الذكي.",
   },
+  {
+    icon: Headphones,
+    title: "دعم فني مع متابعة",
+    description: "محادثة دعم ذكية تقترح خطوات عملية، وتذكرة متابعة إذا لم تُحل المشكلة.",
+  },
 ];
 
 const stats = [
@@ -145,12 +150,12 @@ const accessibilityTools = [
 
 // Screen readers compatibility
 const screenReaders = [
-  { name: "NVDA", platform: "Windows", free: true },
-  { name: "JAWS", platform: "Windows", free: false },
-  { name: "VoiceOver", platform: "iOS / macOS", free: true },
-  { name: "TalkBack", platform: "Android", free: true },
-  { name: "Narrator", platform: "Windows", free: true },
-  { name: "Orca", platform: "Linux", free: true },
+  { name: "NVDA", platform: "Windows" },
+  { name: "JAWS", platform: "Windows" },
+  { name: "VoiceOver", platform: "iOS / macOS" },
+  { name: "TalkBack", platform: "Android" },
+  { name: "Narrator", platform: "Windows" },
+  { name: "Orca", platform: "Linux" },
 ];
 
 export default function Home() {
@@ -210,6 +215,7 @@ export default function Home() {
                     كيف تعمل؟
                   </Button>
                 </Link>
+                <Link href="/about" className="inline-flex min-h-12 items-center px-3 font-bold text-amber-200 underline underline-offset-4 hover:text-amber-100">من نحن</Link>
                 <button
                   onClick={() => readAloud(
                     "مرحباً بك في منصة بصيرة. هذه المنصة تُمكّن الطلاب من ذوي الإعاقة البصرية من أداء اختباراتهم بشكل مستقل. يمكنك مسح ورقة الاختبار بالكاميرا، وسيتم قراءة الأسئلة لك بالصوت، ثم تجيب بصوتك أو بالكتابة. اضغط على جرّب الآن للبدء.",
@@ -316,6 +322,10 @@ export default function Home() {
               <FeatureCard key={feature.title} {...feature} index={i} />
             ))}
           </div>
+          <div className="mt-9 flex flex-wrap items-center gap-4 rounded-2xl border border-amber-300/20 bg-amber-300/5 p-6">
+            <span className="text-lg font-bold text-white">هل تحتاج مساعدة لاستخدام أي خدمة؟</span>
+            <Link href="/support" className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-amber-300 px-5 py-2 font-bold text-[#17130d] hover:bg-amber-200">اذهب إلى الدعم الفني <ArrowLeft aria-hidden="true" className="h-4 w-4" /></Link>
+          </div>
         </div>
       </section>
 
@@ -364,12 +374,7 @@ export default function Home() {
               {screenReaders.map((sr) => (
                 <div key={sr.name} className="text-center p-4 rounded-xl bg-muted/50 border border-border/30">
                   <div className="font-bold text-base mb-1">{sr.name}</div>
-                  <div className="text-xs text-muted-foreground mb-2">{sr.platform}</div>
-                  <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
-                    sr.free ? "bg-green-100 text-green-700" : "bg-blue-100 text-blue-700"
-                  }`}>
-                    {sr.free ? "مجاني" : "مدفوع"}
-                  </span>
+                  <div className="text-xs text-muted-foreground">{sr.platform}</div>
                 </div>
               ))}
             </div>

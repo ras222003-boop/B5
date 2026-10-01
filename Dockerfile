@@ -2,12 +2,11 @@ FROM node:22-alpine
 
 WORKDIR /app
 
-RUN corepack enable && corepack prepare pnpm@10.4.1 --activate
+RUN corepack enable && corepack prepare pnpm@10.18.1 --activate
 
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
-COPY patches ./patches
 RUN pnpm install --frozen-lockfile
-
+RUN pnpm rebuild esbuild @tailwindcss/oxide
 COPY client ./client
 COPY server ./server
 COPY shared ./shared

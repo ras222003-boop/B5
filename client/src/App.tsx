@@ -19,11 +19,21 @@ import AssistantAnalytics from "./pages/AssistantAnalytics";
 import PhotoRequirements from "./pages/PhotoRequirements";
 import VoiceGuide from "./components/VoiceGuide";
 import FloatingChatWidget from "./components/FloatingChatWidget";
+import { About, Terms, Privacy, RefundPolicy, Contact } from "./pages/Information";
+import Support from "./pages/Support";
+import Account from "./pages/Account";
 
 function Router() {
   return (
     <Switch>
       <Route path="/" component={Home} />
+      <Route path="/about" component={About} />
+      <Route path="/terms" component={Terms} />
+      <Route path="/privacy" component={Privacy} />
+      <Route path="/refund-policy" component={RefundPolicy} />
+      <Route path="/contact" component={Contact} />
+      <Route path="/support" component={Support} />
+      <Route path="/account" component={Account} />
       <Route path="/how-it-works" component={HowItWorks} />
       <Route path="/features" component={Features} />
       <Route path="/robotic-arm" component={RoboticArm} />
@@ -33,7 +43,6 @@ function Router() {
       <Route path="/online-exams" component={OnlineExams} />
       <Route path="/teacher" component={TeacherPanel} />
       <Route path="/teacher-panel" component={TeacherPanel} />
-      <Route path="/ai-guide" component={AIGuide} />
       <Route path="/assistant-analytics" component={AssistantAnalytics} />
       <Route path="/photo-requirements" component={PhotoRequirements} />
       <Route path="*" component={NotFound} />

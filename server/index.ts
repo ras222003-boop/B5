@@ -2,6 +2,10 @@ import express from "express";
 import { createServer } from "http";
 import path from "path";
 import { fileURLToPath } from "url";
+import { toNodeHandler } from "better-auth/node";
+import { auth, providerReady } from "./auth";
+import { ensureSchema } from "./migrations";
+import { registerSupportRoutes, startTicketMailWorker } from "./support";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -41,6 +45,7 @@ async function invokeLLM(messages: Array<{ role: string; content: any }>, option
 }
 
 async function startServer() {
+  await ensureSchema();
   const app = express();
   const server = createServer(app);
 
@@ -48,8 +53,16 @@ async function startServer() {
     res.status(200).json({ status: "ok" });
   });
 
+  app.get("/api/auth/providers", (_req, res) => {
+    res.set("Cache-Control", "no-store").json({ providers: providerReady, emailPassword: true });
+  });
+  // Better Auth must receive the original request stream before body parsing.
+  app.all("/api/auth/*", toNodeHandler(auth));
+
   // Parse JSON bodies up to 20MB for image data
   app.use(express.json({ limit: "20mb" }));
+  registerSupportRoutes(app);
+  startTicketMailWorker();
 
   // ========== API: OCR - Extract questions from exam image ==========
   app.post("/api/ocr", async (req, res) => {
@@ -608,64 +621,6 @@ Be thorough and informative, like ChatGPT, providing complete guidance on any to
     }
   });
 
-  // ========== API: Database - Support Tickets ==========
-  app.post("/api/support-ticket", async (req, res) => {
-    try {
-      const { subject, description, email, userId } = req.body;
-      if (!subject || !description || !email) {
-        return res.status(400).json({ error: "subject, description, and email are required" });
-      }
-
-      const ticket = {
-        id: Math.random().toString(36).substring(7),
-        userId: userId || null,
-        subject,
-        description,
-        email,
-        status: "open",
-        priority: "medium",
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      };
-
-      res.json({ success: true, ticket });
-    } catch (err: any) {
-      console.error("Support ticket error:", err);
-      res.status(500).json({ error: err.message || "Failed to create support ticket" });
-    }
-  });
-
-  // ========== API: Database - Get All Support Tickets ==========
-  app.get("/api/support-tickets", async (req, res) => {
-    try {
-      const { status } = req.query;
-      const tickets = [
-        {
-          id: "1",
-          subject: "كيف أبدأ الاختبار؟",
-          email: "user@example.com",
-          status: "open",
-          priority: "medium",
-          createdAt: new Date(),
-        },
-        {
-          id: "2",
-          subject: "مشكلة في الصوت",
-          email: "user2@example.com",
-          status: "in_progress",
-          priority: "high",
-          createdAt: new Date(),
-        },
-      ];
-
-      const filtered = status ? tickets.filter((t) => t.status === status) : tickets;
-      res.json(filtered);
-    } catch (err: any) {
-      console.error("Get tickets error:", err);
-      res.status(500).json({ error: err.message || "Failed to fetch tickets" });
-    }
-  });
-
   // ========== API: Database - Save Conversation ==========
   app.post("/api/save-conversation", async (req, res) => {
     try {
@@ -738,6 +693,8 @@ Be thorough and informative, like ChatGPT, providing complete guidance on any to
       res.status(500).json({ error: err.message || "Failed to fetch stats" });
     }
   });
+
+  app.use("/api", (_req, res) => res.status(404).json({ error: "API endpoint not found" }));
 
   // Serve static files from dist/public in production
   const staticPath =
