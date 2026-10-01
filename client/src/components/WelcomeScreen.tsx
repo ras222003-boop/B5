@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ArrowLeft, Pause, Play, Sparkles, Volume2, VolumeX } from "lucide-react";
+import { ArrowLeft, Sparkles } from "lucide-react";
 import { motion, useReducedMotion } from "framer-motion";
 import BrandLogo from "./BrandLogo";
 
@@ -13,19 +13,15 @@ const AUTO_CLOSE_MS = 9200;
 export default function WelcomeScreen({ onDismiss }: WelcomeScreenProps) {
   const reduceMotion = useReducedMotion();
   const [leaving, setLeaving] = useState(false);
-  const [soundEnabled, setSoundEnabled] = useState(false);
   const leaveRef = useRef(false);
   const buttonRef = useRef<HTMLButtonElement>(null);
-  const soundButtonRef = useRef<HTMLButtonElement>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
-  const autoPlayAttemptRef = useRef(false);
 
   const stopSound = useCallback(() => {
     const audio = audioRef.current;
     if (!audio) return;
     audio.pause();
     audio.currentTime = 0;
-    setSoundEnabled(false);
   }, []);
 
   const close = useCallback(() => {
@@ -39,53 +35,28 @@ export default function WelcomeScreen({ onDismiss }: WelcomeScreenProps) {
     }, reduceMotion ? 0 : 520);
   }, [onDismiss, reduceMotion, stopSound]);
 
-  const playSound = useCallback(async () => {
-    const audio = audioRef.current;
-    if (!audio || leaveRef.current) return false;
-    audio.volume = 0.16;
-    audio.currentTime = 0;
-    try {
-      await audio.play();
-      setSoundEnabled(true);
-      return true;
-    } catch {
-      setSoundEnabled(false);
-      return false;
-    }
-  }, []);
-
-  const toggleSound = async () => {
-    if (soundEnabled) {
-      stopSound();
-      return;
-    }
-    await playSound();
-  };
-
   useEffect(() => {
     buttonRef.current?.focus();
+    const audio = audioRef.current;
+    if (audio) {
+      audio.volume = 0.16;
+      void audio.play().catch(() => undefined);
+    }
+
     const timer = window.setTimeout(close, reduceMotion ? 3000 : AUTO_CLOSE_MS);
-    const soundTimer = window.setTimeout(() => {
-      if (autoPlayAttemptRef.current) return;
-      autoPlayAttemptRef.current = true;
-      void playSound();
-    }, reduceMotion ? 0 : 720);
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") close();
       if (event.key === "Tab") {
         event.preventDefault();
-        const active = document.activeElement;
-        if (event.shiftKey || active === soundButtonRef.current) buttonRef.current?.focus();
-        else soundButtonRef.current?.focus();
+        buttonRef.current?.focus();
       }
     };
     document.addEventListener("keydown", onKeyDown);
     return () => {
       window.clearTimeout(timer);
-      window.clearTimeout(soundTimer);
       document.removeEventListener("keydown", onKeyDown);
     };
-  }, [close, playSound, reduceMotion]);
+  }, [close, reduceMotion]);
 
   useEffect(() => () => stopSound(), [stopSound]);
 
@@ -108,7 +79,7 @@ export default function WelcomeScreen({ onDismiss }: WelcomeScreenProps) {
       animate={{ opacity: leaving ? 0 : 1, scale: leaving ? 1.018 : 1 }}
       transition={{ duration: reduceMotion ? 0 : 0.52, ease: "easeOut" }}
     >
-      <audio ref={audioRef} preload="auto" src={WELCOME_AUDIO_SRC} onEnded={() => setSoundEnabled(false)} />
+      <audio ref={audioRef} autoPlay preload="auto" src={WELCOME_AUDIO_SRC} />
       <div aria-hidden="true" className="aurum-stage pointer-events-none absolute inset-0">
         <div className="aurum-stage__grain" />
         <div className="aurum-stage__veil" />
@@ -163,18 +134,7 @@ export default function WelcomeScreen({ onDismiss }: WelcomeScreenProps) {
           >
             ادخل المنصة <ArrowLeft aria-hidden="true" className="h-5 w-5" />
           </button>
-          <button
-            ref={soundButtonRef}
-            type="button"
-            onClick={() => void toggleSound()}
-            aria-pressed={soundEnabled}
-            className="inline-flex min-h-10 items-center justify-center gap-2 rounded-full border border-amber-200/20 bg-black/20 px-4 text-xs font-semibold text-amber-100/85 transition hover:border-amber-200/55 hover:bg-amber-200/10 focus-visible:outline focus-visible:outline-3 focus-visible:outline-offset-3 focus-visible:outline-amber-100"
-          >
-            {soundEnabled ? <Pause aria-hidden="true" className="h-3.5 w-3.5" /> : <Play aria-hidden="true" className="h-3.5 w-3.5" />}
-            {soundEnabled ? "إيقاف الجرس الترحيبي" : "تشغيل جرس ترحيبي هادئ"}
-            {soundEnabled ? <Volume2 aria-hidden="true" className="h-3.5 w-3.5" /> : <VolumeX aria-hidden="true" className="h-3.5 w-3.5" />}
-          </button>
-          <p className="text-xs text-stone-400">يبدأ الجرس تلقائيًا عند السماح به؛ اضغط دخول أو Esc للتخطي.</p>
+          <p className="text-xs text-stone-400">يبدأ الجرس تلقائيًا عند فتح المنصة؛ اضغط دخول أو Esc للتخطي.</p>
         </motion.div>
 
         <div aria-hidden="true" className="aurum-stage__progress mt-8 h-px w-52 overflow-hidden bg-amber-200/20 sm:w-64">
