@@ -7,7 +7,7 @@ interface WelcomeScreenProps {
   onDismiss: () => void;
 }
 
-const WELCOME_AUDIO_SRC = "/audio/aurum-welcome.mp3";
+const WELCOME_AUDIO_SRC = "/audio/aurum-welcome-bell.mp3";
 const AUTO_CLOSE_MS = 9200;
 
 export default function WelcomeScreen({ onDismiss }: WelcomeScreenProps) {
@@ -159,7 +159,7 @@ export default function WelcomeScreen({ onDismiss }: WelcomeScreenProps) {
             className="inline-flex min-h-10 items-center justify-center gap-2 rounded-full border border-amber-200/20 bg-black/20 px-4 text-xs font-semibold text-amber-100/85 transition hover:border-amber-200/55 hover:bg-amber-200/10 focus-visible:outline focus-visible:outline-3 focus-visible:outline-offset-3 focus-visible:outline-amber-100"
           >
             {soundEnabled ? <Pause aria-hidden="true" className="h-3.5 w-3.5" /> : <Play aria-hidden="true" className="h-3.5 w-3.5" />}
-            {soundEnabled ? "إيقاف نغمة الترحيب" : "تشغيل نغمة ترحيب هادئة"}
+            {soundEnabled ? "إيقاف الجرس الترحيبي" : "تشغيل جرس ترحيبي هادئ"}
             {soundEnabled ? <Volume2 aria-hidden="true" className="h-3.5 w-3.5" /> : <VolumeX aria-hidden="true" className="h-3.5 w-3.5" />}
           </button>
           <p className="text-xs text-stone-400">اضغط دخول أو Esc للتخطي؛ يبدأ الموقع تلقائيًا بعد لحظات.</p>
