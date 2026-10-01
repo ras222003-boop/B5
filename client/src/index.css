@@ -155,10 +155,13 @@
 
 .aurum-welcome {
   background:
-    radial-gradient(circle at 50% 48%, rgb(132 88 17 / 0.2), transparent min(65vw, 30rem)),
-    linear-gradient(135deg, #050505 0%, #13100a 52%, #050505 100%);
+    radial-gradient(circle at 50% 43%, rgb(184 126 22 / 0.22), transparent min(62vw, 29rem)),
+    radial-gradient(circle at 50% 105%, rgb(87 57 11 / 0.27), transparent 48rem),
+    linear-gradient(135deg, #030303 0%, #121008 50%, #050403 100%);
 }
 
+.aurum-stage__grain { position: absolute; inset: 0; opacity: .22; background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 180 180' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.24'/%3E%3C/svg%3E"); mix-blend-mode: soft-light; }
+.aurum-stage__veil { position: absolute; inset: -20%; background: conic-gradient(from 220deg at 50% 50%, transparent 0deg, rgb(247 195 93 / .08) 42deg, transparent 95deg, rgb(247 195 93 / .045) 195deg, transparent 270deg); animation: welcome-veil 24s linear infinite; }
 .aurum-stage__orbit {
   position: absolute;
   top: 50%; left: 50%;
@@ -166,27 +169,47 @@
   border: 1px solid rgb(250 200 100 / 0.22);
   border-radius: 50%;
   transform: translate(-50%, -50%);
-  animation: welcome-orbit 22s ease-in-out infinite;
+  animation: welcome-orbit 26s ease-in-out infinite;
 }
-.aurum-stage__orbit--outer { width: min(120vw, 70rem); box-shadow: inset 0 0 70px rgb(184 137 37 / 0.05); }
-.aurum-stage__orbit--inner { width: min(92vw, 49rem); border-style: dashed; opacity: 0.68; animation-direction: reverse; animation-duration: 18s; }
-.aurum-stage__ray { position: absolute; width: 55vw; max-width: 40rem; height: 1px; background: linear-gradient(90deg, transparent, rgb(250 200 100 / .34), transparent); animation: welcome-glide 7s linear infinite; }
-.aurum-stage__ray--one { top: 27%; right: -12%; transform: rotate(-22deg); }
-.aurum-stage__ray--two { bottom: 17%; left: -18%; transform: rotate(-22deg); animation-delay: -3s; }
-.aurum-stage__glow { position: absolute; inset: 0; background: radial-gradient(circle at 50% 50%, rgb(249 184 67 / 0.12), transparent 32%); animation: welcome-breathe 3.5s ease-in-out infinite; }
-.aurum-stage__mark { animation: welcome-float 5s ease-in-out infinite; }
-.aurum-stage__gold { background: linear-gradient(110deg, #d69f36, #fff4c9 35%, #f2c869 65%, #a46e1e); background-size: 200% auto; color: transparent; background-clip: text; animation: welcome-shimmer 4s linear infinite; }
+.aurum-stage__orbit--outer { width: min(128vw, 76rem); box-shadow: inset 0 0 90px rgb(184 137 37 / 0.06); }
+.aurum-stage__orbit--middle { width: min(105vw, 60rem); border-color: rgb(250 200 100 / 0.12); animation-delay: -11s; animation-duration: 34s; }
+.aurum-stage__orbit--inner { width: min(78vw, 46rem); border-style: dashed; opacity: 0.66; animation-direction: reverse; animation-duration: 21s; }
+.aurum-stage__ray { position: absolute; width: 58vw; max-width: 45rem; height: 1px; background: linear-gradient(90deg, transparent, rgb(250 200 100 / .4), transparent); animation: welcome-glide 9s linear infinite; }
+.aurum-stage__ray--one { top: 22%; right: -16%; transform: rotate(-22deg); }
+.aurum-stage__ray--two { bottom: 14%; left: -18%; transform: rotate(-22deg); animation-delay: -3s; }
+.aurum-stage__ray--three { top: 65%; right: -19%; transform: rotate(17deg); animation-delay: -6s; opacity: .46; }
+.aurum-stage__glow { position: absolute; inset: 0; background: radial-gradient(circle at 50% 48%, rgb(249 184 67 / 0.16), transparent 31%); animation: welcome-breathe 4.6s ease-in-out infinite; }
+.aurum-stage__particle { position: absolute; height: .32rem; width: .32rem; border-radius: 999px; background: #fff1bd; box-shadow: 0 0 17px 5px rgb(250 202 106 / .3); animation: welcome-particle 5s ease-in-out infinite; }
+.aurum-stage__particle--one { top: 22%; left: 23%; animation-delay: -1s; }
+.aurum-stage__particle--two { top: 31%; right: 20%; animation-delay: -3.2s; }
+.aurum-stage__particle--three { bottom: 25%; left: 28%; animation-delay: -2.1s; }
+.aurum-stage__particle--four { bottom: 30%; right: 26%; animation-delay: -4.2s; }
+.aurum-stage__mark { animation: welcome-float 6.5s ease-in-out infinite; }
+.aurum-stage__halo { inset: -13%; border: 1px solid rgb(250 200 100 / .22); box-shadow: 0 0 70px rgb(226 164 48 / .17), inset 0 0 30px rgb(226 164 48 / .08); animation: welcome-halo 3.8s ease-in-out infinite; }
+.aurum-stage__seal { border: 1px dashed rgb(250 200 100 / .46); animation: welcome-seal 18s linear infinite; }
+.aurum-stage__spark { position: absolute; z-index: 20; height: .44rem; width: .44rem; border-radius: 50%; background: #fff1be; box-shadow: 0 0 18px 5px rgb(245 198 104 / .45); }
+.aurum-stage__spark--north { top: 1%; left: 50%; animation: welcome-spark 2.4s ease-in-out infinite; }
+.aurum-stage__spark--east { top: 50%; right: 1%; animation: welcome-spark 2.4s ease-in-out -1.2s infinite; }
+.aurum-stage__gold { background: linear-gradient(110deg, #c78b26, #fff4c9 35%, #f2c869 65%, #9e6619); background-size: 220% auto; color: transparent; background-clip: text; animation: welcome-shimmer 5s linear infinite; }
+.aurum-stage__enter { background: linear-gradient(115deg, #d3972c, #fff0a6 50%, #d89d31); box-shadow: 0 15px 55px rgb(226 164 48 / .2), inset 0 1px 0 rgb(255 255 255 / .52); transition: transform .25s ease, box-shadow .25s ease, filter .25s ease; }
+.aurum-stage__enter:hover { transform: translateY(-2px) scale(1.01); filter: brightness(1.05); box-shadow: 0 20px 65px rgb(226 164 48 / .32), inset 0 1px 0 rgb(255 255 255 / .65); }
 .aurum-stage__progress > div { animation: welcome-progress linear both; }
 @keyframes welcome-progress { from { transform: scaleX(0); } to { transform: scaleX(1); } }
 @keyframes welcome-shimmer { from { background-position: 200% center; } to { background-position: 0 center; } }
-@keyframes welcome-float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-9px); } }
-@keyframes welcome-glide { 0% { opacity: 0; translate: 120px 0; } 50% { opacity: 1; } 100% { opacity: 0; translate: -120px 0; } }
-@keyframes welcome-breathe { 0%, 100% { opacity: .45; } 50% { opacity: 1; } }
-@keyframes welcome-orbit { 0%, 100% { transform: translate(-50%, -50%) rotate(0deg) scale(1); } 50% { transform: translate(-50%, -50%) rotate(180deg) scale(1.04); } }
+@keyframes welcome-float { 0%, 100% { transform: translateY(0) rotate(0deg); } 50% { transform: translateY(-11px) rotate(.45deg); } }
+@keyframes welcome-glide { 0% { opacity: 0; translate: 150px 0; } 45% { opacity: .9; } 100% { opacity: 0; translate: -150px 0; } }
+@keyframes welcome-breathe { 0%, 100% { opacity: .44; } 50% { opacity: 1; } }
+@keyframes welcome-orbit { 0%, 100% { transform: translate(-50%, -50%) rotate(0deg) scale(1); } 50% { transform: translate(-50%, -50%) rotate(180deg) scale(1.035); } }
+@keyframes welcome-veil { from { transform: rotate(0deg) scale(1.08); } to { transform: rotate(360deg) scale(1.08); } }
+@keyframes welcome-particle { 0%, 100% { opacity: .18; transform: translateY(0) scale(.7); } 50% { opacity: 1; transform: translateY(-17px) scale(1.25); } }
+@keyframes welcome-halo { 0%, 100% { transform: scale(.96); opacity: .55; } 50% { transform: scale(1.05); opacity: 1; } }
+@keyframes welcome-seal { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+@keyframes welcome-spark { 0%, 100% { opacity: .3; transform: scale(.7); } 50% { opacity: 1; transform: scale(1.4); } }
 
 @media (prefers-reduced-motion: reduce) {
-  .aurum-stage__orbit, .aurum-stage__ray, .aurum-stage__glow,
-  .aurum-stage__mark, .aurum-stage__gold, .aurum-stage__progress > div {
+  .aurum-stage__veil, .aurum-stage__orbit, .aurum-stage__ray, .aurum-stage__glow,
+  .aurum-stage__particle, .aurum-stage__mark, .aurum-stage__halo, .aurum-stage__seal,
+  .aurum-stage__spark, .aurum-stage__gold, .aurum-stage__progress > div {
     animation: none !important;
   }
 }
