@@ -18,6 +18,7 @@ export default function WelcomeScreen({ onDismiss }: WelcomeScreenProps) {
   const buttonRef = useRef<HTMLButtonElement>(null);
   const soundButtonRef = useRef<HTMLButtonElement>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
+  const autoPlayAttemptRef = useRef(false);
 
   const stopSound = useCallback(() => {
     const audio = audioRef.current;
@@ -38,27 +39,37 @@ export default function WelcomeScreen({ onDismiss }: WelcomeScreenProps) {
     }, reduceMotion ? 0 : 520);
   }, [onDismiss, reduceMotion, stopSound]);
 
-  const toggleSound = async () => {
+  const playSound = useCallback(async () => {
     const audio = audioRef.current;
-    if (!audio) return;
-    if (soundEnabled) {
-      stopSound();
-      return;
-    }
-
-    audio.volume = 0.18;
+    if (!audio || leaveRef.current) return false;
+    audio.volume = 0.16;
     audio.currentTime = 0;
     try {
       await audio.play();
       setSoundEnabled(true);
+      return true;
     } catch {
       setSoundEnabled(false);
+      return false;
     }
+  }, []);
+
+  const toggleSound = async () => {
+    if (soundEnabled) {
+      stopSound();
+      return;
+    }
+    await playSound();
   };
 
   useEffect(() => {
     buttonRef.current?.focus();
     const timer = window.setTimeout(close, reduceMotion ? 3000 : AUTO_CLOSE_MS);
+    const soundTimer = window.setTimeout(() => {
+      if (autoPlayAttemptRef.current) return;
+      autoPlayAttemptRef.current = true;
+      void playSound();
+    }, reduceMotion ? 0 : 720);
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") close();
       if (event.key === "Tab") {
@@ -71,9 +82,10 @@ export default function WelcomeScreen({ onDismiss }: WelcomeScreenProps) {
     document.addEventListener("keydown", onKeyDown);
     return () => {
       window.clearTimeout(timer);
+      window.clearTimeout(soundTimer);
       document.removeEventListener("keydown", onKeyDown);
     };
-  }, [close, reduceMotion]);
+  }, [close, playSound, reduceMotion]);
 
   useEffect(() => () => stopSound(), [stopSound]);
 
@@ -96,7 +108,7 @@ export default function WelcomeScreen({ onDismiss }: WelcomeScreenProps) {
       animate={{ opacity: leaving ? 0 : 1, scale: leaving ? 1.018 : 1 }}
       transition={{ duration: reduceMotion ? 0 : 0.52, ease: "easeOut" }}
     >
-      <audio ref={audioRef} preload="metadata" src={WELCOME_AUDIO_SRC} onEnded={() => setSoundEnabled(false)} />
+      <audio ref={audioRef} preload="auto" src={WELCOME_AUDIO_SRC} onEnded={() => setSoundEnabled(false)} />
       <div aria-hidden="true" className="aurum-stage pointer-events-none absolute inset-0">
         <div className="aurum-stage__grain" />
         <div className="aurum-stage__veil" />
@@ -162,7 +174,7 @@ export default function WelcomeScreen({ onDismiss }: WelcomeScreenProps) {
             {soundEnabled ? "إيقاف الجرس الترحيبي" : "تشغيل جرس ترحيبي هادئ"}
             {soundEnabled ? <Volume2 aria-hidden="true" className="h-3.5 w-3.5" /> : <VolumeX aria-hidden="true" className="h-3.5 w-3.5" />}
           </button>
-          <p className="text-xs text-stone-400">اضغط دخول أو Esc للتخطي؛ يبدأ الموقع تلقائيًا بعد لحظات.</p>
+          <p className="text-xs text-stone-400">يبدأ الجرس تلقائيًا عند السماح به؛ اضغط دخول أو Esc للتخطي.</p>
         </motion.div>
 
         <div aria-hidden="true" className="aurum-stage__progress mt-8 h-px w-52 overflow-hidden bg-amber-200/20 sm:w-64">
