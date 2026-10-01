@@ -2,25 +2,28 @@
   "build_command": "pnpm run build",
   "capabilities": [
     "db",
-    "server",
-    "user"
+    "server"
   ],
   "dev_command": "pnpm run dev",
   "env_vars": {
     "DATABASE_URL": "mysql://wfjJfH1vvWXQPXX.root:2l0Nljsf6JW2vvY38RbA@gateway06.us-east-1.prod.aws.tidbcloud.com:4000/egP6Ccw5DpGVLQ8nQQhPRc?ssl={\"rejectUnauthorized\":true}",
     "DRIZZLE_DATABASE_URL": "mysql://wfjJfH1vvWXQPXX.root:2l0Nljsf6JW2vvY38RbA@gateway06.us-east-1.prod.aws.tidbcloud.com:4000/egP6Ccw5DpGVLQ8nQQhPRc?ssl={\"rejectUnauthorized\":true}"
   },
-  "experiments": null,
+  "experiments": [
+    "no_db_push"
+  ],
   "git_remote": {
     "repo_url": "s3://vida-prod-gitrepo/webdev-git/310519663660690446/egP6Ccw5DpGVLQ8nQQhPRc",
-    "access_key_id": "ASIAZV3A2ECZJIEOBMM3",
-    "secret_access_key": "ccl6kXI1GTFluCZRljvyfCCUObsfvotwX9KU7k8E",
-    "session_token": "IQoJb3JpZ2luX2VjEJz//////////wEaCXVzLWVhc3QtMSJGMEQCIHw7LDwKBV4RmbiGG3KyVB/46JDJ3X32RDZ5mgLbcKA/AiBsfJ6oOebpgYuJmNCnTTS4SyH6+oL5UaLBv2MeoNiZYSr2AwhlEAQaDDY2NTM4NjA5ODg2NiIMt0Js5yOnY2WXclRqKtMDrE02Uw9tZow6irr/zDMqEbGLXqkZqVS8W/qmdaaZzw7lThLvEk7zERqg3ZMPB1lIMyVc5+9P2eUAJn0tHxhDgbDsO3TRnPv4cvH1WOS3ubAtgMIcaA44ro0CSXeRTWnhoSP15dBYQXMVvEyXvWB2jeA0qOkySZVRJ523MT1oImhbCPe265HBr3DQxv0L6ZiIlfCFTzOpcu2lSqyAcdfZ7fWFuTsQrycd0AQYr13UZMg3KLGw8C/AP1dJmzqanvm8AEaO2wkLlfTWMqeRZJPFNeIFDo/iBH9iVcp9HbZCk+iWdOZyd9iP+62HdEHaI5tp0j2L0rfB5U+KGO4tsb/PFFQzQFX+0nrVzWewvdGE8EbxZ3zOQEUsxrd9Phh9yD3DywmZsRbiTRWIe/kABcSRxvx6a/tT0K6yZ66ejqmZyrci+rmmS6XKJ9aivyXy831wKT6NcRpfyRAFFB0d1OyqY8sEJbDJA8edmgKpg/hGu2Cx8cgoEzuozYq5obXJ14j5iB1yT8uThfNGmQwUqGths1eTkt7lrNxomJk6zOsJUYQEvxavtjv1pEJkguZzy1X69jEMLo4XJ3Ikrx5VUkkEU6S6Hgdgo6dq7wqsFnsyoYudWD8w6caY0AY6ngFHTOBytPtVA5nKMPPov5vTrRJEeZ5v4SR7UAZ06RgnMW+CiN94DEu67nedlOB5RMHtslQPaNjLaHipv4bIh7iBoAsvVS4iPOcxXMSP5Ea4UvvC/SoYXGDd5Yn4wb267b9g8QOYj+6Hbqbxum1TKdnRx0cOgJ7R6vQVnRKqI3tVlhFFsVxKLdGwjhGpHxz/AKnil0XizH7C0fwNxJA/IQ==",
-    "expiration": "2026-05-15T07:32:57.000Z"
+    "access_key_id": "ASIAZV3A2ECZHXV6UKA7",
+    "secret_access_key": "h0LQ2QP7WtoWr1EDsQLf3PWyIICbn72R786WBduV",
+    "session_token": "IQoJb3JpZ2luX2VjEJX//////////wEaCXVzLWVhc3QtMSJHMEUCIBX7+75fPue8E1Dv+wWZRppy5h3s3zwLicWMgYvFSG0dAiEAjUsFFER5qrpmi3ywjcCoM28jfDOvZl82PY0JhDaXfQMq9gMIXRAEGgw2NjUzODYwOTg4NjYiDNUx3qpiwTa/2ToHryrTAwF001X1yvuO++S2gzAQybEcAMhtQ8xQxTuplCZuyPLVVYRbKkWZ4zJXqlc7RDfGif+O6vQPU/UyWg4YYCK223h6EPb4J9rjeYKnVtUqF8jr1DQBvN8WYKivP9uf8MtKo+uHzXiI7eCOjEpkWos8ORbocn7dlSB07gyFKbmQatYy2wiQd0+Rjy0s2iuFzrr7FRY4AcLAxx0X5IZqfL1odQgzG2pIOMk+kEh8Mc0Be2Ill6ZnNK8VapXLAee/3uRCE5dt0u0jIfXLONBqSZkw8NjjYrLfvSSD8XcfCdzIsws88MpHJpoERfN38nYH+0Ak6/mdQvTozfgQ+ItvIdeYzNub5mI0vU9K86fdxMYOcAFBrVTTbyNQnJlShdHswpaCyzCcf0t3jxSNvl5vprc81Zr9uwqxFVJFX9i1lbHnrV5m3yr0Z3VZONcgFSWwKOSDB4q6M2IPdHlchqZUVBvi8L7QX8BIznRlbInJiURzYZUuid6ANkrSj6g9FgW/AeClBnmfHuLad3owG7n0s37a7JltJagQLzQsw280vkvdAOgxJ5GvTQX4KdGNuXAungTY6JOqY6r+Q/bTd9AxsCg01arHUmvvNmgmJtUMZa8K7G3IcPBNMOye8tUGOp0BUmQug0jX4aeOXhgAXm12P9pbrliGV16wJpTTCz2pYfRfnLHNhpqwCmIFaczFAg/OLBhAOAEZ+5axYg2CJAMk+mY24affk8/lqzh3YI/sExwBr60uyNzTTPPT/9rbi6auOeYbFpIatGGhap6CdWue9maEoVcp0cD0X7pbQdlURdjoheIP94WRE811aY/E+yTZQq7ZRivdWAzJ4/Ys0A==",
+    "expiration": "2026-09-30T16:26:20.000Z",
+    "backend": "GIT_BACKEND_S3"
   },
   "name": "basira-accessible-exams",
   "path": "/home/ubuntu/basira-accessible-exams",
   "port": 3000,
+  "runtime_endpoints": null,
   "secrets": {
     "BUILT_IN_FORGE_API_KEY": "Hq5JAFXFw9f57diss63MsR",
     "BUILT_IN_FORGE_API_URL": "https://forge.manus.ai",
