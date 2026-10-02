@@ -142,7 +142,7 @@ export const SQL_SCHEMA = {
       INDEX idx_role (role)
     )
   `,
-  
+
   conversations: `
     CREATE TABLE IF NOT EXISTS conversations (
       id VARCHAR(36) PRIMARY KEY,
@@ -157,7 +157,7 @@ export const SQL_SCHEMA = {
       INDEX idx_createdAt (createdAt)
     )
   `,
-  
+
   messages: `
     CREATE TABLE IF NOT EXISTS messages (
       id VARCHAR(36) PRIMARY KEY,
@@ -176,7 +176,7 @@ export const SQL_SCHEMA = {
       INDEX idx_role (role)
     )
   `,
-  
+
   questions_analytics: `
     CREATE TABLE IF NOT EXISTS questions_analytics (
       id VARCHAR(36) PRIMARY KEY,
@@ -194,7 +194,7 @@ export const SQL_SCHEMA = {
       INDEX idx_language (language)
     )
   `,
-  
+
   user_feedback: `
     CREATE TABLE IF NOT EXISTS user_feedback (
       id VARCHAR(36) PRIMARY KEY,
@@ -211,7 +211,7 @@ export const SQL_SCHEMA = {
       INDEX idx_rating (rating)
     )
   `,
-  
+
   assistant_settings: `
     CREATE TABLE IF NOT EXISTS assistant_settings (
       id VARCHAR(36) PRIMARY KEY,
@@ -226,7 +226,7 @@ export const SQL_SCHEMA = {
       INDEX idx_userId (userId)
     )
   `,
-  
+
   knowledge_base: `
     CREATE TABLE IF NOT EXISTS knowledge_base (
       id VARCHAR(36) PRIMARY KEY,
@@ -244,7 +244,7 @@ export const SQL_SCHEMA = {
       INDEX idx_isActive (isActive)
     )
   `,
-  
+
   exam_results: `
     CREATE TABLE IF NOT EXISTS exam_results (
       id VARCHAR(36) PRIMARY KEY,
@@ -262,7 +262,7 @@ export const SQL_SCHEMA = {
       INDEX idx_createdAt (createdAt)
     )
   `,
-  
+
   exam_sessions: `
     CREATE TABLE IF NOT EXISTS exam_sessions (
       id VARCHAR(36) PRIMARY KEY,
@@ -278,7 +278,7 @@ export const SQL_SCHEMA = {
       INDEX idx_status (status)
     )
   `,
-  
+
   notification_logs: `
     CREATE TABLE IF NOT EXISTS notification_logs (
       id VARCHAR(36) PRIMARY KEY,
@@ -294,7 +294,7 @@ export const SQL_SCHEMA = {
       INDEX idx_createdAt (createdAt)
     )
   `,
-  
+
   support_tickets: `
     CREATE TABLE IF NOT EXISTS support_tickets (
       id VARCHAR(36) PRIMARY KEY,

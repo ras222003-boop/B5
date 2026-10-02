@@ -92,12 +92,14 @@
   body {
     @apply bg-background text-foreground;
     font-family: "Tajawal", sans-serif;
-    direction: rtl;
     min-width: 320px;
     background-image:
       radial-gradient(circle at 12% 4%, oklch(0.38 0.09 80 / 0.2), transparent 24rem),
       radial-gradient(circle at 90% 32%, oklch(0.28 0.06 75 / 0.17), transparent 30rem);
     background-attachment: fixed;
+  }
+  html[lang="zh-CN"] body {
+    font-family: "Noto Sans SC", "PingFang SC", "Microsoft YaHei", "Tajawal", sans-serif;
   }
   button:not(:disabled),
   [role="button"]:not([aria-disabled="true"]),

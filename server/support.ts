@@ -1,12 +1,14 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import type { Express, Request } from "express";
 import { fromNodeHeaders } from "better-auth/node";
 import nodemailer from "nodemailer";
 import type { RowDataPacket } from "mysql2";
 import { auth, pool } from "./auth";
+import { toExamLanguage, type ExamLanguage } from "../shared/ocr";
 
 const SUPPORT_EMAIL = "aurum.nexus.r1@gmail.com";
-const SMTP_READY = Boolean(process.env.SUPPORT_SMTP_HOST && process.env.SUPPORT_SMTP_USER && process.env.SUPPORT_SMTP_PASSWORD);
+const recipient = process.env.SUPPORT_EMAIL_TO || SUPPORT_EMAIL;
+const SMTP_READY = Boolean(process.env.SUPPORT_SMTP_HOST && process.env.SUPPORT_SMTP_USER && process.env.SUPPORT_SMTP_PASSWORD && process.env.SUPPORT_EMAIL_FROM);
 const windows = new Map<string, { count: number; endsAt: number }>();
 
 type TicketRow = RowDataPacket & {
@@ -14,6 +16,33 @@ type TicketRow = RowDataPacket & {
   subject: string; description: string; transcript: string | null; delivery_status: string;
 };
 
+const strings: Record<ExamLanguage, Record<string, string>> = {
+  ar: {
+    json: "يجب إرسال بيانات JSON", rate: "انتظر قليلًا قبل إعادة المحاولة", invalidChat: "اكتب وصف المشكلة في رسالة لا تتجاوز 1200 حرف",
+    unavailable: "مساعد الدعم غير متاح الآن؛ يمكنك فتح تذكرة متابعة مباشرة", aiFailed: "تعذّر رد المساعد الآن؛ يمكنك فتح تذكرة متابعة مباشرة",
+    ticketRate: "تم الوصول إلى حد التذاكر مؤقتًا؛ راسل البريد مباشرة إذا كانت المشكلة عاجلة",
+    ticketInvalid: "أدخل اسمًا وبريدًا صحيحًا وعنوانًا واضحًا ووصفًا للمشكلة (10 أحرف على الأقل)",
+    storageFailed: "لم تُحفظ التذكرة. أعد المحاولة أو أرسل رسالة للبريد الظاهر", login: "سجل دخولك لعرض تذاكرك", listFailed: "تعذّر عرض التذاكر مؤقتًا",
+  },
+  en: {
+    json: "Send JSON data", rate: "Please wait a moment before trying again", invalidChat: "Describe the problem in a message of up to 1,200 characters",
+    unavailable: "AI support is unavailable right now. You can open a support ticket directly.", aiFailed: "The assistant could not reply. You can open a support ticket directly.",
+    ticketRate: "You've reached the temporary ticket limit. Email support directly if your issue is urgent.",
+    ticketInvalid: "Enter a name, valid email, clear subject, and problem description (at least 10 characters).",
+    storageFailed: "Your ticket could not be saved. Please try again or email support.", login: "Sign in to view your tickets", listFailed: "Tickets are temporarily unavailable.",
+  },
+  "zh-CN": {
+    json: "请发送 JSON 数据", rate: "请稍等片刻再试", invalidChat: "请在不超过 1,200 字的消息中描述问题",
+    unavailable: "智能客服暂时不可用。您可以直接创建支持工单。", aiFailed: "助手暂时无法回复。您可以直接创建支持工单。",
+    ticketRate: "您已达到临时工单数量上限。如有紧急问题，请直接发送邮件给客服。",
+    ticketInvalid: "请输入姓名、有效邮箱、清晰的主题和至少 10 字的问题描述。",
+    storageFailed: "工单未能保存，请重试或发送邮件给客服。", login: "请登录以查看您的工单", listFailed: "暂时无法显示工单。",
+  },
+};
+
+function language(req: Request): ExamLanguage {
+  return toExamLanguage(req.body?.language ?? req.query?.language ?? req.headers["accept-language"], "ar");
+}
 function limited(req: Request, action: string, max: number, interval: number) {
   const key = `${req.ip}:${action}`;
   const now = Date.now();
@@ -26,7 +55,6 @@ function limited(req: Request, action: string, max: number, interval: number) {
   bucket.count++;
   return bucket.count > max;
 }
-
 function text(value: unknown, max: number): string {
   return typeof value === "string" ? value.trim().slice(0, max + 1) : "";
 }
@@ -34,37 +62,56 @@ function validEmail(value: string) {
   return value.length <= 254 && /^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/.test(value);
 }
 
-async function sendTicketEmail(id: string): Promise<"sent" | "pending" | "failed"> {
+/**
+ * An atomic DB claim prevents two workers from sending the same ticket.
+ * Stable Message-ID also allows mail transports that support idempotency to dedupe.
+ * Ambiguous outcomes (e.g. timeout after provider acceptance or process crash)
+ * are deliberately NOT retried automatically: SMTP cannot guarantee exactly-once
+ * delivery across a network failure. They remain "uncertain" for owner review.
+ */
+export async function sendTicketEmail(id: string): Promise<string> {
   if (!SMTP_READY) return "pending";
-  // Claim atomically so overlapping server instances do not deliver the same ticket twice.
   const [claim] = await pool.execute<any>(
     "UPDATE basira_support_tickets SET delivery_status='sending', delivery_attempts=delivery_attempts+1 WHERE id=? AND delivery_status IN ('pending','failed') AND delivery_attempts < 3", [id],
   );
-  if (claim.affectedRows !== 1) return "pending";
+  if (claim.affectedRows !== 1) {
+    const [rows] = await pool.execute<TicketRow[]>("SELECT delivery_status FROM basira_support_tickets WHERE id=? LIMIT 1", [id]);
+    return rows[0]?.delivery_status || "unknown";
+  }
   const [rows] = await pool.execute<TicketRow[]>("SELECT * FROM basira_support_tickets WHERE id=? LIMIT 1", [id]);
   const ticket = rows[0];
-  if (!ticket) return "failed";
+  if (!ticket) return "unknown";
+  const port = Number(process.env.SUPPORT_SMTP_PORT || 465);
+  const transport = nodemailer.createTransport({
+    host: process.env.SUPPORT_SMTP_HOST!, port,
+    secure: port === 465, requireTLS: port !== 465,
+    auth: { user: process.env.SUPPORT_SMTP_USER!, pass: process.env.SUPPORT_SMTP_PASSWORD! },
+    connectionTimeout: 12000, socketTimeout: 12000,
+    disableFileAccess: true, disableUrlAccess: true,
+  });
   try {
-    const port = Number(process.env.SUPPORT_SMTP_PORT || 465);
-    const transport = nodemailer.createTransport({
-      host: process.env.SUPPORT_SMTP_HOST!, port,
-      secure: port === 465, requireTLS: port !== 465,
-      auth: { user: process.env.SUPPORT_SMTP_USER!, pass: process.env.SUPPORT_SMTP_PASSWORD! },
-      connectionTimeout: 12000, socketTimeout: 12000,
-      disableFileAccess: true, disableUrlAccess: true,
-    });
     const receipt = await transport.sendMail({
-      from: process.env.SUPPORT_SMTP_USER!, to: SUPPORT_EMAIL, replyTo: ticket.email,
+      from: process.env.SUPPORT_EMAIL_FROM!, to: recipient, replyTo: ticket.email,
+      messageId: `<basira-ticket-${id}@aurum-nexus.support>`,
       subject: `[بصيرة #${id.slice(0, 8)}] ${ticket.subject.replace(/[\r\n]/g, " ")}`,
       text: `رقم التذكرة: ${id}\nالاسم: ${ticket.contact_name}\nالبريد: ${ticket.email}\nالموضوع: ${ticket.subject}\n\nالمشكلة:\n${ticket.description}\n\nمقتطف المحادثة (بموافقة المستخدم):\n${ticket.transcript || "لم يُرسل"}`,
     });
-    if (!receipt.accepted?.some(a => a.toLowerCase() === SUPPORT_EMAIL)) throw new Error("SMTP did not accept the recipient");
+    if (!receipt.accepted?.some(a => a.toLowerCase() === recipient.toLowerCase())) {
+      await pool.execute("UPDATE basira_support_tickets SET delivery_status='failed' WHERE id=?", [id]);
+      return "failed";
+    }
     await pool.execute("UPDATE basira_support_tickets SET delivery_status='sent' WHERE id=?", [id]);
     return "sent";
-  } catch (error) {
-    console.error("Ticket delivery failed", id, error instanceof Error ? error.message : "unknown SMTP error");
-    await pool.execute("UPDATE basira_support_tickets SET delivery_status='failed' WHERE id=?", [id]);
-    return "failed";
+  } catch (error: any) {
+    // SMTP 4xx/5xx is an explicit rejection: safe to retry. Network errors may
+    // occur after acceptance; do not risk a duplicate email in that case.
+    const rejected = typeof error?.responseCode === "number" && error.responseCode >= 400;
+    const status = rejected ? "failed" : "uncertain";
+    console.error("Ticket delivery", id, status, error instanceof Error ? error.message : "unknown");
+    await pool.execute("UPDATE basira_support_tickets SET delivery_status=? WHERE id=?", [status, id]);
+    return status;
+  } finally {
+    transport.close();
   }
 }
 
@@ -73,24 +120,20 @@ export function registerSupportRoutes(app: Express) {
 
   app.post("/api/support/chat", async (req, res) => {
     res.set("Cache-Control", "no-store");
-    if (!req.is("application/json")) return res.status(415).json({ error: "يجب إرسال بيانات JSON" });
-    if (limited(req, "chat", 15, 5 * 60_000)) return res.status(429).json({ error: "انتظر قليلًا قبل إعادة المحاولة" });
+    const lang = language(req), t = strings[lang];
+    if (!req.is("application/json")) return res.status(415).json({ error: t.json });
+    if (limited(req, "chat", 15, 5 * 60_000)) return res.status(429).json({ error: t.rate });
     const entries = req.body?.messages;
     if (!Array.isArray(entries) || entries.length < 1 || entries.length > 12 || entries.some(m => !["user", "assistant"].includes(m?.role) || !text(m?.content, 1200) || text(m?.content, 1200).length > 1200) || entries.at(-1)?.role !== "user") {
-      return res.status(400).json({ error: "اكتب وصف المشكلة في رسالة لا تتجاوز 1200 حرف" });
+      return res.status(400).json({ error: t.invalidChat });
     }
-    if (!process.env.MANUS_API_URL || !process.env.MANUS_API_KEY) return res.status(503).json({ error: "مساعد الدعم غير متاح الآن؛ يمكنك فتح تذكرة متابعة مباشرة" });
+    if (!process.env.MANUS_API_URL || !process.env.MANUS_API_KEY) return res.status(503).json({ error: t.unavailable });
     try {
+      const system = `You are the technical support assistant for Basira by Aurum Nexus. Reply ONLY in ${lang === "ar" ? "clear Arabic" : lang === "en" ? "clear English" : "Simplified Chinese"}. Give short, practical troubleshooting steps for the user's issue. Features: exam scanning (/exam-demo), online exams (/online-exams), digital assistant (/assistant), account (/account), support (/support). Never claim to access their account or to have solved an unverified issue. Never ask for passwords. If steps don't resolve it, explain that the user can open a ticket from /support. Do not promise an email was sent if SMTP isn't configured.`;
       const answer = await fetch(`${process.env.MANUS_API_URL.replace(/\/+$/, "")}/v1/chat/completions`, {
         method: "POST",
         headers: { Authorization: `Bearer ${process.env.MANUS_API_KEY}`, "Content-Type": "application/json" },
-        body: JSON.stringify({
-          model: "gpt-5-mini",
-          messages: [
-            { role: "system", content: "أنت مساعد الدعم الفني لمنصة بصيرة التابعة لـ Aurum Nexus. قدّم خطوات قصيرة بالعربية لفحص المشكلة بناءً على وصف المستخدم. الخدمات: مسح اختبار بالكاميرا (/exam-demo)، اختبارات إلكترونية (/online-exams)، المساعد الرقمي (/assistant)، الحساب (/account)، الدعم (/support). لا تدّعِ الوصول إلى حسابه أو حل مشكلة لم تتحقق منها، ولا تطلب كلمات مرور. عند عدم وضوح الحل أو انتهاء الخطوات قل: إذا لم تُحل المشكلة افتح تذكرة من صفحة الدعم. لا تعد بإرسال بريد إن لم تُهيأ خدمة البريد." },
-            ...entries.map(m => ({ role: m.role, content: text(m.content, 1200) })),
-          ],
-        }),
+        body: JSON.stringify({ model: "gpt-5-mini", messages: [{ role: "system", content: system }, ...entries.map(m => ({ role: m.role, content: text(m.content, 1200) }))] }),
         signal: AbortSignal.timeout(30000),
       });
       if (!answer.ok) throw new Error(`Support AI returned ${answer.status}`);
@@ -101,59 +144,76 @@ export function registerSupportRoutes(app: Express) {
       return res.json({ reply, canOpenTicket: true });
     } catch (error) {
       console.error("Support AI error", error instanceof Error ? error.message : "unknown");
-      return res.status(503).json({ error: "تعذّر رد المساعد الآن؛ يمكنك فتح تذكرة متابعة مباشرة" });
+      return res.status(503).json({ error: t.aiFailed });
     }
   });
 
   app.post("/api/support/tickets", async (req, res) => {
     res.set("Cache-Control", "no-store");
-    if (!req.is("application/json")) return res.status(415).json({ error: "يجب إرسال بيانات JSON" });
-    if (limited(req, "ticket", 3, 60 * 60_000)) return res.status(429).json({ error: "تم الوصول إلى حد التذاكر مؤقتًا؛ راسل البريد مباشرة إذا كانت المشكلة عاجلة" });
+    const lang = language(req), t = strings[lang];
+    if (!req.is("application/json")) return res.status(415).json({ error: t.json });
     const name = text(req.body?.name, 120);
     const email = text(req.body?.email, 254).toLowerCase();
     const subject = text(req.body?.subject, 160);
     const description = text(req.body?.description, 4000);
     const transcript = text(req.body?.transcript, 5000);
     if (!name || name.length > 120 || !validEmail(email) || subject.length < 4 || subject.length > 160 || description.length < 10 || description.length > 4000 || transcript.length > 5000) {
-      return res.status(400).json({ error: "أدخل اسمًا وبريدًا صحيحًا وعنوانًا واضحًا ووصفًا للمشكلة (10 أحرف على الأقل)" });
+      return res.status(400).json({ error: t.ticketInvalid });
     }
+    // The client sends a stable UUID for a retried submission. A 10-minute
+    // content hash is the fallback for older clients that send no request key.
+    const providedKey = req.header("Idempotency-Key");
+    const token = providedKey && /^[a-zA-Z0-9-]{8,100}$/.test(providedKey) ? providedKey : `${subject}:${description}:${Math.floor(Date.now() / 600_000)}`;
+    const requestKey = createHash("sha256").update(`${email}:${token}`).digest("hex");
     try {
+      const [existing] = await pool.execute<TicketRow[]>("SELECT id,delivery_status FROM basira_support_tickets WHERE request_key=? LIMIT 1", [requestKey]);
+      if (existing[0]) return res.status(200).json({ id: existing[0].id, deliveryStatus: existing[0].delivery_status, email: SUPPORT_EMAIL, duplicate: true });
+      if (limited(req, "ticket", 3, 60 * 60_000)) return res.status(429).json({ error: t.ticketRate });
       const session = await auth.api.getSession({ headers: fromNodeHeaders(req.headers) });
       const id = randomUUID();
-      await pool.execute(
-        "INSERT INTO basira_support_tickets (id,user_id,contact_name,email,subject,description,transcript) VALUES (?,?,?,?,?,?,?)",
-        [id, session?.user.id ?? null, name, email, subject, description, transcript || null],
-      );
+      try {
+        await pool.execute(
+          "INSERT INTO basira_support_tickets (id,user_id,contact_name,email,subject,description,transcript,request_key) VALUES (?,?,?,?,?,?,?,?)",
+          [id, session?.user.id ?? null, name, email, subject, description, transcript || null, requestKey],
+        );
+      } catch (error: any) {
+        if (error?.code !== "ER_DUP_ENTRY") throw error;
+        const [existing] = await pool.execute<TicketRow[]>("SELECT id,delivery_status FROM basira_support_tickets WHERE request_key=? LIMIT 1", [requestKey]);
+        if (existing[0]) return res.status(200).json({ id: existing[0].id, deliveryStatus: existing[0].delivery_status, email: SUPPORT_EMAIL, duplicate: true });
+        throw error;
+      }
       const deliveryStatus = await sendTicketEmail(id);
       return res.status(201).json({ id, deliveryStatus, email: SUPPORT_EMAIL });
     } catch (error) {
       console.error("Support ticket storage failed", error instanceof Error ? error.message : "unknown");
-      return res.status(503).json({ error: "لم تُحفظ التذكرة. أعد المحاولة أو أرسل رسالة للبريد الظاهر" });
+      return res.status(503).json({ error: t.storageFailed });
     }
   });
 
   app.get("/api/support/tickets", async (req, res) => {
     res.set("Cache-Control", "no-store");
+    const t = strings[language(req)];
     try {
       const session = await auth.api.getSession({ headers: fromNodeHeaders(req.headers) });
-      if (!session) return res.status(401).json({ error: "سجل دخولك لعرض تذاكرك" });
+      if (!session) return res.status(401).json({ error: t.login });
       const [tickets] = await pool.execute<RowDataPacket[]>(
         "SELECT id, subject, status, delivery_status AS deliveryStatus, created_at AS createdAt FROM basira_support_tickets WHERE user_id=? ORDER BY created_at DESC LIMIT 30",
         [session.user.id],
       );
       return res.json({ tickets });
     } catch {
-      return res.status(503).json({ error: "تعذّر عرض التذاكر مؤقتًا" });
+      return res.status(503).json({ error: t.listFailed });
     }
   });
 }
 
-/** Retry pending notifications when SMTP is connected after tickets were saved. */
+/** Retry explicitly rejected notifications; uncertain delivery is never auto-retried. */
 export function startTicketMailWorker() {
   if (!SMTP_READY) return;
   const run = async () => {
     try {
-      await pool.execute("UPDATE basira_support_tickets SET delivery_status='pending' WHERE delivery_status='sending' AND updated_at < NOW() - INTERVAL 15 MINUTE");
+      // A dead process may have sent the email. Do not blindly resend it.
+      await pool.execute("UPDATE basira_support_tickets SET delivery_status='uncertain' WHERE delivery_status='sending' AND updated_at < NOW() - INTERVAL 15 MINUTE");
       const [rows] = await pool.execute<TicketRow[]>("SELECT id FROM basira_support_tickets WHERE delivery_status IN ('pending','failed') AND delivery_attempts < 3 ORDER BY created_at ASC LIMIT 10");
       for (const item of rows) await sendTicketEmail(item.id);
     } catch (error) { console.error("Ticket mail worker error", error instanceof Error ? error.message : "unknown"); }

@@ -1,0 +1,175 @@
+import { defineMessages } from "../define";
+
+/** Strings for the floating Basira AI guide. */
+export const floatingChatMessages = defineMessages({
+  ar: {
+    welcome: {
+      greeting: "مرحباً! 👋 أنا مساعد بصيرة الذكي. كيف يمكنني مساعدتك اليوم؟",
+    },
+    languages: {
+      ar: "العربية",
+      en: "الإنجليزية",
+      zhCN: "الصينية المبسطة",
+    },
+    chat: {
+      title: "مساعد بصيرة",
+      online: "متصل",
+      assistantBadge: "م",
+      userBadge: "أ",
+      inputPlaceholder: "اسأل عن أي شيء...",
+      listeningPlaceholder: "جاري الاستماع...",
+      soundOn: "صوت مفعّل",
+      soundOff: "صوت متوقف",
+      loading: "جاري التفكير...",
+    },
+    suggestions: {
+      label: "أسئلة مقترحة",
+      items: [
+        "كيف أبدأ استخدام بصيرة؟",
+        "كيف أستعد للاختبار؟",
+        "كيف أستخدم قارئ الشاشة؟",
+      ],
+    },
+    aria: {
+      openAssistant: "فتح المساعد",
+      closeAssistant: "إغلاق المساعد",
+      minimizeAssistant: "تصغير المساعد",
+      maximizeAssistant: "تكبير المساعد",
+      changeLanguage: (name: string) => `التبديل إلى ${name}`,
+      inputLabel: "رسالتك إلى مساعد بصيرة",
+      startVoiceInput: "بدء الإدخال الصوتي",
+      stopVoiceInput: "إيقاف الإدخال الصوتي",
+      sendMessage: "إرسال الرسالة",
+      enableAutoSpeak: "تفعيل القراءة التلقائية للردود",
+      disableAutoSpeak: "إيقاف القراءة التلقائية للردود",
+      assistantMessage: "رسالة من مساعد بصيرة",
+      userMessage: "رسالتك",
+    },
+    errors: {
+      connectionFailed: "فشل في الاتصال بالمساعد",
+      unableToProcess: "عذراً، لم أتمكن من معالجة طلبك. حاول مرة أخرى.",
+      connectionError: "عذراً، حدث خطأ في الاتصال. يرجى المحاولة مرة أخرى.",
+    },
+    toasts: {
+      languageChanged: (name: string) => `تم التبديل إلى ${name}`,
+      startSpeaking: "تحدث الآن...",
+      startSpeakingDescription: "سيتم تحويل كلامك إلى نص",
+      autoSpeakEnabled: "تم تفعيل القراءة التلقائية",
+      autoSpeakDisabled: "تم إيقاف القراءة التلقائية",
+    },
+  },
+  en: {
+    welcome: {
+      greeting:
+        "Hello! 👋 I'm Basira's smart assistant. How can I help you today?",
+    },
+    languages: {
+      ar: "Arabic",
+      en: "English",
+      zhCN: "Simplified Chinese",
+    },
+    chat: {
+      title: "Basira Assistant",
+      online: "Online",
+      assistantBadge: "A",
+      userBadge: "U",
+      inputPlaceholder: "Ask anything...",
+      listeningPlaceholder: "Listening...",
+      soundOn: "Sound on",
+      soundOff: "Sound off",
+      loading: "Thinking...",
+    },
+    suggestions: {
+      label: "Suggested questions",
+      items: [
+        "How do I get started with Basira?",
+        "How can I prepare for an exam?",
+        "How do I use a screen reader?",
+      ],
+    },
+    aria: {
+      openAssistant: "Open assistant",
+      closeAssistant: "Close assistant",
+      minimizeAssistant: "Minimize assistant",
+      maximizeAssistant: "Maximize assistant",
+      changeLanguage: (name: string) => `Switch to ${name}`,
+      inputLabel: "Your message to the Basira Assistant",
+      startVoiceInput: "Start voice input",
+      stopVoiceInput: "Stop voice input",
+      sendMessage: "Send message",
+      enableAutoSpeak: "Turn on automatic reading of responses",
+      disableAutoSpeak: "Turn off automatic reading of responses",
+      assistantMessage: "Message from the Basira Assistant",
+      userMessage: "Your message",
+    },
+    errors: {
+      connectionFailed: "Failed to connect to the assistant",
+      unableToProcess:
+        "Sorry, I couldn't process your request. Please try again.",
+      connectionError: "Sorry, there was a connection error. Please try again.",
+    },
+    toasts: {
+      languageChanged: (name: string) => `Switched to ${name}`,
+      startSpeaking: "Start speaking...",
+      startSpeakingDescription: "Your speech will be converted to text",
+      autoSpeakEnabled: "Auto-speak enabled",
+      autoSpeakDisabled: "Auto-speak disabled",
+    },
+  },
+  "zh-CN": {
+    welcome: {
+      greeting: "你好！👋 我是 Basira 智能助手。今天有什么可以帮你？",
+    },
+    languages: {
+      ar: "阿拉伯语",
+      en: "英语",
+      zhCN: "简体中文",
+    },
+    chat: {
+      title: "Basira 助手",
+      online: "在线",
+      assistantBadge: "助",
+      userBadge: "你",
+      inputPlaceholder: "想问什么都可以...",
+      listeningPlaceholder: "正在聆听...",
+      soundOn: "声音已开启",
+      soundOff: "声音已关闭",
+      loading: "正在思考...",
+    },
+    suggestions: {
+      label: "推荐问题",
+      items: [
+        "如何开始使用 Basira？",
+        "如何准备考试？",
+        "如何使用屏幕阅读器？",
+      ],
+    },
+    aria: {
+      openAssistant: "打开助手",
+      closeAssistant: "关闭助手",
+      minimizeAssistant: "最小化助手",
+      maximizeAssistant: "展开助手",
+      changeLanguage: (name: string) => `切换为${name}`,
+      inputLabel: "发送给 Basira 助手的消息",
+      startVoiceInput: "开始语音输入",
+      stopVoiceInput: "停止语音输入",
+      sendMessage: "发送消息",
+      enableAutoSpeak: "开启自动朗读回复",
+      disableAutoSpeak: "关闭自动朗读回复",
+      assistantMessage: "来自 Basira 助手的消息",
+      userMessage: "你的消息",
+    },
+    errors: {
+      connectionFailed: "无法连接到助手",
+      unableToProcess: "抱歉，无法处理你的请求。请重试。",
+      connectionError: "抱歉，连接时出现错误。请重试。",
+    },
+    toasts: {
+      languageChanged: (name: string) => `已切换为${name}`,
+      startSpeaking: "请开始说话...",
+      startSpeakingDescription: "你的语音将转换为文字",
+      autoSpeakEnabled: "已开启自动朗读",
+      autoSpeakDisabled: "已关闭自动朗读",
+    },
+  },
+});

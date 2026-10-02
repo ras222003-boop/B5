@@ -1,51 +1,148 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ArrowLeft, Sparkles } from "lucide-react";
+import { Sparkles } from "lucide-react";
 import { motion, useReducedMotion } from "framer-motion";
 import BrandLogo from "./BrandLogo";
+import { ForwardArrow } from "./DirectionalIcon";
+import { useCommonMessages, useI18n, type Lang } from "@/i18n";
 
 interface WelcomeScreenProps {
   onDismiss: () => void;
 }
 
-const WELCOME_AUDIO_SRC = "/audio/aurum-welcome-bell.mp3";
-const AUTO_CLOSE_MS = 12000;
+/** Exact on-screen duration of the welcome sequence. */
+export const WELCOME_DURATION_MS = 10_000;
+
+/**
+ * One pre-mixed 10-second track per language (welcome music + bell at 0.12 s +
+ * spoken welcome at 1.6 s). A single media element keeps every layer in sync
+ * and makes overlapping or duplicated playback impossible.
+ */
+export const WELCOME_AUDIO_SRC: Record<Lang, string> = {
+  ar: "/audio/welcome-ar.mp3",
+  en: "/audio/welcome-en.mp3",
+  "zh-CN": "/audio/welcome-zh-CN.mp3",
+};
+
+const WELCOME_VOLUME = 0.85;
+const FADE_OUT_MS = 380;
+const UNLOCK_EVENTS = ["pointerdown", "keydown", "touchstart"] as const;
+
+/** Only one welcome track may exist in the page at any time. */
+let activeWelcomeAudio: HTMLAudioElement | null = null;
+
+function releaseAudio(audio: HTMLAudioElement | null) {
+  if (!audio) return;
+  audio.pause();
+  audio.removeAttribute("src");
+  audio.load();
+  if (activeWelcomeAudio === audio) activeWelcomeAudio = null;
+}
 
 export default function WelcomeScreen({ onDismiss }: WelcomeScreenProps) {
   const reduceMotion = useReducedMotion();
+  const { lang } = useI18n();
+  const t = useCommonMessages();
   const [leaving, setLeaving] = useState(false);
+  const [soundBlocked, setSoundBlocked] = useState(false);
   const leaveRef = useRef(false);
   const buttonRef = useRef<HTMLButtonElement>(null);
-  const audioRef = useRef<HTMLAudioElement>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const startedAtRef = useRef(0);
+  const playRequestedRef = useRef(false);
+  const removeUnlockRef = useRef<() => void>(() => undefined);
+  const fadeTimerRef = useRef<number | null>(null);
 
-  const stopSound = useCallback(() => {
+  const stopSound = useCallback((fade: boolean) => {
+    removeUnlockRef.current();
     const audio = audioRef.current;
     if (!audio) return;
-    audio.pause();
-    audio.currentTime = 0;
+    audioRef.current = null;
+    if (!fade || audio.paused) {
+      releaseAudio(audio);
+      return;
+    }
+    const startVolume = audio.volume;
+    const startedAt = performance.now();
+    const step = () => {
+      const progress = Math.min(1, (performance.now() - startedAt) / FADE_OUT_MS);
+      audio.volume = Math.max(0, startVolume * (1 - progress));
+      if (progress < 1) fadeTimerRef.current = window.requestAnimationFrame(step);
+      else releaseAudio(audio);
+    };
+    fadeTimerRef.current = window.requestAnimationFrame(step);
   }, []);
 
-  const close = useCallback(() => {
+  const close = useCallback((skip = false) => {
     if (leaveRef.current) return;
     leaveRef.current = true;
-    stopSound();
+    // A skipped welcome stops immediately. For the timed close, the mixed
+    // track fades within its own 10-second timeline and is stopped at 10 s.
+    if (skip) stopSound(false);
     setLeaving(true);
     window.setTimeout(() => {
+      if (!skip) stopSound(false);
       onDismiss();
       document.querySelector<HTMLElement>("main")?.focus();
     }, reduceMotion ? 0 : 520);
   }, [onDismiss, reduceMotion, stopSound]);
 
+  // Audio: try unmuted autoplay immediately; fall back to the first gesture only when the browser forbids it.
+  useEffect(() => {
+    releaseAudio(activeWelcomeAudio);
+    const audio = new Audio(WELCOME_AUDIO_SRC[lang]);
+    audio.preload = "auto";
+    audio.volume = WELCOME_VOLUME;
+    audio.loop = false;
+    audioRef.current = audio;
+    activeWelcomeAudio = audio;
+    startedAtRef.current = performance.now();
+    playRequestedRef.current = false;
+
+    const attemptPlay = (fromGesture: boolean) => {
+      if (leaveRef.current || audioRef.current !== audio || playRequestedRef.current) return;
+      const elapsed = (performance.now() - startedAtRef.current) / 1000;
+      // Keep the sound aligned with the visual timeline when it starts late.
+      if (elapsed >= WELCOME_DURATION_MS / 1000 - 0.8) return;
+      if (fromGesture && elapsed > 0.25) {
+        try { audio.currentTime = elapsed; } catch { /* metadata not loaded yet */ }
+      }
+      playRequestedRef.current = true;
+      audio.play().then(() => {
+        setSoundBlocked(false);
+        removeUnlockRef.current();
+      }).catch((error: unknown) => {
+        playRequestedRef.current = false;
+        const name = error instanceof DOMException ? error.name : "";
+        if (name === "NotAllowedError") setSoundBlocked(true);
+        // AbortError / NotSupportedError: never break the welcome experience.
+      });
+    };
+
+    const onGesture = () => attemptPlay(true);
+    UNLOCK_EVENTS.forEach(type => window.addEventListener(type, onGesture, { capture: true, passive: true }));
+    removeUnlockRef.current = () => {
+      UNLOCK_EVENTS.forEach(type => window.removeEventListener(type, onGesture, { capture: true }));
+      removeUnlockRef.current = () => undefined;
+    };
+
+    attemptPlay(false);
+
+    return () => {
+      removeUnlockRef.current();
+      if (fadeTimerRef.current !== null) window.cancelAnimationFrame(fadeTimerRef.current);
+      releaseAudio(audio);
+      if (audioRef.current === audio) audioRef.current = null;
+    };
+    // The track language is fixed for the lifetime of the welcome screen.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   useEffect(() => {
     buttonRef.current?.focus();
-    const audio = audioRef.current;
-    if (audio) {
-      audio.volume = 0.16;
-      void audio.play().catch(() => undefined);
-    }
-
-    const timer = window.setTimeout(close, AUTO_CLOSE_MS);
+    // Start the 520 ms exit transition *inside* the 10-second window.
+    const timer = window.setTimeout(() => close(false), WELCOME_DURATION_MS - (reduceMotion ? 0 : 520));
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") close();
+      if (event.key === "Escape") close(true);
       if (event.key === "Tab") {
         event.preventDefault();
         buttonRef.current?.focus();
@@ -57,8 +154,6 @@ export default function WelcomeScreen({ onDismiss }: WelcomeScreenProps) {
       document.removeEventListener("keydown", onKeyDown);
     };
   }, [close, reduceMotion]);
-
-  useEffect(() => () => stopSound(), [stopSound]);
 
   const reveal = (delay: number, distance = 24) => reduceMotion
     ? { initial: false as const, animate: { opacity: 1 } }
@@ -79,7 +174,6 @@ export default function WelcomeScreen({ onDismiss }: WelcomeScreenProps) {
       animate={{ opacity: leaving ? 0 : 1, scale: leaving ? 1.018 : 1 }}
       transition={{ duration: reduceMotion ? 0 : 0.52, ease: "easeOut" }}
     >
-      <audio ref={audioRef} autoPlay preload="auto" src={WELCOME_AUDIO_SRC} />
       <div aria-hidden="true" className="aurum-stage pointer-events-none absolute inset-0">
         <div className="aurum-stage__grain" />
         <div className="aurum-stage__veil" />
@@ -109,36 +203,36 @@ export default function WelcomeScreen({ onDismiss }: WelcomeScreenProps) {
           <span className="aurum-stage__spark aurum-stage__spark--north" aria-hidden="true" />
           <span className="aurum-stage__spark aurum-stage__spark--east" aria-hidden="true" />
           <BrandLogo
-            alt="شعار شركة Aurum Nexus"
+            alt={t.brand.logoAlt}
             className="relative z-10 h-[78%] w-[78%] rounded-full border border-amber-100/40 shadow-[0_0_90px_rgba(226,164,48,0.3)]"
             fetchPriority="high"
           />
         </motion.div>
 
         <motion.p {...reveal(0.58, 16)} className="mb-3 flex items-center gap-2 text-sm font-semibold text-amber-200">
-          <Sparkles aria-hidden="true" className="h-4 w-4" /> تجربة تعليمية أكثر استقلالًا
+          <Sparkles aria-hidden="true" className="h-4 w-4" /> {t.welcome.eyebrow}
         </motion.p>
         <motion.h1 {...reveal(0.74, 22)} id="welcome-title" className="text-5xl font-black leading-[1.15] text-white sm:text-7xl">
-          أهلًا بك في <span className="aurum-stage__gold">بصيرة</span>
+          {t.welcome.titleBefore}<span className="aurum-stage__gold">{t.welcome.titleBrand}</span>{t.welcome.titleAfter}
         </motion.h1>
         <motion.p {...reveal(0.98, 18)} id="welcome-description" className="mt-5 max-w-xl text-base leading-8 text-stone-300 sm:text-lg">
-          اقرأ أسئلتك، استمع إليها، وأجب بطريقتك. مساحة هادئة صُممت لتجعل الاختبار أوضح وأسهل وصولًا.
+          {t.welcome.description}
         </motion.p>
 
         <motion.div {...reveal(1.22, 14)} className="mt-9 flex flex-col items-center gap-3">
           <button
             ref={buttonRef}
             type="button"
-            onClick={close}
+            onClick={() => close(true)}
             className="aurum-stage__enter inline-flex min-h-12 items-center justify-center gap-3 rounded-2xl px-10 py-3 font-extrabold text-[#15120d] focus-visible:outline focus-visible:outline-3 focus-visible:outline-offset-4 focus-visible:outline-amber-100"
           >
-            ادخل المنصة <ArrowLeft aria-hidden="true" className="h-5 w-5" />
+            {t.welcome.enter} <ForwardArrow aria-hidden="true" className="h-5 w-5" />
           </button>
-          <p className="text-xs text-stone-400">يبدأ الجرس تلقائيًا عند فتح المنصة؛ اضغط دخول أو Esc للتخطي.</p>
+          <p className="text-xs text-stone-400" aria-live="polite">{soundBlocked ? t.welcome.blockedHint : t.welcome.hint}</p>
         </motion.div>
 
         <div aria-hidden="true" className="aurum-stage__progress mt-8 h-px w-52 overflow-hidden bg-amber-200/20 sm:w-64">
-          <div className="h-full w-full origin-right bg-gradient-to-l from-transparent via-amber-200 to-transparent" style={{ animationDuration: `${AUTO_CLOSE_MS}ms` }} />
+          <div className="h-full w-full origin-right bg-gradient-to-l from-transparent via-amber-200 to-transparent ltr:origin-left ltr:bg-gradient-to-r" style={{ animationDuration: `${WELCOME_DURATION_MS}ms` }} />
         </div>
       </div>
     </motion.div>

@@ -6,6 +6,8 @@ import { toNodeHandler } from "better-auth/node";
 import { auth, providerReady } from "./auth";
 import { ensureSchema } from "./migrations";
 import { registerSupportRoutes, startTicketMailWorker } from "./support";
+import { registerOcrRoute } from "./ocr";
+import { toExamLanguage, assistantSystem, guideSystem, aiFallback, pdfLabels, escapeHtml } from "./locale";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -17,11 +19,11 @@ const DEFAULT_LLM_MODEL = process.env.MANUS_LLM_MODEL || "gemini-3-flash-preview
 /**
  * Call the LLM via Forge API
  */
-async function invokeLLM(messages: Array<{ role: string; content: any }>, options?: { response_format?: any }) {
+async function invokeLLM(messages: Array<{ role: string; content: any }>, options?: { response_format?: any; model?: string }) {
   const url = `${FORGE_API_URL}/v1/chat/completions`;
   const body: any = {
     messages,
-    model: DEFAULT_LLM_MODEL,
+    model: options?.model || DEFAULT_LLM_MODEL,
   };
   if (options?.response_format) {
     body.response_format = options.response_format;
@@ -64,109 +66,8 @@ async function startServer() {
   registerSupportRoutes(app);
   startTicketMailWorker();
 
-  // ========== API: OCR - Extract questions from exam image ==========
-  app.post("/api/ocr", async (req, res) => {
-    try {
-      const { imageBase64 } = req.body;
-      if (!imageBase64) {
-        return res.status(400).json({ error: "imageBase64 is required" });
-      }
-
-      const response = await invokeLLM(
-        [
-          {
-            role: "system",
-            content: `أنت نظام OCR متقدم متخصص في قراءة أوراق الاختبارات بالعربية والإنجليزية.
-مهمتك: استخراج جميع الأسئلة من صورة ورقة الاختبار وتنظيمها.
-اكتشف لغة الاختبار تلقائياً (عربي أو إنجليزي) وأرجع الأسئلة بنفس اللغة الأصلية.
-
-يجب أن تُرجع JSON بالتنسيق التالي:
-{
-  "examTitle": "عنوان الاختبار إن وجد",
-  "language": "ar" أو "en",
-  "questions": [
-    {
-      "id": 1,
-      "text": "نص السؤال",
-      "type": "multiple" أو "text",
-      "options": ["خيار1", "خيار2", ...] // فقط إذا كان اختيار من متعدد
-    }
-  ]
-}
-
-ملاحظات مهمة:
-- إذا كان الاختبار بالعربية، أرجع language: "ar"
-- إذا كان بالإنجليزية، أرجع language: "en"
-- استخرج الأسئلة بنفس لغتها الأصلية بدقة
-- إذا لم تتمكن من قراءة الصورة بوضوح، أرجع ما تستطيع قراءته`,
-          },
-          {
-            role: "user",
-            content: [
-              {
-                type: "text",
-                text: "اقرأ ورقة الاختبار هذه واستخرج جميع الأسئلة منها بدقة. أرجع النتيجة بصيغة JSON فقط.",
-              },
-              {
-                type: "image_url",
-                image_url: {
-                  url: imageBase64.startsWith("data:") ? imageBase64 : `data:image/jpeg;base64,${imageBase64}`,
-                  detail: "high",
-                },
-              },
-            ],
-          },
-        ],
-        {
-          response_format: {
-            type: "json_schema",
-            json_schema: {
-              name: "exam_ocr_result",
-              strict: true,
-              schema: {
-                type: "object",
-                properties: {
-                  examTitle: { type: "string", description: "عنوان الاختبار" },
-                  language: { type: "string", enum: ["ar", "en"], description: "لغة الاختبار" },
-                  questions: {
-                    type: "array",
-                    items: {
-                      type: "object",
-                      properties: {
-                        id: { type: "integer", description: "رقم السؤال" },
-                        text: { type: "string", description: "نص السؤال" },
-                        type: { type: "string", enum: ["multiple", "text"], description: "نوع السؤال" },
-                        options: {
-                          type: "array",
-                          items: { type: "string" },
-                          description: "خيارات الإجابة إذا كان اختيار من متعدد",
-                        },
-                      },
-                      required: ["id", "text", "type", "options"],
-                      additionalProperties: false,
-                    },
-                  },
-                },
-                required: ["examTitle", "language", "questions"],
-                additionalProperties: false,
-              },
-            },
-          },
-        }
-      );
-
-      const content = response.choices?.[0]?.message?.content;
-      if (!content) {
-        return res.status(500).json({ error: "No response from AI" });
-      }
-
-      const parsed = JSON.parse(content);
-      return res.json(parsed);
-    } catch (err: any) {
-      console.error("OCR error:", err);
-      return res.status(500).json({ error: err.message || "OCR processing failed" });
-    }
-  });
+  // Structured OCR: 3 languages, EXIF rotation, contrast reference, quality report.
+  registerOcrRoute(app, invokeLLM);
 
   // ========== API: Digital Assistant - Chat with AI ==========
   app.post("/api/assistant", async (req, res) => {
@@ -176,34 +77,8 @@ async function startServer() {
         return res.status(400).json({ error: "messages array is required" });
       }
 
-      // Build language-specific system prompt for clarity
-      const systemPrompt = language === "en"
-        ? `You are an intelligent digital assistant named "Basira Assistant", specialized in helping visually impaired students take their exams.
-
-Your tasks:
-- Read questions and explain them clearly
-- Help the user understand what each question asks
-- Provide general tips without giving direct answers
-- Speak in simple, clear English
-- Offer encouragement and emotional support
-- Guide the user to use platform features
-
-${examContext ? `Current exam context:\n${examContext}` : "No active exam currently."}
-
-Be friendly, encouraging, and concise in your responses. Don't give answers directly, but help the student think through problems. Use short, clear sentences for better text-to-speech clarity.`
-        : `أنت مساعد رقمي ذكي اسمه "مساعد بصيرة"، مخصص لمساعدة الأشخاص ذوي الإعاقة البصرية في أداء اختباراتهم.
-
-مهامك:
-- قراءة الأسئلة وشرحها بوضوح جداً
-- مساعدة المستخدم في فهم المطلوب من كل سؤال
-- تقديم نصائح عامة دون إعطاء الإجابات مباشرة
-- التحدث بلغة عربية بسيطة وواضحة جداً
-- التشجيع والدعم المعنوي
-- توجيه المستخدم لاستخدام ميزات المنصة
-
-${examContext ? `سياق الاختبار الحالي:\n${examContext}` : "لا يوجد اختبار نشط حالياً."}
-
-كن ودوداً ومشجعاً ومختصراً في ردودك. استخدم جملاً قصيرة وواضحة لتحسين وضوح قراءة النصوص الصوتية. لا تعطي الإجابات مباشرة بل ساعد الطالب على التفكير.`;
+      const lang = toExamLanguage(language, "ar");
+      const systemPrompt = assistantSystem[lang](typeof examContext === "string" ? examContext.slice(0, 3000) : "");
 
       const llmMessages = [
         { role: "system", content: systemPrompt },
@@ -216,7 +91,7 @@ ${examContext ? `سياق الاختبار الحالي:\n${examContext}` : "ل�
       const response = await invokeLLM(llmMessages);
       const content = response.choices?.[0]?.message?.content;
 
-      return res.json({ content: content || "عذراً، لم أتمكن من معالجة طلبك. حاول مرة أخرى." });
+      return res.json({ content: content || aiFallback[lang] });
     } catch (err: any) {
       console.error("Assistant error:", err);
       return res.status(500).json({ error: err.message || "Assistant processing failed" });
@@ -231,50 +106,8 @@ ${examContext ? `سياق الاختبار الحالي:\n${examContext}` : "ل�
         return res.status(400).json({ error: "messages array is required" });
       }
 
-      // Build comprehensive system prompt for AI Guide
-      const systemPrompt = language === "en"
-        ? `You are an advanced AI guide for Basira platform, working like ChatGPT. Your role is to provide comprehensive, step-by-step guidance about the platform.
-
-Your responsibilities:
-1. Explain platform features in detail
-2. Provide step-by-step instructions for using the platform
-3. Answer technical questions
-4. Give practical tips for exam success
-5. Explain accessibility features
-6. Help troubleshoot issues
-7. Provide encouragement and support
-
-Always:
-- Use clear, simple language
-- Break down complex topics into steps
-- Provide examples when helpful
-- Be friendly and supportive
-- Use short sentences for better text-to-speech clarity
-- Format responses with clear structure (headings, bullet points, numbered lists)
-- Provide detailed, comprehensive answers
-
-Be thorough and informative, like ChatGPT, providing complete guidance on any topic related to Basira.`
-        : `أنت مساعد ذكي متقدم لمنصة بصيرة، تعمل مثل ChatGPT. دورك تقديم إرشادات شاملة وخطوة بخطوة حول المنصة.
-
-مسؤولياتك:
-1. شرح مميزات المنصة بالتفصيل
-2. تقديم تعليمات خطوة بخطوة لاستخدام المنصة
-3. الإجابة على الأسئلة التقنية
-4. تقديم نصائح عملية للنجاح في الاختبارات
-5. شرح ميزات الإمكانية الوصول
-6. مساعدة المستخدم في حل المشاكل
-7. تقديم التشجيع والدعم
-
-دائماً:
-- استخدم لغة واضحة وبسيطة
-- قسّم المواضيع المعقدة إلى خطوات
-- قدّم أمثلة عند الحاجة
-- كن ودوداً وداعماً
-- استخدم جملاً قصيرة وواضحة لتحسين وضوح قراءة النصوص الصوتية
-- نسّق الإجابات بشكل واضح (عناوين، نقاط، قوائم مرقمة)
-- قدّم إجابات مفصلة وشاملة
-
-كن شاملاً وغنياً بالمعلومات، مثل ChatGPT، مقدماً إرشادات كاملة حول أي موضوع يتعلق ببصيرة.`;
+      const lang = toExamLanguage(language, "ar");
+      const systemPrompt = guideSystem[lang];
 
       const llmMessages = [
         { role: "system", content: systemPrompt },
@@ -287,7 +120,7 @@ Be thorough and informative, like ChatGPT, providing complete guidance on any to
       const response = await invokeLLM(llmMessages);
       const content = response.choices?.[0]?.message?.content;
 
-      return res.json({ content: content || (language === "ar" ? "عذراً، لم أتمكن من معالجة طلبك. حاول مرة أخرى." : "Sorry, I couldn't process your request. Try again.") });
+      return res.json({ content: content || aiFallback[lang] });
     } catch (err: any) {
       console.error("AI Guide error:", err);
       return res.status(500).json({ error: err.message || "AI Guide processing failed" });
@@ -297,12 +130,13 @@ Be thorough and informative, like ChatGPT, providing complete guidance on any to
   // ========== API: AI Auto-Grade - Correct exam answers ==========
   app.post("/api/grade", async (req, res) => {
     try {
-      const { examTitle, questions, answers, language } = req.body;
+      const { examTitle, questions, answers, language, uiLanguage } = req.body;
       if (!questions || !Array.isArray(questions)) {
         return res.status(400).json({ error: "questions array is required" });
       }
 
-      const lang = language || "ar";
+      const lang = toExamLanguage(language, "ar");
+      const uiLang = toExamLanguage(uiLanguage, lang);
       const questionsWithAnswers = questions.map((q: any) => ({
         id: q.id,
         text: q.text,
@@ -322,6 +156,8 @@ Be thorough and informative, like ChatGPT, providing complete guidance on any to
 - للأسئلة المقالية: قيّم الإجابة من حيث الدقة والشمولية
 - أعطِ كل سؤال درجة (صحيح/خاطئ/جزئي) مع تعليق توضيحي
 - قدم الإجابة الصحيحة لكل سؤال
+
+لغة نصوص feedback و overallFeedback و correctAnswer يجب أن تطابق لغة واجهة المستخدم ${uiLang}، مع الحفاظ على نص السؤال بلغته الأصلية ${lang}. لا تترجم السؤال ولا تعطي شرحًا بغير لغة الواجهة.
 
 أرجع JSON بالتنسيق التالي:
 {
@@ -398,14 +234,17 @@ Be thorough and informative, like ChatGPT, providing complete guidance on any to
   // ========== API: Generate PDF with grading results ==========
   app.post("/api/generate-pdf", async (req, res) => {
     try {
-      const { examTitle, questions, answers, grading, language } = req.body;
+      const { examTitle, questions, answers, grading, language, uiLanguage } = req.body;
       if (!questions || !Array.isArray(questions)) {
         return res.status(400).json({ error: "questions array is required" });
       }
 
-      const isArabic = (language || "ar") === "ar";
+      const examLang = toExamLanguage(language, "ar");
+      const reportLang = toExamLanguage(uiLanguage, examLang);
+      const labelsText = pdfLabels[reportLang];
+      const isArabic = examLang === "ar";
       const dir = isArabic ? "rtl" : "ltr";
-      const fontFamily = isArabic ? "'Tajawal', 'Arial', sans-serif" : "'Arial', 'Helvetica', sans-serif";
+      const fontFamily = isArabic ? "'Tajawal', 'Arial', sans-serif" : "'Noto Sans SC', 'Arial', 'Helvetica', sans-serif";
       const answeredCount = Object.keys(answers || {}).length;
       const totalScore = grading?.totalScore;
       const totalCorrect = grading?.totalCorrect || 0;
@@ -417,7 +256,7 @@ Be thorough and informative, like ChatGPT, providing complete guidance on any to
 
       const htmlContent = `
 <!DOCTYPE html>
-<html dir="${dir}" lang="${isArabic ? 'ar' : 'en'}">
+<html dir="${dir}" lang="${examLang}">
 <head>
   <meta charset="UTF-8">
   <style>
@@ -471,40 +310,40 @@ Be thorough and informative, like ChatGPT, providing complete guidance on any to
 </head>
 <body>
   <div class="header">
-    <div class="logo">${isArabic ? 'بصيرة - منصة الاختبارات الذكية' : 'Basira - Smart Exam Platform'}</div>
-    <h1>${examTitle || (isArabic ? 'اختبار' : 'Exam')}</h1>
-    <div class="subtitle">${isArabic ? 'تاريخ التصدير' : 'Export Date'}: ${new Date().toLocaleDateString(isArabic ? 'ar-SA' : 'en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</div>
+    <div class="logo">${labelsText.brand}</div>
+    <h1>${escapeHtml(examTitle || labelsText.exam)}</h1>
+    <div class="subtitle">${labelsText.exportDate}: ${new Date().toLocaleDateString(reportLang === 'ar' ? 'ar-SA' : reportLang === 'en' ? 'en-US' : 'zh-CN', { year: 'numeric', month: 'long', day: 'numeric' })}</div>
   </div>
 
   ${totalScore !== undefined ? `
   <div class="score-box ${totalScore >= 50 ? 'pass' : 'fail'}">
     <div class="score-num">${totalScore}%</div>
-    <div class="score-label">${isArabic ? `${totalCorrect} من ${questions.length} إجابة صحيحة` : `${totalCorrect} of ${questions.length} correct`}</div>
+    <div class="score-label">${labelsText.correctCount(totalCorrect, questions.length)}</div>
   </div>
-  ${grading?.overallFeedback ? `<div class="overall-feedback">${grading.overallFeedback}</div>` : ''}
+  ${grading?.overallFeedback ? `<div class="overall-feedback">${escapeHtml(grading.overallFeedback)}</div>` : ''}
   ` : `
   <div class="stats">
-    <div class="stat"><div class="stat-num">${questions.length}</div><div class="stat-label">${isArabic ? 'عدد الأسئلة' : 'Questions'}</div></div>
-    <div class="stat"><div class="stat-num">${answeredCount}</div><div class="stat-label">${isArabic ? 'تمت الإجابة' : 'Answered'}</div></div>
+    <div class="stat"><div class="stat-num">${questions.length}</div><div class="stat-label">${labelsText.questions}</div></div>
+    <div class="stat"><div class="stat-num">${answeredCount}</div><div class="stat-label">${labelsText.answered}</div></div>
   </div>
   `}
 
   ${questions.map((q: any) => {
     const gradingResult = grading?.results?.find((r: any) => r.questionId === q.id);
-    const statusClass = gradingResult ? gradingResult.isCorrect : '';
-    const badgeClass = gradingResult ? `badge-${gradingResult.isCorrect}` : '';
+    const statusClass = gradingResult && ['correct', 'incorrect', 'partial', 'unanswered'].includes(gradingResult.isCorrect) ? gradingResult.isCorrect : '';
+    const badgeClass = statusClass ? `badge-${statusClass}` : '';
     const badgeText = gradingResult ? (
-      gradingResult.isCorrect === 'correct' ? (isArabic ? 'صحيح ✓' : 'Correct ✓') :
-      gradingResult.isCorrect === 'incorrect' ? (isArabic ? 'خاطئ ✗' : 'Incorrect ✗') :
-      gradingResult.isCorrect === 'partial' ? (isArabic ? 'جزئي ~' : 'Partial ~') :
-      (isArabic ? 'لم يُجب' : 'Unanswered')
+      gradingResult.isCorrect === 'correct' ? labelsText.correct :
+      gradingResult.isCorrect === 'incorrect' ? labelsText.incorrect :
+      gradingResult.isCorrect === 'partial' ? labelsText.partial :
+      labelsText.unanswered
     ) : '';
 
     return `
     <div class="question ${statusClass}">
       <div class="question-header">
-        <div class="question-num">${q.id}</div>
-        <div class="question-text">${q.text}</div>
+        <div class="question-num">${escapeHtml(q.number || q.id)}</div>
+        <div class="question-text">${escapeHtml(q.text)}</div>
         ${gradingResult ? `<span class="question-badge ${badgeClass}">${badgeText}</span>` : ''}
       </div>
       ${q.type === 'multiple' && q.options?.length > 0 ? `
@@ -513,34 +352,34 @@ Be thorough and informative, like ChatGPT, providing complete guidance on any to
             const isSelected = answers?.[q.id] === o;
             const isCorrectOpt = gradingResult?.correctAnswer === o;
             const cls = isCorrectOpt ? 'correct-option' : (isSelected ? 'selected' : '');
-            return `<div class="option ${cls}">${labels[i] || (i + 1)}) ${o} ${isCorrectOpt && gradingResult ? '✓' : ''} ${isSelected && !isCorrectOpt && gradingResult ? '✗' : ''}</div>`;
+            return `<div class="option ${cls}">${escapeHtml(q.optionLabels?.[i] || labels[i] || (i + 1))}) ${escapeHtml(o)} ${isCorrectOpt && gradingResult ? '✓' : ''} ${isSelected && !isCorrectOpt && gradingResult ? '✗' : ''}</div>`;
           }).join('')}
         </div>
       ` : ''}
       ${answers && answers[q.id] ? `
         <div class="answer">
-          <div class="answer-label">${isArabic ? 'إجابة الطالب:' : 'Student Answer:'}</div>
-          <div class="answer-text">${answers[q.id]}</div>
+          <div class="answer-label">${labelsText.studentAnswer}</div>
+          <div class="answer-text">${escapeHtml(answers[q.id])}</div>
         </div>
       ` : `
         <div class="no-answer">
-          <div class="no-answer-text">${isArabic ? 'لم يتم الإجابة' : 'Not answered'}</div>
+          <div class="no-answer-text">${labelsText.notAnswered}</div>
         </div>
       `}
       ${gradingResult && gradingResult.isCorrect !== 'correct' && gradingResult.correctAnswer ? `
         <div class="correct-answer">
-          <div class="correct-answer-label">${isArabic ? 'الإجابة الصحيحة:' : 'Correct Answer:'}</div>
-          <div class="correct-answer-text">${gradingResult.correctAnswer}</div>
+          <div class="correct-answer-label">${labelsText.correctAnswer}</div>
+          <div class="correct-answer-text">${escapeHtml(gradingResult.correctAnswer)}</div>
         </div>
       ` : ''}
       ${gradingResult?.feedback ? `
-        <div class="feedback">${isArabic ? 'تعليق المعلم:' : 'Teacher Feedback:'} ${gradingResult.feedback}</div>
+        <div class="feedback">${labelsText.feedback} ${escapeHtml(gradingResult.feedback)}</div>
       ` : ''}
     </div>
   `}).join('')}
 
   <div class="footer">
-    <p>${isArabic ? 'تم إنشاء هذا الملف بواسطة منصة بصيرة - الاختبارات الذكية لذوي الإعاقة البصرية' : 'Generated by Basira - Smart Exam Platform for Visually Impaired'}</p>
+    <p>${labelsText.footer}</p>
   </div>
 </body>
 </html>`;

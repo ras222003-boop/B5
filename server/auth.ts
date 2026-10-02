@@ -22,9 +22,10 @@ const previewOrigins = [
   "https://3000-imv45ni0cja578aqjmie4-14cb3a00.sg2.manus.computer",
   "https://3001-imv45ni0cja578aqjmie4-14cb3a00.sg2.manus.computer",
 ];
+const publishedOrigin = "https://basira-ve3h8rof.manus.space";
 const customOrigin = process.env.BASIRA_PUBLIC_URL?.replace(/\/+$/, "");
 if (customOrigin && !/^https:\/\/[^/]+$/.test(customOrigin)) throw new Error("BASIRA_PUBLIC_URL must be an HTTPS origin");
-const origins = [...previewOrigins, ...(customOrigin ? [customOrigin] : [])];
+const origins = [...previewOrigins, publishedOrigin, ...(customOrigin ? [customOrigin] : [])];
 const apple = providerReady.apple ? {
   apple: async () => {
     const clientId = process.env.APPLE_CLIENT_ID!;
@@ -49,7 +50,7 @@ export const auth = betterAuth({
   baseURL: {
     allowedHosts: [...origins.map(origin => new URL(origin).host), "localhost:*", "127.0.0.1:*"],
     protocol: "auto",
-    fallback: customOrigin || previewOrigins[0],
+    fallback: customOrigin || publishedOrigin,
   },
   trustedOrigins: [...origins, "http://localhost:3000", "http://localhost:3001", "https://appleid.apple.com"],
   advanced: {

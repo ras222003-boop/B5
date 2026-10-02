@@ -6,6 +6,7 @@ import { Route, Switch } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
 import WelcomeScreen from "./components/WelcomeScreen";
 import { ThemeProvider } from "./contexts/ThemeContext";
+import { I18nProvider, useI18n } from "./i18n";
 import Home from "./pages/Home";
 import HowItWorks from "./pages/HowItWorks";
 import Features from "./pages/Features";
@@ -50,15 +51,20 @@ function Router() {
   );
 }
 
+function LocalizedToaster() {
+  const { dir } = useI18n();
+  return <Toaster dir={dir} position={dir === "rtl" ? "top-left" : "top-right"} />;
+}
+
 function App() {
   const [isWelcomeVisible, setIsWelcomeVisible] = useState(true);
 
   return (
-    <>
+    <I18nProvider>
       <ErrorBoundary>
         <ThemeProvider defaultTheme="light">
           <TooltipProvider>
-            <Toaster />
+            <LocalizedToaster />
             <Router />
             <VoiceGuide />
             <FloatingChatWidget />
@@ -66,7 +72,7 @@ function App() {
         </ThemeProvider>
       </ErrorBoundary>
       {isWelcomeVisible && <WelcomeScreen onDismiss={() => setIsWelcomeVisible(false)} />}
-    </>
+    </I18nProvider>
   );
 }
 

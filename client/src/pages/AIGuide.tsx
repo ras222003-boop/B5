@@ -25,6 +25,8 @@ import Layout from "@/components/Layout";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { useTextToSpeech, useSpeechToText } from "@/hooks/useSpeech";
+import { type Lang, useI18n, useMessages } from "@/i18n";
+import { aiGuideMessages } from "@/i18n/locales/aiGuide";
 
 interface Message {
   id: string;
@@ -33,53 +35,49 @@ interface Message {
   timestamp: Date;
 }
 
-const suggestedTopics = [
-  { icon: MessageSquare, label: "كيف أبدأ الاختبار؟", action: "شرح لي خطوات البدء بالاختبار بالتفصيل" },
-  { icon: Lightbulb, label: "شرح المميزات", action: "اشرح لي جميع مميزات منصة بصيرة بشكل مفصل" },
-  { icon: Sparkles, label: "نصائح للنجاح", action: "أعطني نصائح عملية لتحقيق أفضل أداء في الاختبارات" },
-  { icon: Volume2, label: "مساعدة تقنية", action: "ساعدني في حل المشاكل التقنية والأخطاء" },
-];
+const SUGGESTION_ICONS = [MessageSquare, Lightbulb, Sparkles, Volume2] as const;
 
 export default function AIGuide() {
-  const [messages, setMessages] = useState<Message[]>([
+  const { lang, dir, isRTL, languages, setLang } = useI18n();
+  const t = useMessages(aiGuideMessages);
+  const [messages, setMessages] = useState<Message[]>(() => [
     {
       id: "welcome",
       role: "assistant",
-      content: `مرحباً بك في مساعد بصيرة الذكي! 👋
-
-أنا هنا لمساعدتك في كل شيء يتعلق بمنصة بصيرة. يمكنني:
-
-✅ شرح كيفية استخدام المنصة خطوة بخطوة
-✅ تقديم نصائح عملية لتحسين أدائك
-✅ حل المشاكل التقنية والأسئلة
-✅ إرشادك خلال عملية الاختبار بالكامل
-
-اسأل عن أي شيء تريده، وسأقدم لك إجابة مفصلة وواضحة!`,
+      content: t.welcome.message,
       timestamp: new Date(),
     },
   ]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [autoSpeak, setAutoSpeak] = useState(true);
-  const [currentLang, setCurrentLang] = useState<"ar" | "en">("ar");
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const { speak, stop: stopSpeaking, isSpeaking } = useTextToSpeech();
-  const { startListening, stopListening, isListening, transcript, error: speechError, setTranscript, setLang: setSttLang } = useSpeechToText("ar");
+  const { startListening, stopListening, isListening, transcript, error: speechError, setTranscript } = useSpeechToText(lang);
+
+  const languageName = useCallback((language: Lang, locale = t) => {
+    if (language === "ar") return locale.languages.ar;
+    if (language === "en") return locale.languages.en;
+    return locale.languages.zhCN;
+  }, [t]);
+  const nextLang = languages[(languages.indexOf(lang) + 1) % languages.length] ?? lang;
+  const nextLanguageName = languageName(nextLang);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
+  // Keep the initial greeting in sync with the platform language without changing chat history.
   useEffect(() => {
-    setSttLang(currentLang);
-  }, [currentLang, setSttLang]);
+    setMessages(previous => previous.map(message => (
+      message.id === "welcome" ? { ...message, content: t.welcome.message } : message
+    )));
+  }, [t.welcome.message]);
 
   useEffect(() => {
-    if (transcript) {
-      setInput(transcript);
-    }
+    if (transcript) setInput(transcript);
   }, [transcript]);
 
   const messagesRef = useRef(messages);
@@ -111,329 +109,302 @@ export default function AIGuide() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           messages: updatedMessages
-            .filter((m) => m.id !== "welcome")
-            .map((m) => ({ role: m.role, content: m.content })),
-          language: currentLang,
+            .filter(message => message.id !== "welcome")
+            .map(message => ({ role: message.role, content: message.content })),
+          language: lang,
         }),
       });
 
-      if (!response.ok) {
-        throw new Error(currentLang === "ar" ? "فشل في الاتصال" : "Connection failed");
-      }
+      if (!response.ok) throw new Error(t.errors.connectionFailed);
 
       const data = await response.json();
-      const assistantContent = data.content || (currentLang === "ar" ? "عذراً، لم أتمكن من معالجة طلبك" : "Sorry, I couldn't process your request");
-
+      const assistantContent = data.content || t.errors.unableToProcess;
       const assistantMsg: Message = {
         id: (Date.now() + 1).toString(),
         role: "assistant",
         content: assistantContent,
         timestamp: new Date(),
       };
-      setMessages((prev) => [...prev, assistantMsg]);
+      setMessages(previous => [...previous, assistantMsg]);
 
-      if (autoSpeak) {
-        setTimeout(() => speak(assistantContent, 0.9, currentLang), 300);
-      }
-    } catch (err: any) {
-      console.error("AI Guide error:", err);
-      const errorContent = currentLang === "ar" ? "عذراً، حدث خطأ في الاتصال" : "Sorry, connection error";
+      if (autoSpeak) setTimeout(() => speak(assistantContent, 0.9, lang), 300);
+    } catch (error) {
+      console.error("AI Guide error:", error);
       const errorMsg: Message = {
         id: (Date.now() + 1).toString(),
         role: "assistant",
-        content: errorContent,
+        content: t.errors.connectionError,
         timestamp: new Date(),
       };
-      setMessages((prev) => [...prev, errorMsg]);
-      toast.error(currentLang === "ar" ? "فشل في الاتصال" : "Connection failed");
+      setMessages(previous => [...previous, errorMsg]);
+      toast.error(t.errors.connectionFailed);
     } finally {
       setIsLoading(false);
     }
-  }, [autoSpeak, speak, stopSpeaking, setTranscript, currentLang]);
+  }, [autoSpeak, lang, speak, stopSpeaking, setTranscript, t.errors]);
 
   const toggleListening = useCallback(() => {
     if (isListening) {
       stopListening();
       setTimeout(() => {
         const currentInput = document.querySelector<HTMLInputElement>("[data-voice-input]")?.value;
-        if (currentInput?.trim()) {
-          sendMessage(currentInput);
-        }
+        if (currentInput?.trim()) sendMessage(currentInput);
       }, 500);
     } else {
       stopSpeaking();
       setInput("");
-      startListening();
-      toast.info(currentLang === "ar" ? "تحدث الآن..." : "Start speaking...");
+      startListening(lang);
+      toast.info(t.toasts.startSpeaking);
     }
-  }, [isListening, stopListening, startListening, stopSpeaking, sendMessage, currentLang]);
+  }, [isListening, lang, sendMessage, startListening, stopListening, stopSpeaking, t.toasts.startSpeaking]);
 
   const toggleAutoSpeak = () => {
-    setAutoSpeak(!autoSpeak);
-    if (autoSpeak) {
-      stopSpeaking();
-    }
-    const msg = autoSpeak 
-      ? (currentLang === "ar" ? "تم إيقاف القراءة التلقائية" : "Auto-speak disabled")
-      : (currentLang === "ar" ? "تم تفعيل القراءة التلقائية" : "Auto-speak enabled");
-    toast.info(msg);
+    setAutoSpeak(previous => !previous);
+    if (autoSpeak) stopSpeaking();
+    toast.info(autoSpeak ? t.toasts.autoSpeakDisabled : t.toasts.autoSpeakEnabled);
   };
 
   const toggleLanguage = () => {
-    const newLang = currentLang === "ar" ? "en" : "ar";
-    setCurrentLang(newLang);
-    const msg = newLang === "ar" ? "تم التبديل إلى العربية" : "Switched to English";
-    toast.info(msg);
-    setTimeout(() => speak(msg, 0.9, newLang), 200);
+    const nextMessages = aiGuideMessages[nextLang];
+    const confirmation = nextMessages.toasts.languageSwitched(languageName(nextLang, nextMessages));
+    setLang(nextLang);
+    toast.info(confirmation);
+    setTimeout(() => speak(confirmation, 0.9, nextLang), 200);
   };
 
   const speakMessage = (content: string) => {
-    if (isSpeaking) {
-      stopSpeaking();
-    } else {
-      speak(content, 0.9, currentLang);
-    }
+    if (isSpeaking) stopSpeaking();
+    else speak(content, 0.9, lang);
   };
 
   const copyToClipboard = (id: string, content: string) => {
     navigator.clipboard.writeText(content);
     setCopiedId(id);
     setTimeout(() => setCopiedId(null), 2000);
-    toast.success(currentLang === "ar" ? "تم النسخ" : "Copied!");
+    toast.success(t.toasts.copied);
   };
 
   return (
     <Layout>
-      {/* Hero */}
-      <section className="py-10 md:py-14 bg-gradient-to-b from-blue-50/50 to-background">
-        <div className="container">
-          <div className="max-w-3xl mx-auto text-center">
-            <span className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-blue-100 text-blue-700 text-sm font-medium mb-4">
-              <Sparkles className="w-4 h-4" />
-              {currentLang === "ar" ? "مساعد ذكي متقدم" : "Advanced AI Assistant"}
-            </span>
-            <h1 className="text-3xl md:text-4xl font-bold mb-4">
-              {currentLang === "ar" ? "مساعدك الشامل في بصيرة" : "Your Complete Basira Guide"}
-            </h1>
-            <p className="text-muted-foreground text-lg leading-relaxed">
-              {currentLang === "ar" 
-                ? "نظام ذكي يعمل مثل ChatGPT، يرشدك خطوة بخطوة ويجيب على جميع أسئلتك حول المنصة والاختبارات."
-                : "An intelligent system like ChatGPT that guides you step-by-step and answers all your questions about the platform."}
-            </p>
-          </div>
-        </div>
-      </section>
-
-      {/* Chat Interface */}
-      <section className="py-8 md:py-12">
-        <div className="container max-w-4xl">
-          <div className="rounded-2xl border border-border/50 bg-card shadow-lg overflow-hidden">
-            {/* Chat Header */}
-            <div className="p-4 md:p-5 border-b border-border/50 bg-blue-50/50 flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-blue-600 flex items-center justify-center">
-                  <Bot className="w-5 h-5 text-white" />
-                </div>
-                <div>
-                  <h3 className="font-bold text-sm">{currentLang === "ar" ? "مساعد بصيرة الذكي" : "Basira AI Assistant"}</h3>
-                  <p className="text-xs text-muted-foreground">{currentLang === "ar" ? "يعمل بالذكاء الاصطناعي المتقدم" : "Advanced AI-powered"}</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={toggleLanguage}
-                  className={`rounded-lg ${currentLang === "ar" ? "bg-blue-100 border-blue-300" : "bg-green-100 border-green-300"}`}
-                >
-                  <Globe className="w-4 h-4" />
-                  <span className="mr-1 text-xs">{currentLang === "ar" ? "العربية" : "English"}</span>
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={toggleAutoSpeak}
-                  className={`rounded-lg ${autoSpeak ? "bg-blue-100 border-blue-300" : ""}`}
-                >
-                  {autoSpeak ? <Volume2 className="w-4 h-4 text-blue-600" /> : <VolumeX className="w-4 h-4" />}
-                  <span className="mr-1 text-xs">{autoSpeak ? (currentLang === "ar" ? "صوت مفعّل" : "Sound on") : (currentLang === "ar" ? "صوت متوقف" : "Sound off")}</span>
-                </Button>
-              </div>
+      <div dir={dir}>
+        {/* Hero */}
+        <section className="py-10 md:py-14 bg-gradient-to-b from-blue-50/50 to-background">
+          <div className="container">
+            <div className="max-w-3xl mx-auto text-center">
+              <span className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-blue-100 text-blue-700 text-sm font-medium mb-4">
+                <Sparkles className="w-4 h-4" aria-hidden="true" />
+                {t.hero.badge}
+              </span>
+              <h1 className="text-3xl md:text-4xl font-bold mb-4">{t.hero.title}</h1>
+              <p className="text-muted-foreground text-lg leading-relaxed">{t.hero.description}</p>
             </div>
+          </div>
+        </section>
 
-            {/* Messages */}
-            <div className="h-[500px] md:h-[600px] overflow-y-auto p-4 md:p-6 space-y-4 bg-gradient-to-b from-background to-blue-50/20">
-              <AnimatePresence mode="popLayout">
-                {messages.map((msg) => (
+        {/* Chat Interface */}
+        <section className="py-8 md:py-12">
+          <div className="container max-w-4xl">
+            <div className="rounded-2xl border border-border/50 bg-card shadow-lg overflow-hidden">
+              {/* Chat Header */}
+              <div className="p-4 md:p-5 border-b border-border/50 bg-blue-50/50 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-blue-600 flex items-center justify-center">
+                    <Bot className="w-5 h-5 text-white" aria-hidden="true" />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-sm">{t.chat.title}</h3>
+                    <p className="text-xs text-muted-foreground">{t.chat.subtitle}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={toggleLanguage}
+                    className={`rounded-lg ${lang === "ar" ? "bg-blue-100 border-blue-300" : lang === "en" ? "bg-green-100 border-green-300" : "bg-red-100 border-red-300"}`}
+                    aria-label={`${t.chat.languageSelectorLabel}: ${nextLanguageName}`}
+                    title={t.chat.languageSelectorTitle(nextLanguageName)}
+                  >
+                    <Globe className="w-4 h-4" aria-hidden="true" />
+                    <span className="ms-1 text-xs">{languageName(lang)}</span>
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={toggleAutoSpeak}
+                    className={`rounded-lg ${autoSpeak ? "bg-blue-100 border-blue-300" : ""}`}
+                    aria-label={autoSpeak ? t.chat.disableAutoSpeak : t.chat.enableAutoSpeak}
+                  >
+                    {autoSpeak ? <Volume2 className="w-4 h-4 text-blue-600" aria-hidden="true" /> : <VolumeX className="w-4 h-4" aria-hidden="true" />}
+                    <span className="ms-1 text-xs">{autoSpeak ? t.chat.autoSpeakOn : t.chat.autoSpeakOff}</span>
+                  </Button>
+                </div>
+              </div>
+
+              {/* Messages */}
+              <div className="h-[500px] md:h-[600px] overflow-y-auto p-4 md:p-6 space-y-4 bg-gradient-to-b from-background to-blue-50/20">
+                <AnimatePresence mode="popLayout">
+                  {messages.map(message => (
+                    <motion.div
+                      key={message.id}
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ duration: 0.3 }}
+                      className={`flex gap-3 ${message.role === "user" ? "flex-row-reverse" : ""}`}
+                    >
+                      <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${
+                        message.role === "assistant" ? "bg-blue-100" : "bg-slate-200"
+                      }`}>
+                        {message.role === "assistant" ? (
+                          <Bot className="w-4 h-4 text-blue-600" aria-hidden="true" />
+                        ) : (
+                          <User className="w-4 h-4 text-slate-600" aria-hidden="true" />
+                        )}
+                      </div>
+                      <div
+                        className={`max-w-[85%] p-4 rounded-2xl text-sm leading-relaxed ${
+                          message.role === "assistant"
+                            ? "bg-card border border-border/50 text-foreground rounded-ss-none"
+                            : "bg-blue-600 text-white rounded-se-none"
+                        }`}
+                      >
+                        <div className="whitespace-pre-wrap">{message.content}</div>
+                        {message.role === "assistant" && message.id !== "welcome" && (
+                          <div className="mt-3 flex items-center gap-2 flex-wrap">
+                            <button
+                              onClick={() => speakMessage(message.content)}
+                              className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-700"
+                              aria-label={t.chat.readMessage}
+                            >
+                              <Volume2 className="w-3.5 h-3.5" aria-hidden="true" />
+                              {isSpeaking ? t.chat.stopReadingAction : t.chat.readMessageAction}
+                            </button>
+                            <button
+                              onClick={() => copyToClipboard(message.id, message.content)}
+                              className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-700"
+                              aria-label={t.chat.copyMessage}
+                            >
+                              {copiedId === message.id ? (
+                                <>
+                                  <Check className="w-3.5 h-3.5" aria-hidden="true" />
+                                  {t.chat.copiedAction}
+                                </>
+                              ) : (
+                                <>
+                                  <Copy className="w-3.5 h-3.5" aria-hidden="true" />
+                                  {t.chat.copyAction}
+                                </>
+                              )}
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    </motion.div>
+                  ))}
+                </AnimatePresence>
+
+                {isLoading && (
                   <motion.div
-                    key={msg.id}
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.3 }}
-                    className={`flex gap-3 ${msg.role === "user" ? "flex-row-reverse" : ""}`}
+                    className="flex gap-3"
+                    role="status"
+                    aria-live="polite"
                   >
-                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${
-                      msg.role === "assistant" ? "bg-blue-100" : "bg-slate-200"
-                    }`}>
-                      {msg.role === "assistant" ? (
-                        <Bot className="w-4 h-4 text-blue-600" />
-                      ) : (
-                        <User className="w-4 h-4 text-slate-600" />
-                      )}
+                    <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 bg-blue-100">
+                      <Bot className="w-4 h-4 text-blue-600" aria-hidden="true" />
                     </div>
-                    <div
-                      className={`max-w-[85%] p-4 rounded-2xl text-sm leading-relaxed ${
-                        msg.role === "assistant"
-                          ? "bg-card border border-border/50 text-foreground rounded-tr-none"
-                          : "bg-blue-600 text-white rounded-tl-none"
-                      }`}
-                    >
-                      <div className="whitespace-pre-wrap">{msg.content}</div>
-                      {msg.role === "assistant" && msg.id !== "welcome" && (
-                        <div className="mt-3 flex items-center gap-2 flex-wrap">
-                          <button
-                            onClick={() => speakMessage(msg.content)}
-                            className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-700"
-                            aria-label={currentLang === "ar" ? "قراءة الرسالة" : "Read message"}
-                          >
-                            <Volume2 className="w-3.5 h-3.5" />
-                            {isSpeaking ? (currentLang === "ar" ? "إيقاف" : "Stop") : (currentLang === "ar" ? "استمع" : "Listen")}
-                          </button>
-                          <button
-                            onClick={() => copyToClipboard(msg.id, msg.content)}
-                            className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-700"
-                            aria-label={currentLang === "ar" ? "نسخ الرسالة" : "Copy message"}
-                          >
-                            {copiedId === msg.id ? (
-                              <>
-                                <Check className="w-3.5 h-3.5" />
-                                {currentLang === "ar" ? "تم النسخ" : "Copied"}
-                              </>
-                            ) : (
-                              <>
-                                <Copy className="w-3.5 h-3.5" />
-                                {currentLang === "ar" ? "نسخ" : "Copy"}
-                              </>
-                            )}
-                          </button>
-                        </div>
-                      )}
+                    <div className="bg-card border border-border/50 rounded-2xl rounded-ss-none p-4">
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />
+                        {t.chat.thinking}
+                      </div>
                     </div>
                   </motion.div>
-                ))}
-              </AnimatePresence>
+                )}
 
-              {isLoading && (
-                <motion.div
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className="flex gap-3"
-                >
-                  <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 bg-blue-100">
-                    <Bot className="w-4 h-4 text-blue-600" />
-                  </div>
-                  <div className="bg-card border border-border/50 rounded-2xl rounded-tr-none p-4">
-                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                      {currentLang === "ar" ? "جاري التفكير..." : "Thinking..."}
-                    </div>
-                  </div>
-                </motion.div>
-              )}
-
-              <div ref={messagesEndRef} />
-            </div>
-
-            {/* Suggested Topics */}
-            {messages.length === 1 && (
-              <div className="p-4 border-t border-border/30 bg-blue-50/30">
-                <p className="text-xs text-muted-foreground mb-3 font-medium">
-                  {currentLang === "ar" ? "مواضيع مقترحة:" : "Suggested topics:"}
-                </p>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                  {suggestedTopics.map((topic) => {
-                    let label = topic.label;
-                    let action = topic.action;
-                    if (currentLang === "en") {
-                      const translations: Record<string, { label: string; action: string }> = {
-                        "كيف أبدأ الاختبار؟": { label: "How to start exam?", action: "Explain the steps to start an exam in detail" },
-                        "شرح المميزات": { label: "Explain features", action: "Explain all features of Basira platform in detail" },
-                        "نصائح للنجاح": { label: "Success tips", action: "Give me practical tips to achieve the best performance in exams" },
-                        "مساعدة تقنية": { label: "Technical help", action: "Help me solve technical issues and errors" },
-                      };
-                      const trans = translations[topic.label];
-                      if (trans) {
-                        label = trans.label;
-                        action = trans.action;
-                      }
-                    }
-                    return (
-                      <button
-                        key={topic.label}
-                        onClick={() => sendMessage(action)}
-                        className="flex items-center gap-2 px-3 py-2 rounded-lg bg-white hover:bg-blue-50 border border-border/50 text-blue-700 text-xs font-medium transition-colors active:scale-[0.97]"
-                      >
-                        <topic.icon className="w-3.5 h-3.5" />
-                        {label}
-                      </button>
-                    );
-                  })}
-                </div>
+                <div ref={messagesEndRef} />
               </div>
-            )}
 
-            {/* Input Area */}
-            <div className="p-4 border-t border-border/50 bg-card">
-              {speechError && (
-                <div className="mb-3 p-2 rounded-lg bg-red-50 text-red-600 text-xs flex items-center gap-1">
-                  <AlertCircle className="w-3.5 h-3.5" />
-                  {speechError}
+              {/* Suggested Topics */}
+              {messages.length === 1 && (
+                <div className="p-4 border-t border-border/30 bg-blue-50/30">
+                  <p className="text-xs text-muted-foreground mb-3 font-medium">{t.chat.suggestedTopics}</p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {t.suggestions.map((topic, index) => {
+                      const Icon = SUGGESTION_ICONS[index] ?? MessageSquare;
+                      return (
+                        <button
+                          key={topic.label}
+                          onClick={() => sendMessage(topic.action)}
+                          className="flex items-center gap-2 px-3 py-2 rounded-lg bg-white hover:bg-blue-50 border border-border/50 text-blue-700 text-xs font-medium transition-colors active:scale-[0.97]"
+                        >
+                          <Icon className="w-3.5 h-3.5" aria-hidden="true" />
+                          {topic.label}
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
               )}
-              <div className="flex items-center gap-3">
-                <Button
-                  variant="outline"
-                  size="icon"
-                  onClick={toggleListening}
-                  disabled={isLoading}
-                  className={`rounded-xl shrink-0 w-11 h-11 ${
-                    isListening ? "bg-red-50 border-red-300 text-red-500" : ""
-                  }`}
-                  aria-label={isListening ? (currentLang === "ar" ? "إيقاف الاستماع" : "Stop listening") : (currentLang === "ar" ? "بدء الاستماع" : "Start listening")}
-                >
-                  {isListening ? <MicOff className="w-5 h-5 animate-pulse" /> : <Mic className="w-5 h-5" />}
-                </Button>
-                <div className="flex-1 relative">
-                  <input
-                    type="text"
-                    data-voice-input
-                    value={input}
-                    onChange={(e) => setInput(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
-                        e.preventDefault();
-                        sendMessage(input);
-                      }
-                    }}
-                    placeholder={isListening ? (currentLang === "ar" ? "جاري الاستماع..." : "Listening...") : (currentLang === "ar" ? "اسأل عن أي شيء..." : "Ask anything...")}
+
+              {/* Input Area */}
+              <div className="p-4 border-t border-border/50 bg-card">
+                {speechError && (
+                  <div className="mb-3 p-2 rounded-lg bg-red-50 text-red-600 text-xs flex items-center gap-1" role="alert">
+                    <AlertCircle className="w-3.5 h-3.5" aria-hidden="true" />
+                    {speechError}
+                  </div>
+                )}
+                <div className="flex items-center gap-3">
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    onClick={toggleListening}
                     disabled={isLoading}
-                    className="w-full h-11 px-4 rounded-xl border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50"
-                    aria-label={currentLang === "ar" ? "حقل إدخال السؤال" : "Question input field"}
-                  />
+                    className={`rounded-xl shrink-0 w-11 h-11 ${
+                      isListening ? "bg-red-50 border-red-300 text-red-500" : ""
+                    }`}
+                    aria-label={isListening ? t.chat.stopListening : t.chat.startListening}
+                  >
+                    {isListening ? <MicOff className="w-5 h-5 animate-pulse" aria-hidden="true" /> : <Mic className="w-5 h-5" aria-hidden="true" />}
+                  </Button>
+                  <div className="flex-1 relative">
+                    <input
+                      type="text"
+                      data-voice-input
+                      value={input}
+                      onChange={event => setInput(event.target.value)}
+                      onKeyDown={event => {
+                        if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
+                          event.preventDefault();
+                          sendMessage(input);
+                        }
+                      }}
+                      placeholder={isListening ? t.chat.listeningPlaceholder : t.chat.messagePlaceholder}
+                      disabled={isLoading}
+                      className="w-full h-11 px-4 rounded-xl border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50"
+                      aria-label={t.chat.messageInputLabel}
+                    />
+                  </div>
+                  <Button
+                    onClick={() => sendMessage(input)}
+                    disabled={!input.trim() || isLoading}
+                    className="bg-blue-600 hover:bg-blue-700 text-white rounded-xl shrink-0 w-11 h-11 active:scale-[0.97] transition-all"
+                    aria-label={t.chat.sendMessage}
+                  >
+                    {isLoading ? (
+                      <Loader2 className="w-5 h-5 animate-spin" aria-hidden="true" />
+                    ) : (
+                      <Send className={`w-5 h-5 ${isRTL ? "-scale-x-100" : ""}`} aria-hidden="true" />
+                    )}
+                  </Button>
                 </div>
-                <Button
-                  onClick={() => sendMessage(input)}
-                  disabled={!input.trim() || isLoading}
-                  className="bg-blue-600 hover:bg-blue-700 text-white rounded-xl shrink-0 w-11 h-11 active:scale-[0.97] transition-all"
-                  aria-label={currentLang === "ar" ? "إرسال السؤال" : "Send question"}
-                >
-                  {isLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5" />}
-                </Button>
               </div>
             </div>
           </div>
-        </div>
-      </section>
+        </section>
+      </div>
     </Layout>
   );
 }
