@@ -31,6 +31,14 @@ export async function ensureSchema() {
       "SELECT 1 FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='basira_support_tickets' AND column_name='delivery_attempts' LIMIT 1",
     );
     if (!attemptsColumn.length) await connection.query("ALTER TABLE basira_support_tickets ADD COLUMN delivery_attempts int unsigned NOT NULL DEFAULT 0");
+    const [keyColumn] = await connection.query<any[]>(
+      "SELECT 1 FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='basira_support_tickets' AND column_name='request_key' LIMIT 1",
+    );
+    if (!keyColumn.length) await connection.query("ALTER TABLE basira_support_tickets ADD COLUMN request_key char(64) DEFAULT NULL");
+    const [keyIndex] = await connection.query<any[]>(
+      "SELECT 1 FROM information_schema.statistics WHERE table_schema=DATABASE() AND table_name='basira_support_tickets' AND index_name='support_request_key_idx' LIMIT 1",
+    );
+    if (!keyIndex.length) await connection.query("CREATE UNIQUE INDEX support_request_key_idx ON basira_support_tickets (request_key)");
   } finally {
     connection.release();
   }

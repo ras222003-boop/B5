@@ -1,6 +1,20 @@
 import { useRef, useState, useCallback, useEffect } from "react";
 
-export function useCamera() {
+export interface CameraErrorMessages {
+  unsupported: string;
+  permissionDenied: string;
+  notFound: string;
+  inUse: string;
+  generic: (name: string) => string;
+  videoElementMissing: string;
+  playbackFailed: string;
+}
+
+/**
+ * Camera capture with errors supplied by the consuming localized UI.
+ * Keeping the hook text-free lets its consumers control the visible language.
+ */
+export function useCamera(messages: CameraErrorMessages) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -33,7 +47,7 @@ export function useCamera() {
 
     // Check if getUserMedia is supported
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-      setError("المتصفح لا يدعم الكاميرا. استخدم Chrome أو Safari على جهاز حديث.");
+      setError(messages.unsupported);
       setIsStarting(false);
       return;
     }
@@ -83,13 +97,13 @@ export function useCamera() {
       setIsStarting(false);
       if (lastError) {
         if (lastError.name === "NotAllowedError" || lastError.name === "PermissionDeniedError") {
-          setError("يرجى السماح بالوصول إلى الكاميرا. اضغط على أيقونة الكاميرا في شريط العنوان وفعّل الصلاحية.");
+          setError(messages.permissionDenied);
         } else if (lastError.name === "NotFoundError" || lastError.name === "DevicesNotFoundError") {
-          setError("لم يتم العثور على كاميرا. يمكنك رفع صورة بدلاً من ذلك.");
+          setError(messages.notFound);
         } else if (lastError.name === "NotReadableError" || lastError.name === "TrackStartError") {
-          setError("الكاميرا مستخدمة من تطبيق آخر. أغلق التطبيقات الأخرى وحاول مرة أخرى.");
+          setError(messages.inUse);
         } else {
-          setError(`حدث خطأ في تشغيل الكاميرا (${lastError.name}). يمكنك رفع صورة بدلاً من ذلك.`);
+          setError(messages.generic(lastError.name));
         }
       }
       return;
@@ -102,7 +116,7 @@ export function useCamera() {
     if (!video) {
       stream.getTracks().forEach((t) => t.stop());
       setIsStarting(false);
-      setError("خطأ داخلي: عنصر الفيديو غير موجود.");
+      setError(messages.videoElementMissing);
       return;
     }
 
@@ -184,13 +198,13 @@ export function useCamera() {
           setIsActive(true);
         } else {
           stream.getTracks().forEach((t) => t.stop());
-          setError("تعذّر تشغيل الكاميرا. حاول رفع صورة بدلاً من ذلك.");
+          setError(messages.playbackFailed);
         }
       }
     } finally {
       setIsStarting(false);
     }
-  }, [isStarting]);
+  }, [isStarting, messages]);
 
   const captureImage = useCallback((): string | null => {
     const video = videoRef.current;

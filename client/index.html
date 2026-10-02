@@ -13,6 +13,27 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@300;400;500;700;800;900&display=swap" rel="stylesheet" />
+    <script>
+      (function () {
+        try {
+          var saved = localStorage.getItem("basira-lang");
+          var lang = saved === "ar" || saved === "en" || saved === "zh-CN" ? saved : null;
+          if (!lang) {
+            var prefs = (navigator.languages || []).concat(navigator.language || "");
+            for (var i = 0; i < prefs.length && !lang; i++) {
+              var tag = String(prefs[i] || "").toLowerCase();
+              if (tag.indexOf("zh") === 0) lang = "zh-CN";
+              else if (tag.indexOf("en") === 0) lang = "en";
+              else if (tag.indexOf("ar") === 0) lang = "ar";
+            }
+          }
+          lang = lang || "ar";
+          document.documentElement.lang = lang;
+          document.documentElement.dir = lang === "ar" ? "rtl" : "ltr";
+          document.documentElement.setAttribute("data-lang", lang);
+        } catch (e) {}
+      })();
+    </script>
   </head>
 
   <body>

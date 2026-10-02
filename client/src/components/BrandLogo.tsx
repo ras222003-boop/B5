@@ -6,7 +6,7 @@ export const AURUM_NEXUS_LOGO_URL =
 type BrandLogoProps = Omit<ImgHTMLAttributes<HTMLImageElement>, "src">;
 
 export default function BrandLogo({
-  alt = "شعار Aurum Nexus",
+  alt = "Aurum Nexus",
   className = "",
   ...props
 }: BrandLogoProps) {

@@ -6,7 +6,7 @@ RUN corepack enable && corepack prepare pnpm@10.18.1 --activate
 
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 RUN pnpm install --frozen-lockfile
-RUN pnpm rebuild esbuild @tailwindcss/oxide
+RUN pnpm rebuild esbuild @tailwindcss/oxide sharp
 COPY client ./client
 COPY server ./server
 COPY shared ./shared
