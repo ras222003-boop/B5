@@ -8,7 +8,7 @@ interface WelcomeScreenProps {
 }
 
 const WELCOME_AUDIO_SRC = "/audio/aurum-welcome-bell.mp3";
-const AUTO_CLOSE_MS = 9200;
+const AUTO_CLOSE_MS = 12000;
 
 export default function WelcomeScreen({ onDismiss }: WelcomeScreenProps) {
   const reduceMotion = useReducedMotion();
@@ -43,7 +43,7 @@ export default function WelcomeScreen({ onDismiss }: WelcomeScreenProps) {
       void audio.play().catch(() => undefined);
     }
 
-    const timer = window.setTimeout(close, reduceMotion ? 3000 : AUTO_CLOSE_MS);
+    const timer = window.setTimeout(close, AUTO_CLOSE_MS);
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") close();
       if (event.key === "Tab") {
@@ -138,7 +138,7 @@ export default function WelcomeScreen({ onDismiss }: WelcomeScreenProps) {
         </motion.div>
 
         <div aria-hidden="true" className="aurum-stage__progress mt-8 h-px w-52 overflow-hidden bg-amber-200/20 sm:w-64">
-          <div className="h-full w-full origin-right bg-gradient-to-l from-transparent via-amber-200 to-transparent" style={{ animationDuration: reduceMotion ? "3s" : `${AUTO_CLOSE_MS}ms` }} />
+          <div className="h-full w-full origin-right bg-gradient-to-l from-transparent via-amber-200 to-transparent" style={{ animationDuration: `${AUTO_CLOSE_MS}ms` }} />
         </div>
       </div>
     </motion.div>
