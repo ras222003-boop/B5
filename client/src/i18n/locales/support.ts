@@ -53,6 +53,8 @@ export const supportMessages = defineMessages({
         "حُفظت التذكرة لكن تعذّر إرسال إشعار البريد حاليًا. يمكنك التواصل بالبريد مباشرة.",
       pending:
         "حُفظت التذكرة، لكن إرسال البريد لم يُفعّل بعد. يمكنك التواصل بالبريد مباشرة.",
+      uncertain:
+        "حُفظت التذكرة، لكن لم نتمكن من تأكيد إرسال إشعار البريد. يمكنك التواصل بالبريد مباشرة.",
     },
     transcript: { user: "المستخدم", assistant: "المساعد" },
     errors: {
@@ -114,6 +116,8 @@ export const supportMessages = defineMessages({
         "The ticket was saved, but the email notification could not be sent right now. You can contact us directly by email.",
       pending:
         "The ticket was saved, but email delivery has not been enabled yet. You can contact us directly by email.",
+      uncertain:
+        "The ticket was saved, but we could not confirm the email notification. You can contact us directly by email.",
     },
     transcript: { user: "User", assistant: "Assistant" },
     errors: {
@@ -172,6 +176,8 @@ export const supportMessages = defineMessages({
         "工单已保存，但目前无法发送邮件通知。你可以直接通过电子邮件联系我们。",
       pending:
         "工单已保存，但尚未启用邮件发送。你可以直接通过电子邮件联系我们。",
+      uncertain:
+        "工单已保存，但无法确认邮件通知是否已发送。你可以直接通过电子邮件联系我们。",
     },
     transcript: { user: "用户", assistant: "助手" },
     errors: {

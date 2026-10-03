@@ -372,7 +372,9 @@ export default function Support() {
                       ? t.delivery.sent(SUPPORT_EMAIL)
                       : ticket.deliveryStatus === "failed"
                         ? t.delivery.failed
-                        : t.delivery.pending}
+                        : ticket.deliveryStatus === "pending"
+                          ? t.delivery.pending
+                          : t.delivery.uncertain}
                   </p>
                 </div>
               ) : (
