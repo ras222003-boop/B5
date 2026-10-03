@@ -13,7 +13,9 @@ import {
 import { Button } from "@/components/ui/button";
 import Layout from "@/components/Layout";
 import { useCamera } from "@/hooks/useCamera";
-import { useTextToSpeech, useSpeechToText } from "@/hooks/useSpeech";
+import { detectLanguage, useTextToSpeech, useSpeechToText } from "@/hooks/useSpeech";
+import { ExamImagePreparationError, prepareExamUpload } from "@/lib/examImage";
+import { beginVoiceAnswer, classifyOcrFailure, consumeVoiceAnswer, countAnswers, ScanAttemptTracker, updateAnswer, type OcrFailureKind, type VoiceAnswerSession } from "@/lib/examFlow";
 import { useI18n, useMessages } from "@/i18n";
 import { examDemoMessages } from "@/i18n/locales/examDemo";
 import type { ExamLanguage, OcrQuestion, OcrResult } from "@shared/ocr";
@@ -40,6 +42,14 @@ type GradingData = {
 type Stage = "scan" | "exam" | "review" | "grading" | "export";
 type Notice = { tone: "error" | "warning"; title?: string; message: string; detail?: string };
 
+class OcrHttpError extends Error {
+  constructor(public readonly status: number, public readonly code?: unknown) {
+    super("OCR request failed");
+  }
+}
+
+const OCR_REQUEST_TIMEOUT_MS = 135_000;
+
 const examDirection = (language: ExamLanguage) => language === "ar" ? "rtl" : "ltr";
 const languageKey = (language: ExamLanguage) => language === "zh-CN" ? "zhCN" : language;
 
@@ -51,6 +61,7 @@ export default function ExamDemo() {
   const [answers, setAnswers] = useState<Record<number, string>>({});
   const [currentQ, setCurrentQ] = useState(0);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [isPreparingImage, setIsPreparingImage] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const [isGrading, setIsGrading] = useState(false);
   const [gradingData, setGradingData] = useState<GradingData | null>(null);
@@ -61,6 +72,9 @@ export default function ExamDemo() {
   const [ocrReport, setOcrReport] = useState<Pick<OcrResult, "detectedLanguages" | "quality"> | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const voiceSessionRef = useRef<VoiceAnswerSession | null>(null);
+  const answerRevisionsRef = useRef<Record<number, number>>({});
+  const scanAttemptsRef = useRef(new ScanAttemptTracker());
 
   const { videoRef, canvasRef, isActive: cameraActive, isStarting: cameraStarting, error: cameraError, startCamera, stopCamera, captureImage } = useCamera(t.cameraErrors);
   const { speak, speakQuestion, stop: stopSpeaking, isSpeaking } = useTextToSpeech();
@@ -69,7 +83,8 @@ export default function ExamDemo() {
   const examDir = examDirection(examLang);
   const examIsRTL = examDir === "rtl";
   const totalQuestions = examData?.questions.length || 0;
-  const answeredCount = Object.keys(answers).length;
+  const answeredCount = countAnswers(answers, examData?.questions.map(question => question.id) ?? []);
+  const scanBusy = isPreparingImage || isProcessing;
   const currentQuestion = examData?.questions[currentQ];
   const PreviousIcon = isRTL ? ChevronRight : ChevronLeft;
   const NextIcon = isRTL ? ChevronLeft : ChevronRight;
@@ -78,12 +93,20 @@ export default function ExamDemo() {
   const optionLabel = useCallback((question: Question, index: number) => question.optionLabels[index] || String(index + 1), []);
   const languageName = useCallback((language: ExamLanguage) => t.languages[languageKey(language)], [t]);
 
-  // Store final speech recognition text as the response to the visible question.
+  const saveAnswer = useCallback((questionId: number, value: string) => {
+    answerRevisionsRef.current[questionId] = (answerRevisionsRef.current[questionId] ?? 0) + 1;
+    setAnswers(previous => updateAnswer(previous, questionId, value));
+  }, []);
+
+  // Recognition may finish after navigation; preserve the question where recording began.
   useEffect(() => {
-    if (transcript && currentQuestion && !isListening) {
-      setAnswers((previous) => ({ ...previous, [currentQuestion.id]: transcript }));
-    }
-  }, [transcript, isListening, currentQuestion]);
+    const session = voiceSessionRef.current;
+    const revision = session ? (answerRevisionsRef.current[session.questionId] ?? 0) : 0;
+    const result = consumeVoiceAnswer(session, transcript, isListening, Boolean(speechError), revision);
+    voiceSessionRef.current = result.session;
+    if (result.answer) saveAnswer(result.answer.questionId, result.answer.text);
+    if (session && !result.session) setTranscript("");
+  }, [transcript, isListening, speechError, saveAnswer, setTranscript]);
 
   const readQuestion = useCallback((question: Question) => {
     const number = questionNumber(question);
@@ -98,68 +121,113 @@ export default function ExamDemo() {
     if (index >= 0 && index < totalQuestions) setCurrentQ(index);
   }, [totalQuestions]);
 
-  const processImage = useCallback(async (imageData: string) => {
+  const beginScan = useCallback((): number | null => {
+    return scanAttemptsRef.current.begin();
+  }, []);
+
+  const processImage = useCallback(async (imageData: string, generation: number) => {
+    if (!scanAttemptsRef.current.isCurrent(generation)) return;
     setIsProcessing(true);
     setStatusMsg(t.status.analyzing);
     setScanNotice(null);
     setActionError(null);
 
+    const controller = new AbortController();
+    const timeoutId = window.setTimeout(() => controller.abort(), OCR_REQUEST_TIMEOUT_MS);
     try {
       const response = await fetch("/api/ocr", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ imageBase64: imageData, language: lang }),
+        signal: controller.signal,
       });
-      if (!response.ok) throw new Error("OCR failed");
+      if (!response.ok) {
+        const payload = await response.json().catch(() => null) as { code?: unknown } | null;
+        throw new OcrHttpError(response.status, payload?.code);
+      }
 
       const data: OcrResult = await response.json();
+      if (!data || !Array.isArray(data.questions) || !data.quality || !Array.isArray(data.quality.issues)) {
+        throw new OcrHttpError(500, "internal");
+      }
+      if (!scanAttemptsRef.current.isCurrent(generation)) return;
       setOcrReport({ detectedLanguages: data.detectedLanguages, quality: data.quality });
-      if (!data.questions || data.questions.length === 0 || data.quality.status === "insufficient") {
+      if (data.questions.length === 0) {
+        const reason: OcrFailureKind = data.quality.issues.includes("no_document") ? "noDocument" : "noText";
         setScanNotice({
           tone: "error",
           title: t.quality.insufficientTitle,
-          message: data.questions?.length ? t.quality.insufficientAdvice : t.status.noQuestions,
-          detail: data.questions?.length ? undefined : t.quality.insufficientAdvice,
+          message: t.status.ocrErrors[reason],
         });
         return;
       }
 
       setExamData(data);
       setAnswers({});
+      answerRevisionsRef.current = {};
+      voiceSessionRef.current = null;
       setCurrentQ(0);
       setGradingData(null);
       setStage("exam");
       const title = data.examTitle || t.content.examTitle[languageKey(data.language)];
       speak(t.announcements.loaded(title, data.questions.length), 0.9, lang);
     } catch (error) {
-      console.error("OCR error:", error);
-      setScanNotice({ tone: "error", message: t.status.ocrError });
+      if (!scanAttemptsRef.current.isCurrent(generation)) return;
+      const reason: OcrFailureKind = error instanceof OcrHttpError
+        ? classifyOcrFailure(error.status, error.code)
+        : controller.signal.aborted ? "timeout"
+          : error instanceof TypeError ? "network" : "internal";
+      setScanNotice({ tone: "error", message: t.status.ocrErrors[reason] });
     } finally {
-      setIsProcessing(false);
-      setStatusMsg("");
+      window.clearTimeout(timeoutId);
+      if (scanAttemptsRef.current.finish(generation)) {
+        setIsProcessing(false);
+        setStatusMsg("");
+      }
     }
   }, [lang, speak, t]);
 
   const handleCapture = useCallback(() => {
     const image = captureImage();
-    if (!image) return;
+    if (!image) {
+      setScanNotice({ tone: "warning", message: t.status.captureNotReady });
+      return;
+    }
+    const generation = beginScan();
+    if (generation === null) return;
     setCapturedImage(image);
     stopCamera();
-    processImage(image);
-  }, [captureImage, processImage, stopCamera]);
+    processImage(image, generation);
+  }, [beginScan, captureImage, processImage, stopCamera, t.status.captureNotReady]);
 
-  const handleFileUpload = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      const image = reader.result as string;
-      setCapturedImage(image);
-      processImage(image);
-    };
-    reader.readAsDataURL(file);
     event.target.value = "";
-  }, [processImage]);
+    const generation = beginScan();
+    if (generation === null) return;
+    setIsPreparingImage(true);
+    setScanNotice(null);
+    try {
+      const image = await prepareExamUpload(file);
+      if (!scanAttemptsRef.current.isCurrent(generation)) return;
+      setCapturedImage(image);
+      stopCamera();
+      setIsPreparingImage(false);
+      await processImage(image, generation);
+    } catch (error) {
+      if (!scanAttemptsRef.current.isCurrent(generation)) return;
+      const kind = error instanceof ExamImagePreparationError ? error.kind : "unreadable";
+      const message = kind === "unsupported" ? t.status.uploadUnsupported
+        : kind === "tooLarge" ? t.status.uploadTooLarge : t.status.uploadUnreadable;
+      setScanNotice({ tone: "error", message });
+    }
+    finally {
+      if (scanAttemptsRef.current.finish(generation)) {
+        setIsPreparingImage(false);
+      }
+    }
+  }, [beginScan, processImage, stopCamera, t.status]);
 
   const handleGrade = useCallback(async () => {
     if (!examData) return;
@@ -230,6 +298,13 @@ export default function ExamDemo() {
 
   const resetExam = useCallback(() => {
     stopCamera();
+    stopListening();
+    voiceSessionRef.current = null;
+    answerRevisionsRef.current = {};
+    scanAttemptsRef.current.cancel();
+    setIsPreparingImage(false);
+    setIsProcessing(false);
+    setTranscript("");
     setStage("scan");
     setExamData(null);
     setAnswers({});
@@ -242,7 +317,7 @@ export default function ExamDemo() {
     setOcrReport(null);
     setActionError(null);
     stopSpeaking();
-  }, [stopCamera, stopSpeaking]);
+  }, [setTranscript, stopCamera, stopListening, stopSpeaking]);
 
   const speakReview = useCallback((question: Question) => {
     const content = t.content;
@@ -268,10 +343,10 @@ export default function ExamDemo() {
                   <p className="text-muted-foreground text-lg max-w-lg mx-auto">{t.scan.description}</p>
                 </div>
 
-                <div className="relative rounded-2xl overflow-hidden bg-slate-900 mb-6 aspect-[4/3] max-w-2xl mx-auto">
+                <div className="relative rounded-2xl overflow-hidden bg-slate-900 mb-6 aspect-[3/4] sm:aspect-[4/3] max-w-2xl mx-auto">
                   {cameraActive ? (
                     <>
-                      <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover" />
+                      <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-contain" />
                       <div className="absolute inset-0 pointer-events-none">
                         <div className="absolute inset-8 border-2 border-white/40 rounded-xl" />
                         <div className="absolute top-8 start-8 w-8 h-8 border-t-4 border-s-4 border-amber-400 rounded-ss-lg" />
@@ -296,16 +371,16 @@ export default function ExamDemo() {
                   <canvas ref={canvasRef} className="hidden" />
                 </div>
 
-                {isProcessing && (
+                {scanBusy && (
                   <div className="text-center mb-6" role="status" aria-live="polite">
                     <div className="inline-flex items-center gap-3 bg-amber-50 text-amber-700 px-6 py-3 rounded-xl">
                       <Loader2 className="w-5 h-5 animate-spin" />
-                      <span className="font-medium">{statusMsg || t.status.processing}</span>
+                      <span className="font-medium">{statusMsg || t.status.preparingImage}</span>
                     </div>
                   </div>
                 )}
 
-                {scanNotice && !isProcessing && (
+                {scanNotice && !scanBusy && (
                   <div className={`mb-6 rounded-2xl border-2 p-5 text-start ${scanNotice.tone === "error" ? "bg-red-50 border-red-300 text-red-900" : "bg-amber-50 border-amber-300 text-amber-900"}`} role="alert">
                     <div className="flex items-start gap-3">
                       <AlertCircle className="w-6 h-6 shrink-0 mt-0.5" />
@@ -330,20 +405,25 @@ export default function ExamDemo() {
 
                 <div className="flex flex-wrap items-center justify-center gap-4">
                   {!cameraActive ? (
-                    <Button onClick={startCamera} disabled={isProcessing || cameraStarting} className="bg-amber-600 hover:bg-amber-700 text-white rounded-xl px-8 h-12 text-base active:scale-[0.97]" aria-label={t.scan.cameraAria}>
+                    <Button onClick={startCamera} disabled={scanBusy || cameraStarting} className="bg-amber-600 hover:bg-amber-700 text-white rounded-xl px-8 h-12 text-base active:scale-[0.97]" aria-label={t.scan.cameraAria}>
                       {cameraStarting ? <><Loader2 className="w-5 h-5 ms-2 animate-spin" />{t.scan.openingCamera}</> : <><Camera className="w-5 h-5 ms-2" />{t.scan.openCamera}</>}
                     </Button>
                   ) : (
                     <>
-                      <Button onClick={handleCapture} disabled={isProcessing} className="bg-green-600 hover:bg-green-700 text-white rounded-xl px-8 h-12 text-base active:scale-[0.97]" aria-label={t.scan.captureAria}>
-                        {isProcessing ? <><Loader2 className="w-5 h-5 ms-2 animate-spin" />{t.status.processing}</> : <><Camera className="w-5 h-5 ms-2" />{t.scan.capture}</>}
+                      <Button onClick={handleCapture} disabled={scanBusy} className="bg-green-600 hover:bg-green-700 text-white rounded-xl px-8 h-12 text-base active:scale-[0.97]" aria-label={t.scan.captureAria}>
+                        {scanBusy ? <><Loader2 className="w-5 h-5 ms-2 animate-spin" />{t.status.processing}</> : <><Camera className="w-5 h-5 ms-2" />{t.scan.capture}</>}
                       </Button>
                       <Button onClick={stopCamera} variant="outline" className="rounded-xl h-12">{t.scan.cancel}</Button>
                     </>
                   )}
-                  <Button onClick={() => fileInputRef.current?.click()} disabled={isProcessing} variant="outline" className="rounded-xl px-8 h-12 text-base border-2 active:scale-[0.97]" aria-label={t.scan.uploadAria}>
+                  <Button onClick={() => fileInputRef.current?.click()} disabled={scanBusy} variant="outline" className="rounded-xl px-8 h-12 text-base border-2 active:scale-[0.97]" aria-label={t.scan.uploadAria}>
                     <Upload className="w-5 h-5 ms-2" />{t.scan.upload}
                   </Button>
+                  {capturedImage && scanNotice && !scanBusy && !cameraActive && (
+                    <Button onClick={() => { const generation = beginScan(); if (generation !== null) processImage(capturedImage, generation); }} variant="outline" className="rounded-xl px-8 h-12 text-base border-2 active:scale-[0.97]">
+                      <RotateCcw className="w-5 h-5 ms-2" />{t.scan.retry}
+                    </Button>
+                  )}
                   <input ref={fileInputRef} type="file" accept="image/jpeg,image/png,image/webp,image/jpg" onChange={handleFileUpload} className="hidden" aria-hidden="true" />
                 </div>
               </motion.div>
@@ -351,7 +431,7 @@ export default function ExamDemo() {
 
             {stage === "exam" && examData && currentQuestion && (
               <motion.div key="exam" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} transition={{ duration: 0.4 }}>
-                {examData.quality.status === "partial" && (
+                {examData.quality.status !== "good" && (
                   <div className="mb-6 rounded-2xl border-2 border-amber-300 bg-amber-50 p-5 text-amber-900" role="alert">
                     <div className="flex items-start gap-3">
                       <AlertCircle className="w-6 h-6 shrink-0 mt-0.5" />
@@ -388,7 +468,7 @@ export default function ExamDemo() {
                   <div className="flex items-start gap-4 mb-4">
                     <div className="w-10 h-10 rounded-xl bg-amber-600 text-white flex items-center justify-center font-bold text-lg shrink-0">{questionNumber(currentQuestion)}</div>
                     <div className="flex-1">
-                      <p className="text-lg md:text-xl font-medium leading-relaxed">{currentQuestion.text}</p>
+                      <p className="text-lg md:text-xl font-medium leading-relaxed whitespace-pre-line" dir="auto">{currentQuestion.text}</p>
                       <p className="text-xs text-muted-foreground mt-2 flex items-center gap-1" dir={dir}>
                         <Volume2 className="w-3 h-3" />{t.exam.tapToHear}
                       </p>
@@ -415,11 +495,12 @@ export default function ExamDemo() {
                       {currentQuestion.options.map((option, index) => {
                         const label = optionLabel(currentQuestion, index);
                         const selected = answers[currentQuestion.id] === option;
+                        const readable = Boolean(option.trim());
                         return (
-                          <button key={`${label}-${index}`} onClick={(event) => { event.stopPropagation(); setAnswers((previous) => ({ ...previous, [currentQuestion.id]: option })); speak(`${label}: ${option}`, 0.9, examLang); }} className={`w-full text-start p-4 rounded-xl border-2 transition-all duration-200 flex items-center gap-3 active:scale-[0.98] ${selected ? "border-amber-500 bg-amber-50 text-amber-900" : "border-border hover:border-amber-200 hover:bg-amber-50/30"}`} aria-label={t.exam.optionAria(label, option)}>
+                          <button key={`${label}-${index}`} disabled={!readable} onClick={(event) => { event.stopPropagation(); saveAnswer(currentQuestion.id, option); speak(`${label}: ${option}`, 0.9, examLang); }} className={`w-full text-start p-4 rounded-xl border-2 transition-all duration-200 flex items-center gap-3 ${readable ? "active:scale-[0.98]" : "cursor-not-allowed opacity-60"} ${selected && readable ? "border-amber-500 bg-amber-50 text-amber-900" : "border-border hover:border-amber-200 hover:bg-amber-50/30"}`} aria-label={t.exam.optionAria(label, readable ? option : t.exam.unreadableOption)}>
                             <span className={`w-9 h-9 rounded-lg flex items-center justify-center font-bold text-sm shrink-0 ${selected ? "bg-amber-600 text-white" : "bg-muted text-muted-foreground"}`}>{label}</span>
-                            <span className="flex-1">{option}</span>
-                            {selected && <CheckCircle className="w-5 h-5 text-amber-600 shrink-0" />}
+                            <span className="flex-1 whitespace-pre-line" dir="auto">{readable ? option : t.exam.unreadableOption}</span>
+                            {selected && readable && <CheckCircle className="w-5 h-5 text-amber-600 shrink-0" />}
                           </button>
                         );
                       })}
@@ -428,9 +509,9 @@ export default function ExamDemo() {
 
                   {currentQuestion.type === "text" && (
                     <div className="mt-6 space-y-3" dir={dir}>
-                      <textarea value={answers[currentQuestion.id] || ""} onChange={(event) => setAnswers((previous) => ({ ...previous, [currentQuestion.id]: event.target.value }))} onClick={(event) => event.stopPropagation()} placeholder={t.exam.answerPlaceholder} className="w-full min-h-[120px] p-4 rounded-xl border-2 border-border bg-background text-foreground resize-none focus:outline-none focus:border-amber-500 transition-colors" dir={examDir} lang={examLang} aria-label={t.exam.answerFieldAria} />
+                      <textarea value={answers[currentQuestion.id] || ""} onChange={(event) => saveAnswer(currentQuestion.id, event.target.value)} onClick={(event) => event.stopPropagation()} placeholder={t.exam.answerPlaceholder} className="w-full min-h-[120px] p-4 rounded-xl border-2 border-border bg-background text-foreground resize-none focus:outline-none focus:border-amber-500 transition-colors" dir="auto" lang={examLang} aria-label={t.exam.answerFieldAria} />
                       <div className="flex items-center gap-3">
-                        <Button onClick={(event) => { event.stopPropagation(); if (isListening) stopListening(); else { setTranscript(""); startListening(); } }} variant={isListening ? "destructive" : "outline"} className="rounded-xl" aria-label={isListening ? t.exam.stopRecording : t.exam.voiceAnswer}>
+                        <Button onClick={(event) => { event.stopPropagation(); if (isListening) stopListening(); else { voiceSessionRef.current = beginVoiceAnswer(currentQuestion.id, answerRevisionsRef.current[currentQuestion.id] ?? 0); setTranscript(""); startListening(detectLanguage(currentQuestion.text, examLang)); } }} variant={isListening ? "destructive" : "outline"} className="rounded-xl" aria-label={isListening ? t.exam.stopRecording : t.exam.voiceAnswer}>
                           {isListening ? <MicOff className="w-4 h-4 ms-2" /> : <Mic className="w-4 h-4 ms-2" />}
                           {isListening ? t.exam.stop : t.exam.voiceAnswer}
                         </Button>
@@ -474,8 +555,8 @@ export default function ExamDemo() {
                         <div className="flex items-start gap-3">
                           <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 text-sm font-bold ${answered ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}`}>{questionNumber(question)}</div>
                           <div className="flex-1 min-w-0">
-                            <p className="font-medium mb-2">{question.text}</p>
-                            {answered ? <p className="text-green-700 text-sm flex items-center gap-2" dir={dir}><CheckCircle className="w-4 h-4 shrink-0" /><span>{t.review.answer}: {answers[question.id]}</span></p> : <p className="text-red-500 text-sm" dir={dir}>{t.review.notAnswered}</p>}
+                            <p className="font-medium mb-2 whitespace-pre-line" dir="auto">{question.text}</p>
+                            {answered ? <p className="text-green-700 text-sm flex items-center gap-2" dir={dir}><CheckCircle className="w-4 h-4 shrink-0" /><span>{t.review.answer}:</span><bdi className="whitespace-pre-line">{answers[question.id]}</bdi></p> : <p className="text-red-500 text-sm" dir={dir}>{t.review.notAnswered}</p>}
                           </div>
                           <Button variant="outline" size="sm" onClick={(event) => { event.stopPropagation(); goToQuestion(examData.questions.findIndex((candidate) => candidate.id === question.id)); setStage("exam"); }} className="rounded-lg text-xs shrink-0" dir={dir}>{t.review.edit}</Button>
                         </div>
@@ -520,8 +601,8 @@ export default function ExamDemo() {
                         <div className="flex items-start gap-3">
                           <div className="w-8 h-8 rounded-lg bg-amber-600 text-white flex items-center justify-center shrink-0 text-sm font-bold">{questionNumber(question)}</div>
                           <div className="flex-1 min-w-0">
-                            <p className="font-medium mb-2">{question.text}</p>
-                            {answers[question.id] && <div className={`text-sm mb-2 flex items-center gap-2 ${result.isCorrect === "correct" ? "text-green-700" : "text-red-600"}`} dir={dir}>{statusIcons[result.isCorrect]}<span>{t.grading.yourAnswer}: {answers[question.id]}</span></div>}
+                            <p className="font-medium mb-2 whitespace-pre-line" dir="auto">{question.text}</p>
+                            {answers[question.id] && <div className={`text-sm mb-2 flex items-center gap-2 ${result.isCorrect === "correct" ? "text-green-700" : "text-red-600"}`} dir={dir}>{statusIcons[result.isCorrect]}<span>{t.grading.yourAnswer}:</span><bdi className="whitespace-pre-line">{answers[question.id]}</bdi></div>}
                             {result.isCorrect !== "correct" && result.correctAnswer && <div className="text-sm text-green-700 flex items-center gap-2 mb-2" dir={dir}><CheckCircle className="w-4 h-4 shrink-0" /><span>{t.grading.correctAnswer}: {result.correctAnswer}</span></div>}
                             {result.feedback && <p className="text-xs text-blue-700 bg-blue-50 px-3 py-1.5 rounded-lg mt-1">{result.feedback}</p>}
                           </div>

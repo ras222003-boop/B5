@@ -1,4 +1,5 @@
 import { useRef, useState, useCallback, useEffect } from "react";
+import { ocrImageDimensions } from "@/lib/examImage";
 
 export interface CameraErrorMessages {
   unsupported: string;
@@ -57,8 +58,8 @@ export function useCamera(messages: CameraErrorMessages) {
       {
         video: {
           facingMode: { ideal: "environment" },
-          width: { ideal: 1920, min: 640 },
-          height: { ideal: 1080, min: 480 },
+          width: { ideal: 2560, min: 640 },
+          height: { ideal: 1920, min: 480 },
         },
         audio: false,
       },
@@ -128,61 +129,39 @@ export function useCamera(messages: CameraErrorMessages) {
 
     try {
       await new Promise<void>((resolve, reject) => {
-        let resolved = false;
-
-        const doResolve = async () => {
-          if (resolved) return;
-          resolved = true;
-          try {
-            await video.play();
-            resolve();
-          } catch (playErr: any) {
-            // Autoplay blocked - still show video
-            if (playErr.name === "NotAllowedError") {
-              resolve(); // Video is ready even if autoplay is blocked
-            } else {
-              reject(playErr);
-            }
-          }
-        };
-
-        // Listen for multiple events to handle different browser behaviors
+        let started = false;
+        let settled = false;
         const events = ["loadedmetadata", "loadeddata", "canplay", "canplaythrough"];
         const cleanup = () => {
-          events.forEach(evt => video.removeEventListener(evt, doResolve));
+          events.forEach(event => video.removeEventListener(event, onReady));
+          video.removeEventListener("error", onError);
+          window.clearTimeout(timeoutId);
         };
-
-        events.forEach(evt => video.addEventListener(evt, () => {
+        const finish = (error?: unknown) => {
+          if (settled) return;
+          settled = true;
           cleanup();
-          doResolve();
-        }, { once: true }));
-
-        video.addEventListener("error", (e) => {
-          cleanup();
-          reject(new Error(`Video error: ${video.error?.message || "unknown"}`));
-        }, { once: true });
-
-        // If already has data, try immediately
-        if (video.readyState >= 1) {
-          cleanup();
-          doResolve();
-          return;
+          if (error) reject(error);
+          else resolve();
+        };
+        const onReady = async () => {
+          if (started) return;
+          started = true;
+          try {
+            await video.play();
+            finish();
+          } catch (playErr: any) {
+            // A browser gesture may still start playback; keep the stream available.
+            finish(playErr?.name === "NotAllowedError" ? undefined : playErr);
+          }
+        };
+        const onError = () => finish(new Error(`Video error: ${video.error?.message || "unknown"}`));
+        const timeoutId = window.setTimeout(() => finish(new Error("Camera stream did not become ready")), 10000);
+        events.forEach(event => video.addEventListener(event, onReady));
+        video.addEventListener("error", onError);
+        if (video.readyState >= HTMLMediaElement.HAVE_METADATA) {
+          onReady();
         }
-
-        // Timeout after 10 seconds
-        const timeout = setTimeout(() => {
-          cleanup();
-          // Try to play anyway even if events didn't fire
-          doResolve();
-        }, 10000);
-
-        // Clear timeout on resolve
-        const origResolve = resolve;
-        // @ts-ignore
-        resolve = (val?: any) => {
-          clearTimeout(timeout);
-          origResolve(val);
-        };
       });
 
       setIsActive(true);
@@ -215,14 +194,12 @@ export function useCamera(messages: CameraErrorMessages) {
       return null;
     }
 
-    // Ensure video has valid dimensions
-    const width = video.videoWidth || video.clientWidth || 1280;
-    const height = video.videoHeight || video.clientHeight || 720;
-
-    if (!width || !height) {
-      console.warn("captureImage: video has no dimensions yet");
+    // A CSS-sized video can still have no frame; capturing then creates a blank image.
+    if (video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA || !video.videoWidth || !video.videoHeight) {
       return null;
     }
+
+    const { width, height } = ocrImageDimensions(video.videoWidth, video.videoHeight);
 
     canvas.width = width;
     canvas.height = height;
@@ -230,8 +207,12 @@ export function useCamera(messages: CameraErrorMessages) {
     const ctx = canvas.getContext("2d");
     if (!ctx) return null;
 
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(0, 0, width, height);
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = "high";
     ctx.drawImage(video, 0, 0, width, height);
-    return canvas.toDataURL("image/jpeg", 0.92);
+    return canvas.toDataURL("image/jpeg", 0.9);
   }, []);
 
   // Cleanup on unmount
