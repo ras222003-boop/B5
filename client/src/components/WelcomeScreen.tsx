@@ -3,25 +3,19 @@ import { Sparkles } from "lucide-react";
 import { motion, useReducedMotion } from "framer-motion";
 import BrandLogo from "./BrandLogo";
 import { ForwardArrow } from "./DirectionalIcon";
-import { useCommonMessages, useI18n, type Lang } from "@/i18n";
+import { useCommonMessages } from "@/i18n";
 
 interface WelcomeScreenProps {
   onDismiss: () => void;
 }
 
 /** Exact on-screen duration of the welcome sequence. */
-export const WELCOME_DURATION_MS = 10_000;
+export const WELCOME_DURATION_MS = 5_000;
 
 /**
- * One pre-mixed 10-second track per language (welcome music + bell at 0.12 s +
- * spoken welcome at 1.6 s). A single media element keeps every layer in sync
- * and makes overlapping or duplicated playback impossible.
+ * One short bell only. A single media element prevents duplicate playback.
  */
-export const WELCOME_AUDIO_SRC: Record<Lang, string> = {
-  ar: "/audio/welcome-ar.mp3",
-  en: "/audio/welcome-en.mp3",
-  "zh-CN": "/audio/welcome-zh-CN.mp3",
-};
+export const WELCOME_AUDIO_SRC = "/audio/aurum-welcome-bell.mp3";
 
 const WELCOME_VOLUME = 0.85;
 const FADE_OUT_MS = 380;
@@ -40,7 +34,6 @@ function releaseAudio(audio: HTMLAudioElement | null) {
 
 export default function WelcomeScreen({ onDismiss }: WelcomeScreenProps) {
   const reduceMotion = useReducedMotion();
-  const { lang } = useI18n();
   const t = useCommonMessages();
   const [leaving, setLeaving] = useState(false);
   const [soundBlocked, setSoundBlocked] = useState(false);
@@ -75,8 +68,7 @@ export default function WelcomeScreen({ onDismiss }: WelcomeScreenProps) {
   const close = useCallback((skip = false) => {
     if (leaveRef.current) return;
     leaveRef.current = true;
-    // A skipped welcome stops immediately. For the timed close, the mixed
-    // track fades within its own 10-second timeline and is stopped at 10 s.
+    // A skipped welcome stops immediately; the bell is also stopped at the end of the 5-second sequence.
     if (skip) stopSound(false);
     setLeaving(true);
     window.setTimeout(() => {
@@ -86,10 +78,10 @@ export default function WelcomeScreen({ onDismiss }: WelcomeScreenProps) {
     }, reduceMotion ? 0 : 520);
   }, [onDismiss, reduceMotion, stopSound]);
 
-  // Audio: try unmuted autoplay immediately; fall back to the first gesture only when the browser forbids it.
+  // Audio: try the bell unmuted immediately; fall back to the first gesture only when the browser forbids it.
   useEffect(() => {
     releaseAudio(activeWelcomeAudio);
-    const audio = new Audio(WELCOME_AUDIO_SRC[lang]);
+    const audio = new Audio(WELCOME_AUDIO_SRC);
     audio.preload = "auto";
     audio.volume = WELCOME_VOLUME;
     audio.loop = false;
@@ -139,7 +131,7 @@ export default function WelcomeScreen({ onDismiss }: WelcomeScreenProps) {
 
   useEffect(() => {
     buttonRef.current?.focus();
-    // Start the 520 ms exit transition *inside* the 10-second window.
+    // Start the 520 ms exit transition *inside* the 5-second window.
     const timer = window.setTimeout(() => close(false), WELCOME_DURATION_MS - (reduceMotion ? 0 : 520));
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") close(true);
