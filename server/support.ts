@@ -14,6 +14,7 @@ const windows = new Map<string, { count: number; endsAt: number }>();
 type TicketRow = RowDataPacket & {
   id: string; user_id: string | null; contact_name: string; email: string;
   subject: string; description: string; transcript: string | null; delivery_status: string;
+  created_at: Date;
 };
 
 const strings: Record<ExamLanguage, Record<string, string>> = {
@@ -81,22 +82,27 @@ export async function sendTicketEmail(id: string): Promise<string> {
   const [rows] = await pool.execute<TicketRow[]>("SELECT * FROM basira_support_tickets WHERE id=? LIMIT 1", [id]);
   const ticket = rows[0];
   if (!ticket) return "unknown";
-  const port = Number(process.env.SUPPORT_SMTP_PORT || 465);
-  const transport = nodemailer.createTransport({
-    host: process.env.SUPPORT_SMTP_HOST!, port,
-    secure: port === 465, requireTLS: port !== 465,
-    auth: { user: process.env.SUPPORT_SMTP_USER!, pass: process.env.SUPPORT_SMTP_PASSWORD! },
-    connectionTimeout: 12000, socketTimeout: 12000,
-    disableFileAccess: true, disableUrlAccess: true,
-  });
+  let transport: ReturnType<typeof nodemailer.createTransport> | undefined;
   try {
+    const port = Number(process.env.SUPPORT_SMTP_PORT || 587);
+    if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error("Invalid SMTP port");
+    const secure = process.env.SUPPORT_SMTP_SECURE === undefined
+      ? port === 465
+      : process.env.SUPPORT_SMTP_SECURE.toLowerCase() === "true";
+    transport = nodemailer.createTransport({
+      host: process.env.SUPPORT_SMTP_HOST!, port,
+      secure, requireTLS: !secure,
+      auth: { user: process.env.SUPPORT_SMTP_USER!, pass: process.env.SUPPORT_SMTP_PASSWORD! },
+      connectionTimeout: 12000, socketTimeout: 12000,
+      disableFileAccess: true, disableUrlAccess: true,
+    });
     const receipt = await transport.sendMail({
       from: process.env.SUPPORT_EMAIL_FROM!, to: recipient, replyTo: ticket.email,
       messageId: `<basira-ticket-${id}@aurum-nexus.support>`,
-      subject: `[بصيرة #${id.slice(0, 8)}] ${ticket.subject.replace(/[\r\n]/g, " ")}`,
-      text: `رقم التذكرة: ${id}\nالاسم: ${ticket.contact_name}\nالبريد: ${ticket.email}\nالموضوع: ${ticket.subject}\n\nالمشكلة:\n${ticket.description}\n\nمقتطف المحادثة (بموافقة المستخدم):\n${ticket.transcript || "لم يُرسل"}`,
+      subject: `[Basira Support] New Ticket #${id.slice(0, 8)}: ${ticket.subject.replace(/[\r\n]/g, " ")}`,
+      text: `رقم التذكرة: ${id}\nالاسم: ${ticket.contact_name}\nالبريد: ${ticket.email}\nالموضوع: ${ticket.subject}\nتاريخ الإنشاء: ${ticket.created_at instanceof Date ? ticket.created_at.toISOString() : ticket.created_at}\n\nالمشكلة:\n${ticket.description}${ticket.transcript ? `\n\nمقتطف المحادثة (بموافقة المستخدم):\n${ticket.transcript}` : ""}`,
     });
-    if (!receipt.accepted?.some(a => a.toLowerCase() === recipient.toLowerCase())) {
+    if (!receipt.accepted?.some((address: string) => address.toLowerCase() === recipient.toLowerCase())) {
       await pool.execute("UPDATE basira_support_tickets SET delivery_status='failed' WHERE id=?", [id]);
       return "failed";
     }
@@ -107,11 +113,13 @@ export async function sendTicketEmail(id: string): Promise<string> {
     // occur after acceptance; do not risk a duplicate email in that case.
     const rejected = typeof error?.responseCode === "number" && error.responseCode >= 400;
     const status = rejected ? "failed" : "uncertain";
-    console.error("Ticket delivery", id, status, error instanceof Error ? error.message : "unknown");
+    // SMTP errors may contain server responses or connection details. Log only
+    // the ticket reference and delivery state, never the raw error or credentials.
+    console.error("Ticket delivery failed", id, status);
     await pool.execute("UPDATE basira_support_tickets SET delivery_status=? WHERE id=?", [status, id]);
     return status;
   } finally {
-    transport.close();
+    transport?.close();
   }
 }
 
@@ -182,10 +190,18 @@ export function registerSupportRoutes(app: Express) {
         if (existing[0]) return res.status(200).json({ id: existing[0].id, deliveryStatus: existing[0].delivery_status, email: SUPPORT_EMAIL, duplicate: true });
         throw error;
       }
-      const deliveryStatus = await sendTicketEmail(id);
+      let deliveryStatus: string;
+      try {
+        deliveryStatus = await sendTicketEmail(id);
+      } catch {
+        // The insert has committed. A mail/queue failure must not turn a saved
+        // ticket into an apparent storage failure or prompt a duplicate retry.
+        console.error("Ticket notification could not be confirmed", id);
+        deliveryStatus = "uncertain";
+      }
       return res.status(201).json({ id, deliveryStatus, email: SUPPORT_EMAIL });
     } catch (error) {
-      console.error("Support ticket storage failed", error instanceof Error ? error.message : "unknown");
+      console.error("Support ticket storage failed");
       return res.status(503).json({ error: t.storageFailed });
     }
   });
@@ -216,7 +232,7 @@ export function startTicketMailWorker() {
       await pool.execute("UPDATE basira_support_tickets SET delivery_status='uncertain' WHERE delivery_status='sending' AND updated_at < NOW() - INTERVAL 15 MINUTE");
       const [rows] = await pool.execute<TicketRow[]>("SELECT id FROM basira_support_tickets WHERE delivery_status IN ('pending','failed') AND delivery_attempts < 3 ORDER BY created_at ASC LIMIT 10");
       for (const item of rows) await sendTicketEmail(item.id);
-    } catch (error) { console.error("Ticket mail worker error", error instanceof Error ? error.message : "unknown"); }
+    } catch { console.error("Ticket mail worker failed"); }
   };
   void run();
   setInterval(run, 5 * 60_000).unref();
