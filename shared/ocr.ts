@@ -15,6 +15,7 @@ export const OCR_QUALITY_ISSUES = [
   "glare",
   "low_resolution",
   "handwriting",
+  "no_document",
   "no_text",
 ] as const;
 export type OcrQualityIssue = (typeof OCR_QUALITY_ISSUES)[number];
@@ -42,6 +43,8 @@ export interface OcrQuestion {
 export interface OcrQuality {
   status: OcrQualityStatus;
   issues: OcrQualityIssue[];
+  /** Aggregate of the readable questions; warnings about the image do not erase it. */
+  confidence: OcrConfidence;
 }
 
 export interface OcrResult {
@@ -126,37 +129,65 @@ export function normalizeOcrResult(raw: unknown, fallbackLanguage: ExamLanguage 
     const q = (item && typeof item === "object" ? item : {}) as Record<string, unknown>;
     const text = asString(q.text);
     if (!text) continue;
-    const options = asStringArray(q.options);
+    // Keep empty option slots so labels and texts remain aligned when a choice
+    // is present but its text is unreadable. Removing one would shift every
+    // later answer label onto the wrong answer.
+    const options = Array.isArray(q.options) ? q.options.map(asString) : [];
     const rawLabels = Array.isArray(q.optionLabels) ? q.optionLabels.map(asString) : [];
-    const optionLabels = options.map((_, i) => rawLabels[i] ?? "");
-    const confidence: OcrConfidence = q.confidence === "high" || q.confidence === "medium" || q.confidence === "low" ? q.confidence : "medium";
+    const choiceCount = Math.max(options.length, rawLabels.length);
+    const alignedOptions = Array.from({ length: choiceCount }, (_, i) => options[i] ?? "");
+    const optionLabels = Array.from({ length: choiceCount }, (_, i) => rawLabels[i] ?? "");
+    const uncertainParts = asStringArray(q.uncertainParts);
+    const reportedConfidence: OcrConfidence = q.confidence === "high" || q.confidence === "medium" || q.confidence === "low" ? q.confidence : "medium";
+    const confidence: OcrConfidence = uncertainParts.length && reportedConfidence === "high" ? "medium" : reportedConfidence;
+    const multiple = q.type === "multiple" || choiceCount >= 2;
     questions.push({
       id: questions.length + 1,
       number: asString(q.number),
       text,
-      type: options.length >= 2 ? "multiple" : "text",
-      options: options.length >= 2 ? options : [],
-      optionLabels: options.length >= 2 ? optionLabels : [],
+      type: multiple && choiceCount ? "multiple" : "text",
+      options: multiple ? alignedOptions : [],
+      optionLabels: multiple ? optionLabels : [],
       confidence,
-      uncertainParts: asStringArray(q.uncertainParts),
+      uncertainParts,
     });
   }
+
+  // The model can omit a secondary script on a mixed-language page. Infer
+  // substantial script presence from transcribed text, without letting a lone
+  // Latin math variable or Arabic-Indic question number count as a language.
+  const transcribed = [asString(data.examTitle), ...questions.flatMap(q => [q.text, ...q.options])].join(" ");
+  if ((transcribed.match(/[\u0621-\u064A\u0671-\u06D3]/g) || []).length >= 4 && !detected.includes("ar")) detected.push("ar");
+  if ((transcribed.match(/[A-Za-z]/g) || []).length >= 8 && !detected.includes("en")) detected.push("en");
+  if ((transcribed.match(/[\u3400-\u4DBF\u4E00-\u9FFF]/g) || []).length >= 2 && !detected.includes("zh-CN")) detected.push("zh-CN");
 
   const rawQuality = (data.quality && typeof data.quality === "object" ? data.quality : {}) as Record<string, unknown>;
   const issues = (Array.isArray(rawQuality.issues) ? rawQuality.issues : []).filter((i): i is OcrQualityIssue => (OCR_QUALITY_ISSUES as readonly string[]).includes(i as string));
   let status: OcrQualityStatus = rawQuality.status === "good" || rawQuality.status === "partial" || rawQuality.status === "insufficient" ? rawQuality.status : "good";
   if (!questions.length) {
     status = "insufficient";
-    if (!issues.includes("no_text")) issues.push("no_text");
-  } else if (status === "good" && questions.some(q => q.confidence === "low")) {
-    status = "partial";
+    if (!issues.includes("no_text") && !issues.includes("no_document")) issues.push("no_text");
+  } else {
+    // An uncertain fragment should not suppress the readable questions. The
+    // client only treats `insufficient` as a page-level failure.
+    status = status === "insufficient" || questions.some(q => q.confidence === "low" || q.uncertainParts.length) ? "partial" : status;
+    for (const issue of ["no_text", "no_document"] as const) {
+      const index = issues.indexOf(issue);
+      if (index >= 0) issues.splice(index, 1);
+    }
   }
+
+  const high = questions.filter(q => q.confidence === "high").length;
+  const low = questions.filter(q => q.confidence === "low").length;
+  const confidence: OcrConfidence = !questions.length || low >= Math.ceil(questions.length / 2)
+    ? "low"
+    : high === questions.length ? "high" : "medium";
 
   return {
     examTitle: asString(data.examTitle),
     language,
     detectedLanguages: detected,
     questions,
-    quality: { status, issues: Array.from(new Set(issues)) },
+    quality: { status, issues: Array.from(new Set(issues)), confidence },
   };
 }

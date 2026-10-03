@@ -36,9 +36,11 @@ async function invokeLLM(messages: Array<{ role: string; content: any }>, option
       Authorization: `Bearer ${FORGE_API_KEY}`,
     },
     body: JSON.stringify(body),
+    signal: options?.model ? AbortSignal.timeout(60_000) : undefined,
   });
 
   if (!resp.ok) {
+    if (options?.model) throw new Error(`LLM API error ${resp.status}`);
     const text = await resp.text();
     throw new Error(`LLM API error ${resp.status}: ${text}`);
   }
@@ -286,7 +288,7 @@ async function startServer() {
     .question.unanswered { border-color: #d1d5db; background: #f9fafb; }
     .question-header { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
     .question-num { background: #d97706; color: white; width: 32px; height: 32px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 14px; flex-shrink: 0; }
-    .question-text { font-size: 16px; font-weight: 500; flex: 1; }
+    .question-text { font-size: 16px; font-weight: 500; flex: 1; white-space: pre-line; }
     .question-badge { font-size: 11px; font-weight: 700; padding: 3px 10px; border-radius: 20px; }
     .badge-correct { background: #dcfce7; color: #16a34a; }
     .badge-incorrect { background: #fee2e2; color: #dc2626; }
@@ -298,7 +300,7 @@ async function startServer() {
     .option.correct-option { background: #dcfce7; color: #16a34a; font-weight: 600; }
     .answer { margin-top: 12px; padding: 14px; background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; }
     .answer-label { font-size: 12px; color: #15803d; font-weight: 700; margin-bottom: 4px; }
-    .answer-text { font-size: 15px; color: #166534; }
+    .answer-text { font-size: 15px; color: #166534; white-space: pre-line; }
     .correct-answer { margin-top: 8px; padding: 12px; background: #ecfdf5; border: 1px solid #a7f3d0; border-radius: 8px; }
     .correct-answer-label { font-size: 12px; color: #059669; font-weight: 700; margin-bottom: 4px; }
     .correct-answer-text { font-size: 14px; color: #047857; }

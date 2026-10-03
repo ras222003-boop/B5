@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { LANG_META, useI18n, type Lang } from "@/i18n";
+import { transcriptFromSpeechResults } from "@/lib/examFlow";
 
 export type SpeechLanguage = Lang;
 
@@ -366,21 +367,15 @@ export function useSpeechToText(fixedLang?: SpeechLanguage) {
       recognition.continuous = false;
       recognition.interimResults = true;
       recognition.maxAlternatives = 3;
-      recognition.onstart = () => setIsListening(true);
+      recognition.onstart = () => {
+        if (recognitionRef.current === recognition) setIsListening(true);
+      };
       recognition.onresult = (event: any) => {
-        let finalText = "";
-        let interimText = "";
-        for (let i = event.resultIndex; i < event.results.length; i++) {
-          const result = event.results[i];
-          // Pick the most confident alternative.
-          let best = result[0];
-          for (let a = 1; a < result.length; a++) if ((result[a]?.confidence ?? 0) > (best?.confidence ?? 0)) best = result[a];
-          if (result.isFinal) finalText += best.transcript;
-          else interimText += best.transcript;
-        }
-        setTranscript((finalText || interimText).trim());
+        if (recognitionRef.current !== recognition) return;
+        setTranscript(transcriptFromSpeechResults(event.results));
       };
       recognition.onerror = (event: any) => {
+        if (recognitionRef.current !== recognition) return;
         const map: Record<string, keyof typeof messages> = {
           "not-allowed": "notAllowed",
           "service-not-allowed": "notAllowed",
@@ -391,8 +386,11 @@ export function useSpeechToText(fixedLang?: SpeechLanguage) {
         if (event.error !== "aborted") setError(messages[map[event.error] ?? "generic"]);
         setIsListening(false);
       };
-      recognition.onend = () => setIsListening(false);
+      recognition.onend = () => {
+        if (recognitionRef.current === recognition) setIsListening(false);
+      };
       recognitionRef.current = recognition;
+      setIsListening(true);
       recognition.start();
     } catch {
       setError(messages.generic);
@@ -404,9 +402,9 @@ export function useSpeechToText(fixedLang?: SpeechLanguage) {
     try {
       recognitionRef.current?.stop?.();
     } catch {
-      /* ignore */
+      setIsListening(false);
     }
-    setIsListening(false);
+    // Wait for onend so a final result can replace any interim transcript.
   }, []);
 
   useEffect(() => () => {
