@@ -43,9 +43,11 @@ export function matchPlace(text:string, places:Place[]):Place|null {
 
 /** Uses B1 search; unmatched navigation text stays a private in-memory candidate. */
 export class VisualPlaceRecognitionService {
-  constructor(private readonly buildingId: string|null,private readonly floorId:string|null) {}
+  constructor(private readonly buildingId: string|null,private readonly floorId:string|null,private readonly localPlaces:Place[]=[] ) {}
   async recognize(reading:OCRDetection):Promise<{place:RecognizedPlace|null;candidate:PlaceCandidate|null}> {
     if (reading.confidence<0.6||!isNavigationText(reading.text)) return {place:null,candidate:null};
+    const local=matchPlace(reading.text,this.localPlaces.filter(place=>(!this.buildingId||place.buildingId===this.buildingId)&&(!this.floorId||place.floorId===this.floorId)));
+    if(local)return {place:{placeId:local.id,name:local.name,buildingId:local.buildingId,floorId:local.floorId,confidence:reading.confidence},candidate:null};
     let lookupStatus:PlaceCandidate['lookupStatus']='NOT_FOUND';
     try {
       const normalized=normalizePlaceText(reading.text);

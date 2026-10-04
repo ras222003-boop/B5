@@ -223,6 +223,12 @@ export function registerNavigationRoutes(app: Express) {
     const saved=await rows(`SELECT s.*,b.name AS building_name,f.name AS floor_name FROM basira_saved_places s LEFT JOIN basira_buildings b ON b.id=s.building_id LEFT JOIN basira_floors f ON f.id=s.floor_id WHERE s.user_id=? AND (?='' OR s.name LIKE ?)${clause} ORDER BY ${filter==='recent'?'s.last_used_at':'s.updated_at'} DESC LIMIT 200`,[userId,q,like(q)]);
     res.set('Cache-Control','private, no-store').json({savedPlaces:saved});
   }));
+  api.get('/saved-places/:id', asyncRoute(async (req,res) => {
+    if (!uuid(req)) return res.status(400).json({error:'invalid_id'});
+    const userId=await owner(req,res); if (!userId) return;
+    const savedPlace=await one(`SELECT s.*,b.name AS building_name,f.name AS floor_name FROM basira_saved_places s LEFT JOIN basira_buildings b ON b.id=s.building_id LEFT JOIN basira_floors f ON f.id=s.floor_id WHERE s.id=? AND s.user_id=?`,[req.params.id,userId]);
+    res.set('Cache-Control','private, no-store').status(savedPlace?200:404).json(savedPlace?{savedPlace}:{error:'not_found'});
+  }));
   api.post('/saved-places', asyncRoute(async (req,res) => {
     const userId=await owner(req,res); if (!userId) return;
     const data=parse(savedInput,req,res); if (!data) return;
@@ -270,7 +276,7 @@ export function registerNavigationRoutes(app: Express) {
   }));
   api.get('/buildings/:id/graph', asyncRoute(async (req,res) => {
     if (!uuid(req)) return res.status(400).json({error:'invalid_id'});
-    const building=await one("SELECT id,name,map_status FROM basira_buildings WHERE id=? AND status='ACTIVE'",[req.params.id]);
+    const building=await one("SELECT * FROM basira_buildings WHERE id=? AND status='ACTIVE'",[req.params.id]);
     if (!building) return res.status(404).json({error:'not_found'});
     const [nodes,edges]=await Promise.all([rows('SELECT n.id,n.building_id,n.floor_id,CASE WHEN p.is_public=1 THEN n.place_id ELSE NULL END AS place_id,n.x,n.y,n.node_type,n.accessibility_level FROM basira_map_nodes n LEFT JOIN basira_places p ON p.id=n.place_id WHERE n.building_id=?',[req.params.id]),rows('SELECT * FROM basira_map_edges WHERE building_id=?',[req.params.id])]);
     res.json({building,nodes,edges});
