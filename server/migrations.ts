@@ -39,6 +39,25 @@ export async function ensureSchema() {
     for (const statement of sharedMap.split(";").map(s => s.trim()).filter(Boolean)) {
       await connection.query(statement);
     }
+    const organizations = await readFile(resolve(process.cwd(), "server/migrations/0006_organizations_production.sql"), "utf8");
+    for (const statement of organizations.split(";").map(s => s.trim()).filter(Boolean)) {
+      await connection.query(statement);
+    }
+    for (const [column, definition] of Object.entries({
+      organization_id: 'varchar(36) NULL',
+      official_map_source: 'varchar(30) NULL',
+      official_approved_by: 'varchar(36) NULL',
+      official_reviewed_at: 'timestamp(3) NULL',
+    })) {
+      const [existing] = await connection.query<any[]>("SELECT 1 FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='basira_buildings' AND column_name=? LIMIT 1", [column]);
+      if (!existing.length) await connection.query(`ALTER TABLE basira_buildings ADD COLUMN ${column} ${definition}`);
+    }
+    const [organizationIndex] = await connection.query<any[]>("SELECT 1 FROM information_schema.statistics WHERE table_schema=DATABASE() AND table_name='basira_buildings' AND index_name='building_organization_idx' LIMIT 1");
+    if (!organizationIndex.length) await connection.query('CREATE INDEX building_organization_idx ON basira_buildings (organization_id)');
+    for(const [name,column,target] of [['building_organization_fk','organization_id','basira_organizations'],['building_official_approver_fk','official_approved_by','`user`']]){
+      const [existing]=await connection.query<any[]>('SELECT 1 FROM information_schema.table_constraints WHERE table_schema=DATABASE() AND table_name=? AND constraint_name=? LIMIT 1',['basira_buildings',name]);
+      if(!existing.length)await connection.query(`ALTER TABLE basira_buildings ADD CONSTRAINT ${name} FOREIGN KEY (${column}) REFERENCES ${target}(id) ON DELETE SET NULL`);
+    }
     for (const [column,definition] of Object.entries({local_x:'decimal(12,3) NULL',local_y:'decimal(12,3) NULL',localization_confidence:'decimal(4,3) NULL'})) {
       const [existing] = await connection.query<any[]>("SELECT 1 FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='basira_saved_places' AND column_name=? LIMIT 1",[column]);
       if (!existing.length) await connection.query(`ALTER TABLE basira_saved_places ADD COLUMN ${column} ${definition}`);
@@ -55,6 +74,9 @@ export async function ensureSchema() {
       "SELECT 1 FROM information_schema.statistics WHERE table_schema=DATABASE() AND table_name='basira_support_tickets' AND index_name='support_request_key_idx' LIMIT 1",
     );
     if (!keyIndex.length) await connection.query("CREATE UNIQUE INDEX support_request_key_idx ON basira_support_tickets (request_key)");
+    // End abandoned sessions and purge detailed coordinates; reviewed suggestions remain.
+    await connection.query("UPDATE basira_mapping_sessions SET status='CANCELLED',ended_at=CURRENT_TIMESTAMP(3) WHERE status='ACTIVE' AND started_at<DATE_SUB(CURRENT_TIMESTAMP(3),INTERVAL 7 DAY)");
+    for(const table of ['basira_mapping_track','basira_mapping_anchors','basira_mapping_floor_events'])await connection.query(`DELETE detail FROM ${table} detail JOIN basira_mapping_sessions s ON s.id=detail.session_id WHERE s.status<>'ACTIVE'`);
   } finally {
     connection.release();
   }

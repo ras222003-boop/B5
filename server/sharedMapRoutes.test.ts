@@ -20,7 +20,9 @@ describe('B5 role boundary',()=>{
       const {res,json,status}=response();handler(path)({headers:{},params:{id:'33333333-3333-4333-8333-333333333333'},body:{decision:'APPROVE',action:'CREATE',version:2}} as unknown as Request,res);
       await vi.waitFor(()=>expect(json).toHaveBeenCalledWith({error:path.includes('rollback')?'admin_role_required':'mapper_role_required'}));expect(status).toHaveBeenCalledWith(403);
     }
-    expect(mocks.query.mock.calls.every(([sql])=>String(sql).startsWith('SELECT role'))).toBe(true);
+    expect(mocks.query.mock.calls.every(([sql])=>String(sql).startsWith('SELECT '))).toBe(true);
+    expect(mocks.getConnection).not.toHaveBeenCalled();
+    expect(mocks.connection.execute).not.toHaveBeenCalled();
   });
   it('requires an admin for rollback even when the caller is a mapper',async()=>{
     mocks.getSession.mockResolvedValue({user:{id:'mapper'}});mocks.query.mockResolvedValue([[{role:'mapper'}]]);

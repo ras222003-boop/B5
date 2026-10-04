@@ -12,6 +12,7 @@ export interface Building {
   latitude: number | null; longitude: number | null; numberOfFloors: number | null;
   status: 'ACTIVE' | 'INACTIVE'; mapStatus: 'UNMAPPED' | 'IN_PROGRESS' | 'MAPPED';
   verificationStatus: typeof verificationStatuses[number]; createdBy: string | null;
+  organizationId?: string | null; officialMapSource?: string | null; officialApprovedBy?: string | null; officialReviewedAt?: string | null;
   createdAt: string; updatedAt: string;
 }
 export interface Floor {

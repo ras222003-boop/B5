@@ -29,7 +29,21 @@ const route=(handler:(req:Request,res:Response)=>Promise<unknown>)=>(req:Request
 async function rows(sql:string,params:unknown[]=[],connection:PoolConnection|typeof pool=pool):Promise<Raw[]>{const [result]=await connection.query<any[]>(sql,params);return result;}
 async function one(sql:string,params:unknown[]=[],connection:PoolConnection|typeof pool=pool):Promise<Raw|null>{return (await rows(sql,params,connection))[0]??null;}
 async function identity(req:Request,res:Response):Promise<Actor|null>{const session=await auth.api.getSession({headers:fromNodeHeaders(req.headers)});if(!session){res.status(401).json({error:'sign_in_required'});return null;}const grant=await one('SELECT role FROM basira_navigation_roles WHERE user_id=?',[session.user.id]);return {userId:session.user.id,role:grant?.role==='admin'?'admin':grant?.role==='mapper'?'mapper':null};}
-async function reviewer(req:Request,res:Response,admin=false):Promise<Actor|null>{const actor=await identity(req,res);if(!actor)return null;if(!actor.role||(admin&&actor.role!=='admin')){res.status(403).json({error:admin?'admin_role_required':'mapper_role_required'});return null;}return actor;}
+async function reviewer(req:Request,res:Response,admin=false,buildingId?:string):Promise<Actor|null>{
+  const actor=await identity(req,res);if(!actor)return null;
+  if(admin){if(actor.role!=='admin'){res.status(403).json({error:'admin_role_required'});return null;}return actor;}
+  if(buildingId){
+    const building=await one('SELECT organization_id FROM basira_buildings WHERE id=?',[buildingId]);
+    if(!building){res.status(404).json({error:'building_not_found'});return null;}
+    if(building.organization_id){
+      if(actor.role==='admin')return actor;
+      const membership=await one('SELECT role FROM basira_organization_memberships WHERE organization_id=? AND user_id=?',[building.organization_id,actor.userId]);
+      if(['organization_admin','reviewer'].includes(membership?.role))return {...actor,role:'mapper'};
+      res.status(403).json({error:'organization_reviewer_required'});return null;
+    }
+  }
+  if(!actor.role){res.status(403).json({error:'mapper_role_required'});return null;}return actor;
+}
 async function limit(userId:string,table:'basira_shared_map_contributions'|'basira_shared_map_confirmations'|'basira_map_issue_reports',column:string,limitCount:number,hours:number,connection:PoolConnection){const found=await one(`SELECT COUNT(*) AS count FROM ${table} WHERE ${column}=? AND created_at>DATE_SUB(CURRENT_TIMESTAMP(3),INTERVAL ? HOUR)`,[userId,hours],connection);return Number(found?.count??0)<limitCount;}
 async function validProposal(buildingId:string,proposal:ContributionProposal,connection:PoolConnection){
   const building=await one("SELECT id FROM basira_buildings WHERE id=? AND status='ACTIVE'",[buildingId],connection);
@@ -139,7 +153,7 @@ export function registerSharedMapRoutes(api:Router){
     }catch(error){await connection.rollback();if((error as {code?:string}).code==='ER_DUP_ENTRY')return res.json({duplicate:true});throw error;}finally{connection.release();}
   }));
   api.get('/shared-map/buildings/:id/contributions',route(async(req,res)=>{
-    if(!await reviewer(req,res))return;if(!id.safeParse(req.params.id).success)return res.status(400).json({error:'invalid_id'});
+    if(!id.safeParse(req.params.id).success)return res.status(400).json({error:'invalid_id'});if(!await reviewer(req,res,false,req.params.id))return;
     await refreshStale(req.params.id);
     const found=await rows('SELECT * FROM basira_shared_map_contributions WHERE building_id=? ORDER BY created_at DESC LIMIT 100',[req.params.id]);
     res.set('Cache-Control','private, no-store').json({contributions:found.map(presentContribution)});
@@ -184,18 +198,22 @@ export function registerSharedMapRoutes(api:Router){
     }catch(error){await connection.rollback();if((error as {code?:string}).code==='ER_DUP_ENTRY'){const duplicate=await one('SELECT id,status FROM basira_map_issue_reports WHERE reporter_user_id=? AND idempotency_key=?',[actor.userId,item.idempotencyKey]);if(duplicate)return res.json({issue:duplicate,duplicate:true});}throw error;}finally{connection.release();}
   }));
   api.get('/shared-map/buildings/:id/issues',route(async(req,res)=>{
-    if(!await reviewer(req,res))return;
+    if(!id.safeParse(req.params.id).success)return res.status(400).json({error:'invalid_id'});if(!await reviewer(req,res,false,req.params.id))return;
     const issues=await rows("SELECT id,building_id,floor_id,issue_type AS type,duration,description,target_place_id,target_edge_id,status,created_at FROM basira_map_issue_reports WHERE building_id=? ORDER BY CASE WHEN issue_type IN ('UNMARKED_STAIRS','ROAD_CLOSED','WRONG_ACCESSIBILITY') THEN 0 ELSE 1 END,created_at DESC LIMIT 100",[req.params.id]);
     res.set('Cache-Control','private, no-store').json({issues});
   }));
   api.post('/shared-map/issues/:id/review',route(async(req,res)=>{
-    if(!await reviewer(req,res))return;
+    if(!await identity(req,res))return;
+    const issue=await one('SELECT building_id FROM basira_map_issue_reports WHERE id=?',[req.params.id]);if(!issue)return res.status(404).json({error:'not_found'});
+    if(!await reviewer(req,res,false,issue.building_id))return;
     const parsed=z.object({status:z.enum(['REVIEWED','DISMISSED'])}).strict().safeParse(req.body);if(!parsed.success)return res.status(400).json({error:'invalid_input'});
     const [result]=await pool.execute<any>("UPDATE basira_map_issue_reports SET status=?,reviewed_at=CURRENT_TIMESTAMP(3) WHERE id=? AND status='PENDING'",[parsed.data.status,req.params.id]);
     if(!result.affectedRows)return res.status(404).json({error:'not_found'});res.json({status:parsed.data.status});
   }));
   api.post('/shared-map/contributions/:id/review',route(async(req,res)=>{
-    const actor=await reviewer(req,res);if(!actor)return;
+    if(!await identity(req,res))return;
+    const target=await one('SELECT building_id FROM basira_shared_map_contributions WHERE id=?',[req.params.id]);if(!target)return res.status(404).json({error:'not_found'});
+    const actor=await reviewer(req,res,false,target.building_id);if(!actor)return;
     const parsed=reviewSchema.safeParse(req.body);if(!parsed.success)return res.status(400).json({error:'invalid_input'});
     const connection=await pool.getConnection();try{await connection.beginTransaction();
       const item=await one('SELECT * FROM basira_shared_map_contributions WHERE id=? FOR UPDATE',[req.params.id],connection);
@@ -208,6 +226,8 @@ export function registerSharedMapRoutes(api:Router){
         const proposal=parseJson<ContributionProposal>(item.proposal);
         let changes;try{changes=await applyApprovedContribution(connection,item.building_id,item.contribution_type,proposal,review.action as MapDecision);}catch(error){await connection.rollback();return res.status(409).json({error:error instanceof Error?error.message:'invalid_map_change'});}
         const version=await advanceMapVersion(connection,item.building_id,changes,item.source,actor.userId);
+        const assigned=await one('SELECT organization_id FROM basira_buildings WHERE id=?',[item.building_id],connection);
+        if(assigned?.organization_id)await connection.execute('INSERT INTO basira_organization_map_audit_log (id,organization_id,building_id,actor_id,action,entity_type,entity_id,metadata) VALUES (?,?,?,?,?,?,?,?)',[randomUUID(),assigned.organization_id,item.building_id,actor.userId,review.action==='CLOSE_EDGE'?'EDGE_CLOSURE':'CONTRIBUTION_APPROVE','CONTRIBUTION',item.id,JSON.stringify({version,action:review.action})]);
         await connection.execute("UPDATE basira_shared_map_contributions SET status='OFFICIAL',visibility='OFFICIAL',reviewed_at=CURRENT_TIMESTAMP(3),reviewed_by=? WHERE root_id=? AND status NOT IN ('OFFICIAL','REJECTED')",[actor.userId,item.root_id]);
         if(review.resolveConflicts)await connection.execute("UPDATE basira_shared_map_conflicts SET status='RESOLVED',resolved_at=CURRENT_TIMESTAMP(3) WHERE root_id=? AND status='OPEN'",[item.root_id]);
         await connection.execute("UPDATE basira_place_change_candidates SET status='APPROVED',reviewed_at=CURRENT_TIMESTAMP(3) WHERE contribution_id=?",[item.id]);
@@ -238,7 +258,9 @@ export function registerSharedMapRoutes(api:Router){
     res.set('Cache-Control','private, no-store').json({history});
   }));
   api.post('/shared-map/map-suggestions/:id/import',route(async(req,res)=>{
-    const actor=await reviewer(req,res);if(!actor)return;
+    if(!await identity(req,res))return;
+    const target=await one('SELECT building_id FROM basira_map_suggestions WHERE id=?',[req.params.id]);if(!target)return res.status(404).json({error:'not_found'});
+    const actor=await reviewer(req,res,false,target.building_id);if(!actor)return;
     const connection=await pool.getConnection();try{await connection.beginTransaction();
       const suggestion=await one("SELECT * FROM basira_map_suggestions WHERE id=? AND status='ACCEPTED' FOR UPDATE",[req.params.id],connection);
       if(!suggestion||!suggestion.floor_id){await connection.rollback();return res.status(404).json({error:'accepted_suggestion_required'});}
@@ -258,6 +280,8 @@ export function registerSharedMapRoutes(api:Router){
     const parsed=z.object({version:z.number().int().min(2)}).strict().safeParse(req.body);if(!parsed.success)return res.status(400).json({error:'invalid_input'});
     const connection=await pool.getConnection();try{await connection.beginTransaction();
       let version;try{version=await rollbackMapVersion(connection,req.params.id,parsed.data.version,actor.userId);}catch(error){await connection.rollback();return res.status(409).json({error:error instanceof Error?error.message:'rollback_failed'});}
+      const assigned=await one('SELECT organization_id FROM basira_buildings WHERE id=?',[req.params.id],connection);
+      if(assigned?.organization_id)await connection.execute('INSERT INTO basira_organization_map_audit_log (id,organization_id,building_id,actor_id,action,entity_type,entity_id,metadata) VALUES (?,?,?,?,?,?,?,?)',[randomUUID(),assigned.organization_id,req.params.id,actor.userId,'MAP_ROLLBACK','MAP_VERSION',req.params.id,JSON.stringify({rolledBackVersion:parsed.data.version,newVersion:version})]);
       await connection.commit();res.json({version,rolledBackVersion:parsed.data.version});
     }catch(error){await connection.rollback();throw error;}finally{connection.release();}
   }));
