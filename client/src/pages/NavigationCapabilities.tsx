@@ -20,5 +20,5 @@ export default function NavigationCapabilities(){
     ['Semantic segmentation',media?'Experimental':'Unavailable'],['Depth',flags?.metricDepth&&'BasiraNativeDepth'in window?'Experimental':'Native-only'],
     ['Native AR bridge','BasiraNativeAr'in window?'Experimental':'Native-only'],
   ];
-  return <Layout><main className="container space-y-5 py-10 text-stone-100"><Link href="/navigation/permissions" className="text-amber-200 underline">Permissions</Link><h1 className="text-3xl font-bold">{t.title}</h1><p>{t.hint}</p><ul className="grid gap-3 sm:grid-cols-2">{entries.map(([name,status])=><li key={name} className="rounded-xl border border-amber-200/25 bg-stone-900 p-4"><strong>{name}</strong><p className="text-amber-200">{t.statuses[status]}</p></li>)}</ul></main></Layout>;
+  return <Layout><div className="container space-y-5 py-10 text-stone-100"><Link href="/navigation/permissions" className="text-amber-200 underline">Permissions</Link><h1 className="text-3xl font-bold">{t.title}</h1><p>{t.hint}</p><ul className="grid gap-3 sm:grid-cols-2">{entries.map(([name,status])=><li key={name} className="rounded-xl border border-amber-200/25 bg-stone-900 p-4"><strong>{name}</strong><p className="text-amber-200">{t.statuses[status]}</p></li>)}</ul></div></Layout>;
 }

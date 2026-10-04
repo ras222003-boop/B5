@@ -11,7 +11,8 @@ import { buildingTypes } from '../shared/navigation';
 
 const uid = z.string().uuid();
 const organizationInput = z.object({ name: z.string().trim().min(1).max(255), type: z.enum(['UNIVERSITY','SCHOOL','HOSPITAL','AIRPORT','MALL','GOVERNMENT','COMPANY','DISABILITY_CENTER','OTHER']), description: z.string().trim().max(2000).nullable().optional(), country: z.string().trim().max(100).nullable().optional(), city: z.string().trim().max(100).nullable().optional(), website: z.url().max(500).nullable().optional() }).strict();
-const membershipInput = z.object({ userId: uid, role: z.enum(['organization_admin','mapper','reviewer','viewer']) }).strict();
+// Better Auth user IDs are opaque strings (32 characters by default), not UUIDs.
+const membershipInput = z.object({ userId: z.string().min(1).max(36), role: z.enum(['organization_admin','mapper','reviewer','viewer']) }).strict();
 const buildingInput = z.object({ name: z.string().trim().min(1).max(255), buildingType: z.enum(buildingTypes), address: z.string().trim().max(500).nullable().optional() }).strict();
 const route = (handler: (req: Request, res: Response) => Promise<unknown>) => (req: Request, res: Response) => { Promise.resolve(handler(req,res)).catch(error => { console.error('Organization API error', error); if (!res.headersSent) res.status(500).json({error:'server_error'}); }); };
 async function rows(sql: string, args: unknown[] = [], connection: PoolConnection | typeof pool = pool): Promise<any[]> { const [result] = await connection.query(sql,args); return result as any[]; }

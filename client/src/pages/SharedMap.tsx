@@ -47,7 +47,7 @@ export default function SharedMap(){
   const confirm=async(candidate:Candidate)=>{if(!consent){setNotice('وافق على مشاركة ملاحظة مستقلة قبل التأكيد.');return;}setBusy(true);try{await sharedMapApi.confirm(candidate.id,observedEvidence(candidate.proposal.floorId,candidate.proposal.x,candidate.proposal.y,.6));setNotice('سُجل تأكيدك مرة واحدة؛ لا يصبح المكان رسميًا دون مراجعة.');await load(buildingId);}catch{setNotice('تعذر التأكيد أو سبق تسجيل مساهمتك.');}finally{setBusy(false);}};
   const review=async(item:SharedMapContribution,decision:'APPROVE'|'REJECT'|'MORE_EVIDENCE',action:MapDecision|null)=>{setBusy(true);try{await sharedMapApi.review(item.id,decision,action,Boolean(resolveConflicts[item.id]));setNotice('حُفظ قرار المراجعة.');await load(buildingId);}catch{setNotice('لم تُطبق المراجعة. تحقق من التعارضات وحقول المكان ونوع الإجراء.');}finally{setBusy(false);}};
   const rollback=async(version:number)=>{setBusy(true);try{await sharedMapApi.rollback(buildingId,version);setNotice('أُنشئ إصدار جديد يعكس التغييرات السابقة.');await load(buildingId);}catch{setNotice('تعذر التراجع؛ ربما تغيّر الكيان منذ ذلك الإصدار.');}finally{setBusy(false);}};
-  return <Layout><main className="container space-y-6 py-10 text-stone-100"><Link href="/navigation" className="text-amber-200 underline">العودة إلى التنقل</Link><h1 className="text-3xl font-black">خريطة بصيرة المشتركة</h1>
+  return <Layout><div className="container space-y-6 py-10 text-stone-100"><Link href="/navigation" className="text-amber-200 underline">العودة إلى التنقل</Link><h1 className="text-3xl font-black">خريطة بصيرة المشتركة</h1>
     <p>ساهم بالمعلومات العامة عن الأماكن. الأسماء المحفوظة في «أماكني» تبقى خاصة ولا تُرسل تلقائيًا. لا ترسل صورة أو سجل حركة أو عنوان منزل. المساهمة المكتشفة لا تُستخدم كمسار رسمي قبل مراجعتها.</p>
     <label className="block max-w-xl">المبنى<select className={input} value={buildingId} onChange={e=>{setBuildingId(e.target.value);sessionStorage.setItem('basira-current-building',e.target.value);}}><option value="">اختر مبنى</option>{buildings.map(building=><option key={building.id} value={building.id}>{building.name}</option>)}</select></label>
     {buildingId&&<p className={panel}>إصدار الخريطة المعتمد: {version} · حالة خريطة المبنى: {buildings.find(item=>item.id===buildingId)?.mapStatus??'غير معروف'}. خذ حذرك عند نقص الخريطة أو تعارض المساهمات.</p>}
@@ -69,5 +69,5 @@ export default function SharedMap(){
       </section>}
       {role==='admin'&&<section className={panel}><h2 className="mb-3 text-xl font-bold">إصدارات الخريطة والتراجع</h2><ul className="space-y-2">{history.map((entry,index)=><li key={`${entry.version}-${index}`}>الإصدار {entry.version}: {entry.action} · {entry.entity_type} <button className={secondary} disabled={busy} onClick={()=>rollback(entry.version)}>تراجع إلى ما قبل هذا التغيير</button></li>)}</ul></section>}
     </>}
-  </main></Layout>;
+  </div></Layout>;
 }
