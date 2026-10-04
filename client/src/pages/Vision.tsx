@@ -18,6 +18,7 @@ import type { MapNode, Place } from '@shared/navigation';
 import type { LocalizationEstimate } from '@shared/localization';
 import { BasiraLocalizationEngine } from '@/lib/localization/engine';
 import { navApi, navigationRequest, json } from '@/lib/navigationApi';
+import { emptyProposal, observedEvidence, sharedMapApi } from '@/lib/sharedMap';
 
 const button='inline-flex min-h-14 items-center justify-center rounded-xl bg-amber-300 px-6 py-3 text-lg font-bold text-stone-950 hover:bg-amber-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-300';
 const secondary='inline-flex min-h-14 items-center justify-center rounded-xl border border-amber-300/50 px-6 py-3 text-lg font-bold text-amber-100 hover:bg-amber-300/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-300';
@@ -46,6 +47,7 @@ export default function Vision() {
   const [scene,setScene]=useState<SceneDescription|null>(null);
   const [recognized,setRecognized]=useState<RecognizedPlace|null>(null);
   const [candidates,setCandidates]=useState<PlaceCandidate[]>([]);
+  const [shareCandidate,setShareCandidate]=useState(false),[shareNotice,setShareNotice]=useState('');
   const [cameraPermission,setCameraPermission]=useState<PermissionState>('not_requested');
   const [online,setOnline]=useState(typeof navigator==='undefined'?true:navigator.onLine);
   const [spokenSummary,setSpokenSummary]=useState('');
@@ -136,6 +138,12 @@ export default function Vision() {
     try{await navigationRequest('/saved-places',json('POST',{name:savedName.trim(),category:'OTHER',buildingId:estimate.buildingId,floorId:estimate.floorId,localX:estimate.x,localY:estimate.y,localizationConfidence:estimate.confidence}));setSaveNotice('حُفظ المكان في أماكنك الخاصة.');setSavedName('');}
     catch{setSaveNotice('تعذر حفظ المكان. سجّل الدخول ثم حاول مجددًا.');}
   };
+  const contributeCandidate=async(candidate:PlaceCandidate)=>{
+    const estimate=localizationRef.current.fusion.current(Date.now());
+    if(!shareCandidate||estimate.state!=='TRACKING'||estimate.confidence<.55||estimate.x===null||estimate.y===null||!estimate.floorId||!estimate.buildingId||candidate.buildingId!==estimate.buildingId){setShareNotice('ثبّت موقعك داخل المبنى ووافق على المشاركة قبل الإرسال.');return;}
+    const proposal=emptyProposal(estimate.floorId);proposal.name=candidate.detectedText;proposal.placeType=candidate.suggestedType;proposal.x=estimate.x;proposal.y=estimate.y;
+    try{const result=await sharedMapApi.submit({buildingId:estimate.buildingId,type:'PLACE',source:'OCR',proposal,evidence:observedEvidence(estimate.floorId,estimate.x,estimate.y,estimate.confidence,candidate.confidence),idempotencyKey:crypto.randomUUID(),consent:true});setShareNotice('queued'in result?'حُفظت المساهمة المصرح بها حتى عودة الاتصال.':'أُرسلت قراءة اللوحة والموقع فقط للمراجعة، دون صورة أو سجل حركة.');setShareCandidate(false);}catch{setShareNotice('تعذر إرسال المساهمة. تحقق من الدخول وبيانات الموقع.');}
+  };
   const cameraState=state==='STOPPED'?t.stopped:state==='STARTING'?t.starting:state==='WORKING'?t.working:t.analyzing;
   return <Layout><div className="container max-w-4xl space-y-6 py-10 text-stone-100">
     <Link href="/navigation" className="text-amber-300 underline">{nav.title}</Link>
@@ -160,7 +168,7 @@ export default function Vision() {
     {recognized&&<p role="status" className="rounded-xl border border-emerald-300/40 p-4 text-emerald-100">{t.placeRecognized(recognized.name)}</p>}
     {locationEstimate?.state==='TRACKING'&&<section className="space-y-3 rounded-xl border border-amber-300/40 p-4"><p>موقعك الحالي: بالقرب من {recognized?.name??'مكان معروف'} · الثقة {Math.round(locationEstimate.confidence*100)}٪. التقدير مرتبط بلوحة معروفة وليس قياسًا ميدانيًا للدقة.</p><div className="flex flex-wrap gap-2"><input className="min-h-12 rounded-xl border border-amber-200/40 bg-stone-950 px-3" value={savedName} onChange={e=>setSavedName(e.target.value)} placeholder="اسم مكانك الخاص" aria-label="اسم مكانك الخاص"/><button className={secondary} disabled={!savedName.trim()} onClick={savePersonal}>احفظ هذا المكان</button></div><p role="status" aria-live="polite">{saveNotice}</p></section>}
     {locationEstimate?.state==='LOCALIZATION_LOST'&&<p role="alert" className="rounded-xl border border-amber-300/40 p-4">تعذر تحديد موقعك بدقة داخل المبنى. وجّه الكاميرا نحو لوحة مكان معروف لإعادة التثبيت.</p>}
-    {candidates.length>0&&<div role="status" aria-live="polite" className="space-y-2">{candidates.slice(0,2).map(candidate=><p key={candidate.id}>{candidate.lookupStatus==='UNAVAILABLE'?t.candidateOffline(candidate.detectedText):t.candidate(candidate.detectedText)}</p>)}</div>}
+    {candidates.length>0&&<section className="space-y-3 rounded-xl border border-amber-200/30 p-4"><h2 className="font-bold">معلومات جديدة محتملة للخريطة</h2><label className="flex gap-2"><input type="checkbox" checked={shareCandidate} onChange={e=>setShareCandidate(e.target.checked)}/>أوافق على مشاركة نص اللوحة وموقع تقريبي فقط، دون صورة، للمراجعة العامة</label>{candidates.slice(0,2).map(candidate=><p key={candidate.id}>{candidate.lookupStatus==='UNAVAILABLE'?t.candidateOffline(candidate.detectedText):t.candidate(candidate.detectedText)} <button className={secondary} disabled={!shareCandidate||locationEstimate?.state!=='TRACKING'} onClick={()=>void contributeCandidate(candidate)}>أرسل كمساهمة</button></p>)}<p role="status" aria-live="polite">{shareNotice}</p></section>}
     <video ref={videoRef} muted playsInline aria-hidden="true" aria-label={t.preview} className="aspect-video w-full max-w-md rounded-xl bg-stone-950 object-cover" />
   </div></Layout>;
 }
