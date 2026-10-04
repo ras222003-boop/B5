@@ -4,6 +4,8 @@ import Layout from '@/components/Layout';
 import { useI18n, useMessages } from '@/i18n';
 import { visionMessages } from '@/i18n/locales/vision';
 import { navApi, navigationRequest, json, type BuildingGraph, type SearchResult } from '@/lib/navigationApi';
+import { sharedMapApi, SharedMapSyncService } from '@/lib/sharedMap';
+import type { IssueDuration, IssueType } from '@shared/sharedMap';
 import { BasiraLocalizationEngine } from '@/lib/localization/engine';
 import { PedestrianMotionProvider, decodeQrFrame, parseQrAnchor } from '@/lib/localization/providers';
 import { BasiraNavigationEngine } from '@/lib/guidance/engine';
@@ -40,12 +42,15 @@ export default function Guidance(){
   const [notice,setNotice]=useState(''),[safetyText,setSafetyText]=useState(''),[scene,setScene]=useState<SceneDescription|null>(null),[cameraStatus,setCameraStatus]=useState('الكاميرا متوقفة'),[micStatus,setMicStatus]=useState('التحكم الصوتي متوقف'),[motionStatus,setMotionStatus]=useState('حساسات الحركة متوقفة');
   const [busy,setBusy]=useState(false),[cameraOn,setCameraOn]=useState(false),[micOn,setMicOn]=useState(false),[showPreview,setShowPreview]=useState(false),[routeType,setRouteType]=useState<RouteType>('RECOMMENDED'),[showOptions,setShowOptions]=useState(false);
   const [online,setOnline]=useState(()=>typeof navigator==='undefined'?true:navigator.onLine);
+  const [issueType,setIssueType]=useState<IssueType>('ROAD_CLOSED'),[issueDuration,setIssueDuration]=useState<IssueDuration>('TEMPORARY'),[issueDescription,setIssueDescription]=useState(''),[issueConsent,setIssueConsent]=useState(false);
   const [disclaimer,setDisclaimer]=useState(()=>typeof window!=='undefined'&&!localStorage.getItem(disclaimerKey));
   const speechAvailable=typeof window!=='undefined'&&'speechSynthesis'in window&&typeof SpeechSynthesisUtterance!=='undefined';
   const {session,sync}=useSession();
   const localization=useRef(new BasiraLocalizationEngine()),navigation=useRef<BasiraNavigationEngine|null>(null),voice=useRef(new VoiceNavigationService(platformLanguage)),haptic=useRef(new HapticNavigationService()),intent=useRef(new NavigationIntentService());
   const motion=useRef<PedestrianMotionProvider|null>(null),listener=useRef<VoiceCommandListener|null>(null),camera=useRef(new CameraService(DEFAULT_VISION_CONFIG)),pipeline=useRef<VisionPipeline|null>(null),video=useRef<HTMLVideoElement|null>(null),canvas=useRef<HTMLCanvasElement|null>(null),qrTimer=useRef<number|null>(null),generation=useRef(0);
   const graphRef=useRef<BuildingGraph|null>(null),placesRef=useRef<Place[]>([]),floorsRef=useRef<Floor[]>([]),latestScene=useRef<SceneDescription|null>(null),lastInstruction=useRef('');
+  const mapVersionRef=useRef(1),deferredMapRef=useRef<{graph:BuildingGraph;version:number}|null>(null);
+  const mapSync=useRef(new SharedMapSyncService());
   const hazardActive=useRef(false);
   const languageRef=useRef(language),styleRef=useRef(style),selectedRef=useRef<SearchResult|null>(null);
   const handlerRef=useRef<(command:NavigationIntent)=>Promise<void>>(async()=>{});
@@ -64,19 +69,24 @@ export default function Guidance(){
     if(result==='PROGRESS')emitInstruction();
   };
   const anchorNode=(node:MapNode,source:'MANUAL'|'QR'|'NFC'='MANUAL')=>{
+    if(deferredMapRef.current){const pending=deferredMapRef.current;deferredMapRef.current=null;graphRef.current=pending.graph;setGraph(pending.graph);mapVersionRef.current=pending.version;navigation.current?.updateEdges(pending.graph.edges);announce('تحدّثت الخريطة عند نقطة تثبيت معروفة. سأعيد التحقق من المسار.','RELOCALIZATION','map-safe-point');}
     const location=localization.current.anchor({buildingId:node.buildingId,floorId:node.floorId,x:node.x,y:node.y,headingDegrees:null,confidence:source==='MANUAL'?.82:.95,uncertaintyRadius:source==='MANUAL'?2.5:1.5,source,timestamp:Date.now(),nodeId:node.id,placeId:node.placeId});
     updateLocation(location);announce(`تم تثبيت الموقع عند ${nodeLabel(node,placesRef.current,floorsRef.current)}.`,'RELOCALIZATION','anchor');
   };
   const loadBuilding=async(buildingId:string)=>{
+    let knownVersion=Number(sessionStorage.getItem(`basira-b5-version-${buildingId}`)??1),cachedGraph=false;
+    try{knownVersion=(await sharedMapApi.version(buildingId)).version;}catch{/* keep cached version */}
     let data:BuildingGraph;
     try{data=await navApi.graph(buildingId);sessionStorage.setItem(`basira-b4-graph-${buildingId}`,JSON.stringify(data));}
-    catch{const cached=sessionStorage.getItem(`basira-b4-graph-${buildingId}`);if(!cached)throw new Error('map_unavailable');data=JSON.parse(cached) as BuildingGraph;setNotice('تعمل الخريطة المحملة سابقًا دون اتصال؛ قد لا تكون معلومات الإغلاق حديثة.');}
+    catch{const cached=sessionStorage.getItem(`basira-b4-graph-${buildingId}`);if(!cached)throw new Error('map_unavailable');data=JSON.parse(cached) as BuildingGraph;cachedGraph=true;setNotice('تعمل الخريطة المحملة سابقًا دون اتصال؛ قد لا تكون معلومات الإغلاق حديثة.');}
     const [floorResult,placeResult]=await Promise.allSettled([navApi.floors(buildingId),navApi.places(buildingId)]);
     const floorList=floorResult.status==='fulfilled'?floorResult.value.floors:JSON.parse(sessionStorage.getItem(`basira-b4-floors-${buildingId}`)??'[]') as Floor[];
     const placeList=placeResult.status==='fulfilled'?placeResult.value.places:JSON.parse(sessionStorage.getItem(`basira-b4-places-${buildingId}`)??'[]') as Place[];
     if(floorResult.status==='fulfilled')sessionStorage.setItem(`basira-b4-floors-${buildingId}`,JSON.stringify(floorList));
     if(placeResult.status==='fulfilled')sessionStorage.setItem(`basira-b4-places-${buildingId}`,JSON.stringify(placeList));
     setGraph(data);graphRef.current=data;setFloors(floorList);floorsRef.current=floorList;setPlaces(placeList);placesRef.current=placeList;
+    mapVersionRef.current=cachedGraph?Number(sessionStorage.getItem(`basira-b5-version-${buildingId}`)??1):knownVersion;
+    sessionStorage.setItem(`basira-b5-version-${buildingId}`,String(mapVersionRef.current));
     return data;
   };
   const choose=async(result:SearchResult)=>{
@@ -155,12 +165,19 @@ export default function Guidance(){
   const toggleMic=()=>{if(listener.current?.listening){listener.current.stop();setMicOn(false);setMicStatus('التحكم الصوتي متوقف');return;}const next=new VoiceCommandListener(language,text=>void handlerRef.current(intent.current.parse(text)),status=>{setMicStatus(status);if(status.startsWith('تعذر')||status.startsWith('توقف'))setMicOn(false);});listener.current=next;setMicOn(next.start());};
   const acknowledge=()=>{localStorage.setItem(disclaimerKey,'1');setDisclaimer(false);};
   useEffect(()=>{const saved=sessionStorage.getItem('basira-navigation-destination');if(!saved){const current=sessionStorage.getItem('basira-current-building');if(current)void loadBuilding(current).catch(()=>{});return;}try{const reference=JSON.parse(saved) as {kind:'place'|'saved';id:string};if(reference.kind==='saved')authorizedSavedPlace(reference.id).then(item=>{if(item)void choose({kind:'saved',item,priority:0});}).catch(()=>{});else navigationRequest<{place:Place}>(`/places/${reference.id}`).then(data=>void choose({kind:'place',item:data.place,priority:0})).catch(()=>{});}catch{/* stale selection */}},[]);
-  useEffect(()=>{const timer=window.setInterval(()=>{const loc=localization.current.fusion.current(Date.now());if(loc.state!=='UNANCHORED')updateLocation(loc);const buildingId=graphRef.current?.building.id;if(buildingId&&navigator.onLine&&navigation.current?.session.state==='NAVIGATING')navApi.graph(buildingId).then(data=>{sessionStorage.setItem(`basira-b4-graph-${buildingId}`,JSON.stringify(data));graphRef.current=data;setGraph(data);if(navigation.current?.updateEdges(data.edges)){sync(navigation.current);announce('تغير إغلاق أحد الممرات. سأعيد حساب المسار.','RELOCALIZATION','closure');emitInstruction(true);}}).catch(()=>{});},30_000);return()=>window.clearInterval(timer);},[]);
+  useEffect(()=>{const timer=window.setInterval(()=>{const loc=localization.current.fusion.current(Date.now());if(loc.state!=='UNANCHORED')updateLocation(loc);const buildingId=graphRef.current?.building.id;if(!buildingId||!navigator.onLine)return;
+    if(deferredMapRef.current&&navigation.current?.session.state!=='NAVIGATING'){const pending=deferredMapRef.current;deferredMapRef.current=null;graphRef.current=pending.graph;setGraph(pending.graph);mapVersionRef.current=pending.version;navigation.current?.updateEdges(pending.graph.edges);}
+    mapSync.current.latest(buildingId,deferredMapRef.current?.version??mapVersionRef.current,navigation.current?.session.state==='NAVIGATING').then(state=>{if(!state)return;const fresh=state.graph;sessionStorage.setItem(`basira-b4-graph-${buildingId}`,JSON.stringify(fresh));sessionStorage.setItem(`basira-b5-version-${buildingId}`,String(state.version));
+      if(state.policy==='DEFER'){deferredMapRef.current={graph:fresh,version:state.version};announce('توفرت نسخة أحدث من الخريطة، وستُطبّق عند نقطة تثبيت معروفة أو بعد انتهاء التوجيه.','INFORMATION','map-update-deferred');return;}
+      graphRef.current=fresh;setGraph(fresh);mapVersionRef.current=state.version;if(navigation.current?.updateEdges(fresh.edges)){sync(navigation.current);announce(state.policy==='URGENT'?'ورد تحديث لإغلاق ممر؛ أعدت حساب الطريق.':'تحدّثت الخريطة وأُعيد حساب الطريق.','RELOCALIZATION','map-update');emitInstruction(true);}
+    }).catch(()=>{});
+  },30_000);return()=>window.clearInterval(timer);},[]);
   useEffect(()=>{const changed=()=>setOnline(navigator.onLine);window.addEventListener('online',changed);window.addEventListener('offline',changed);return()=>{window.removeEventListener('online',changed);window.removeEventListener('offline',changed);};},[]);
   useEffect(()=>()=>{listener.current?.stop();motion.current?.stop();voice.current.close();generation.current++;if(qrTimer.current!==null)window.clearInterval(qrTimer.current);camera.current.stop(video.current??undefined);void pipeline.current?.stop();navigation.current?.cancel();},[]);
   useEffect(()=>{const onHide=()=>{if(document.hidden){motion.current?.stop();motion.current=null;listener.current?.stop();setMicOn(false);void stopCamera();navigation.current?.pause();sync(navigation.current);}};document.addEventListener('visibilitychange',onHide);return()=>document.removeEventListener('visibilitychange',onHide);},[]);
 
   const selectedFloor=floors.find(f=>f.id===estimate?.floorId)?.name??'غير معروف';
+  const reportMapIssue=async(event:FormEvent)=>{event.preventDefault();const buildingId=graphRef.current?.building.id;if(!buildingId||!issueConsent||issueDescription.trim().length<8){announce('اختر المبنى واكتب وصفًا واضحًا ووافق على إرسال البلاغ.');return;}try{const result=await sharedMapApi.report({buildingId,floorId:estimate?.floorId??null,type:issueType,duration:issueDuration,description:issueDescription.trim(),targetPlaceId:null,targetEdgeId:null,idempotencyKey:crypto.randomUUID(),consent:true});announce('queued'in result?'حُفظ البلاغ وسيرسل عند عودة الاتصال.':'وصل البلاغ إلى مراجعة الخريطة، ولم يغيّر المسار الرسمي تلقائيًا.');setIssueDescription('');setIssueConsent(false);}catch{announce('تعذر إرسال البلاغ. تحقق من تسجيل الدخول.');}};
   const progress=session?.progress?.fraction;
   return <Layout><div className="container max-w-4xl space-y-6 py-8 text-stone-100" dir="rtl">
     <Link href="/navigation" className="text-amber-300 underline">العودة إلى الأماكن</Link>
@@ -189,6 +206,7 @@ export default function Guidance(){
       {!speechAvailable&&<p role="status" className="mt-2 text-amber-200">النطق الصوتي غير متاح في هذا المتصفح؛ استخدم قارئ الشاشة والأزرار.</p>}
       <button className="mt-3 text-amber-200 underline" onClick={()=>setShowPreview(!showPreview)}>{showPreview?'إخفاء المعاينة':'إظهار معاينة الكاميرا الاختيارية'}</button><video ref={video} muted playsInline aria-label="معاينة الكاميرا الاختيارية" className={`mt-3 max-h-64 w-full rounded-xl bg-black object-contain ${showPreview?'':'sr-only'}`}/><canvas ref={canvas} hidden/>
     </section>
+    <section className={panel}><h2 className="mb-3 text-xl font-bold">الإبلاغ عن مشكلة في الخريطة</h2><p className="mb-2 text-sm text-stone-300">بلاغك يذهب للمراجعة. العائق المؤقت مثل كرسي أو ازدحام لا يُسجّل كجدار أو إغلاق دائم.</p><form onSubmit={reportMapIssue} className="grid gap-3 sm:grid-cols-2"><label>نوع المشكلة<select className={input} value={issueType} onChange={e=>setIssueType(e.target.value as IssueType)}><option value="ROAD_CLOSED">طريق مغلق</option><option value="PLACE_MOVED">مكان انتقل</option><option value="WRONG_ACCESSIBILITY">مسار غير مناسب للكفيف</option><option value="UNMARKED_STAIRS">درج غير مسجل</option><option value="OTHER">أخرى</option></select></label><label>مدة المشكلة<select className={input} value={issueDuration} onChange={e=>setIssueDuration(e.target.value as IssueDuration)}><option value="TEMPORARY">مؤقتة</option><option value="PERSISTENT">مستمرة</option><option value="UNKNOWN">غير معروف</option></select></label><label className="sm:col-span-2">الوصف<textarea className={input} minLength={8} maxLength={500} required value={issueDescription} onChange={e=>setIssueDescription(e.target.value)}/></label><label className="flex gap-2 sm:col-span-2"><input type="checkbox" checked={issueConsent} onChange={e=>setIssueConsent(e.target.checked)}/>أوافق على مشاركة وصف المشكلة والطابق التقريبي دون سجل المسار أو صور الكاميرا</label><button className={secondary} disabled={!issueConsent}>إرسال البلاغ</button></form></section>
     <p role={safetyText?'alert':'status'} aria-live={safetyText?'assertive':'polite'} className="min-h-7 text-amber-200">{screenReader||!speechAvailable||safetyText?notice:''}</p>
   </div></Layout>;
 }

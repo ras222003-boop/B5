@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { auth, pool } from './auth';
 import { buildingTypes, placeTypes, nodeTypes, savedCategories, verificationStatuses, accessibilityLevels } from '../shared/navigation';
 import { registerLocalizationRoutes } from './localization';
+import { registerSharedMapRoutes } from './sharedMap';
 
 const id = z.string().uuid();
 const name = z.string().trim().min(1).max(255);
@@ -128,6 +129,7 @@ export function registerNavigationRoutes(app: Express) {
   const api = express.Router();
   app.use('/api/navigation', api);
   registerLocalizationRoutes(api);
+  registerSharedMapRoutes(api);
   api.get('/access', asyncRoute(async (req, res) => res.set('Cache-Control','no-store').json(await identity(req))));
   api.get('/buildings', asyncRoute(async (req, res) => {
     const q = queryText(req);
