@@ -26,6 +26,7 @@ import Account from "./pages/Account";
 import Navigation, { BuildingPage, MyPlaces } from "./pages/Navigation";
 import NavigationAdmin from "./pages/NavigationAdmin";
 import NavigationPermissions from "./pages/NavigationPermissions";
+import Vision from "./pages/Vision";
 
 function Router() {
   return (
@@ -41,6 +42,7 @@ function Router() {
       <Route path="/navigation" component={Navigation} />
       <Route path="/navigation/places" component={MyPlaces} />
       <Route path="/navigation/permissions" component={NavigationPermissions} />
+      <Route path="/navigation/vision" component={Vision} />
       <Route path="/settings/privacy-permissions" component={NavigationPermissions} />
       <Route path="/navigation/admin" component={NavigationAdmin} />
       <Route path="/navigation/buildings/:id" component={BuildingPage} />
