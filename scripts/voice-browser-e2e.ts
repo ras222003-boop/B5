@@ -56,6 +56,28 @@ try {
   assert(await page.getByLabel('اللغة').inputValue() === 'zh-CN', 'voice preference did not persist');
   await page.getByLabel('اللغة').selectOption('ar');
   await page.getByRole('radio', { name: 'العربية السعودية' }).check();
+  const priority = await page.evaluate(`(async () => {
+    const { AudioPlaybackManager } = await import('/src/lib/speechEngine.ts');
+    const { NavigationInstructionGenerator } = await import('/src/lib/guidance/instructions.ts');
+    const events = [];
+    const bytes = Uint8Array.from(atob(${JSON.stringify(wav.toString('base64'))}), c => c.charCodeAt(0));
+    const provider = {
+      isAvailable: () => true,
+      stop: () => {},
+      synthesize: (request, signal) => request.text === 'LOW'
+        ? new Promise((_resolve, reject) => signal.addEventListener('abort', () => { events.push('turn-aborted'); reject(new Error('cancelled')); }))
+        : Promise.resolve(new Blob([bytes], { type: 'audio/wav' })),
+    };
+    const manager = new AudioPlaybackManager(provider);
+    const base = { language: 'ar', arabicStyle: 'SAUDI', context: 'NAVIGATION', rate: 1 };
+    const turn = manager.enqueue({ ...base, text: 'LOW' }, 'TURN');
+    await new Promise(resolve => setTimeout(resolve, 20));
+    const safety = manager.enqueue({ ...base, text: 'STOP', context: 'SAFETY' }, 'CRITICAL_SAFETY');
+    await Promise.all([turn, safety]);
+    return { events, fallbackCount: manager.metrics.fallbacks, arrival: new NavigationInstructionGenerator([], 'ar', 'LEFT_RIGHT', 'SAUDI').arrival('غرفة 121', 'FRONT') };
+  })()`) as { events: string[]; fallbackCount: number; arrival: string };
+  assert(priority.events.includes('turn-aborted') && priority.fallbackCount === 0, 'browser safety interruption failed');
+  assert(priority.arrival.includes('قدامك'), 'Saudi navigation phrase failed in browser');
   const beforeMuted = speechRequests.length;
   await page.getByLabel('استخدم قارئ الشاشة بدل صوت بصيرة').check();
   await page.getByRole('button', { name: 'استمع إلى الصوت' }).click();
@@ -77,5 +99,5 @@ try {
   await open('/navigation/guidance');
   await page.getByText('خيارات المسار والإرشاد').click();
   assert(await page.getByText('نمط العربية').count() > 0, 'navigation Arabic style control missing');
-  console.log(JSON.stringify({ status: 'PASS', speechRequests: speechRequests.length, checks: ['MSA male/female', 'Saudi male/female', 'English', 'Chinese', 'preview', 'persistence', 'screen reader', 'offline fallback', 'Saudi exam text', 'navigation style'] }));
+  console.log(JSON.stringify({ status: 'PASS', speechRequests: speechRequests.length, checks: ['MSA male/female', 'Saudi male/female', 'English', 'Chinese', 'preview', 'persistence', 'screen reader', 'offline fallback', 'Saudi exam text', 'navigation', 'safety interruption'] }));
 } finally { await browser.close(); }
