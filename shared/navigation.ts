@@ -49,7 +49,9 @@ export interface SavedPlace {
 
 /** B2 contracts are re-exported for existing B1 import paths. */
 export type { VisionProvider, OCRProvider, DepthProvider, ObstacleProvider, HapticFeedbackProvider,
-  VisionDetection, ObstacleDetection, SceneDescription, DepthReading, OCRDetection, PlaceCandidate, RiskLevel } from './vision';
+  SceneSegmentationProvider, RelativeDepthProvider, MetricDepthProvider, WalkableAreaProvider,
+  VisionDetection, ObstacleDetection, SceneDescription, DepthReading, OCRDetection, PlaceCandidate, RiskLevel,
+  SegmentationGrid, RelativeDepthMap, MetricDepthMap, WalkableAreaResult } from './vision';
 export interface IndoorLocalizationProvider { locate(buildingId: string): Promise<{ floorId: string; x: number; y: number } | null> }
 export interface NavigationProvider { prepareDestination(placeId: string): Promise<void> }
 export interface AutoMapperProvider { importGraph(buildingId: string, nodes: MapNode[], edges: MapEdge[]): Promise<void> }

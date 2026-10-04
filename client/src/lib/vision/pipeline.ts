@@ -1,9 +1,10 @@
-import type { DepthProvider, DepthReading, OCRDetection, OCRProvider, PlaceCandidate, RecognizedPlace, SceneDescription, VisionDetection, VisionMode, VisionProvider } from '@shared/vision';
+import type { DepthProvider, DepthReading, MetricDepthMap, MetricDepthProvider, OCRDetection, OCRProvider, PlaceCandidate, RecognizedPlace, RelativeDepthMap, RelativeDepthProvider, SceneDescription, SceneSegmentationProvider, SegmentationGrid, VisionDetection, VisionMode, VisionProvider } from '@shared/vision';
 import type { VisionConfig } from './config';
 import { captureFrame } from './camera';
 import { BasiraSafetyEngine, classifyDirection, classifyVertical } from './safety';
-import { isNavigationText, normalizePlaceText, VisualPlaceRecognitionService } from './placeRecognition';
+import { isNavigationText, normalizePlaceText, signTypeForText, VisualPlaceRecognitionService } from './placeRecognition';
 import { SceneUnderstandingService, VisionAnnouncementService, type VisionCopy } from './scene';
+import { VisionFusionEngine } from './fusion';
 
 interface Callbacks {
   scene:(description:SceneDescription)=>void;
@@ -11,10 +12,14 @@ interface Callbacks {
   candidate:(candidate:PlaceCandidate)=>void;
   recognized:(place:RecognizedPlace)=>void;
   OCRFailure:()=>void;
+  segmentationFailure:()=>void;
+  depthFailure:()=>void;
   fatal:(error:unknown)=>void;
 }
 export interface VisionPipelineOptions {
   video:HTMLVideoElement; vision:VisionProvider; ocr:OCRProvider; depth:DepthProvider;
+  segmentation?:SceneSegmentationProvider;relativeDepth?:RelativeDepthProvider;metricDepth?:MetricDepthProvider;
+  segmentationIntervalMs?:number;depthIntervalMs?:number;
   config:VisionConfig; copy:VisionCopy; mode:VisionMode;
   buildingId:string|null; floorId:string|null;
   announcement:VisionAnnouncementService; callbacks:Callbacks;
@@ -35,7 +40,17 @@ export class VisionPipeline {
   private latest:SceneDescription|null=null;
   private seenCandidates=new Set<string>();
   private depthCache=new Map<string,{reading:DepthReading|null;at:number}>();
+  private segmentation:SegmentationGrid|null=null;
+  private relativeDepth:RelativeDepthMap|null=null;
+  private metricDepth:MetricDepthMap|null=null;
+  private geometryBusy=false;
+  private geometryEnabled=true;
+  private relativeDepthEnabled=true;
+  private lastGeometry=Number.NEGATIVE_INFINITY;
+  private lastDepth=Number.NEGATIVE_INFINITY;
+  private latestObjects:VisionDetection[]=[];
   private readonly safety:BasiraSafetyEngine;
+  private readonly fusion:VisionFusionEngine;
   private readonly scene:SceneUnderstandingService;
   private readonly place:VisualPlaceRecognitionService;
   private frames=0;
@@ -43,6 +58,7 @@ export class VisionPipeline {
   private detections=0;
   constructor(private readonly options:VisionPipelineOptions) {
     this.safety=new BasiraSafetyEngine(options.config);
+    this.fusion=new VisionFusionEngine(this.safety);
     this.scene=new SceneUnderstandingService(options.copy);
     this.place=new VisualPlaceRecognitionService(options.buildingId,options.floorId);
   }
@@ -69,18 +85,17 @@ export class VisionPipeline {
       if(!this.running||generation!==this.generation)return;
       const enriched=await Promise.all(detections.map(async detection=>({ ...detection,approximateDistance:await this.readDepth(detection,started) })));
       if(!this.running||generation!==this.generation)return;
-      const validSigns=this.signDetections.filter(sign=>started-sign.timestamp<12_000);
-      const events=this.safety.classifyAll([...enriched,...validSigns]);
-      this.latest=this.scene.summarize(events,this.recognizedPlace,Date.now());
-      this.options.callbacks.scene(this.latest);
-      const alert=this.options.announcement.announce(events,Date.now());
-      if(alert)this.options.callbacks.alert(alert.text,alert.event.riskLevel);
+      this.latestObjects=enriched;
+      this.publish(started);
       this.frames++;
       this.inferenceMs+=performance.now()-started;
       this.detections+=detections.length;
       if(this.ocrEnabled&&!this.ocrBusy&&started-this.lastOCR>=this.options.config.OCRRefreshRate){
         this.lastOCR=started;
         void this.processOCR(generation,started);
+      }
+      if(this.options.segmentation&&this.geometryEnabled&&!this.geometryBusy&&started-this.lastGeometry>=(this.options.segmentationIntervalMs??3000)){
+        this.lastGeometry=started;void this.processGeometry(generation,started);
       }
       this.schedule(Math.max(0,1000/(this.options.config.frameAnalysisRate/(this.lowBattery?2:1))-(performance.now()-started)));
     } catch(error) {
@@ -89,6 +104,38 @@ export class VisionPipeline {
       this.options.callbacks.fatal(error);
       await this.stop();
     }
+  }
+  private publish(now:number){
+    const signs=this.signDetections.filter(sign=>now-sign.timestamp<12_000);
+    const segmentation=this.segmentation&&now-this.segmentation.timestamp<10_000?this.segmentation:null;
+    const relativeDepth=this.relativeDepth&&now-this.relativeDepth.timestamp<2_000?this.relativeDepth:null;
+    const metricDepth=this.metricDepth&&now-this.metricDepth.timestamp<2_000?this.metricDepth:null;
+    const frame=this.fusion.fuse({objects:this.latestObjects,segmentation,relativeDepth,metricDepth,signs});
+    this.latest=this.scene.summarize(frame.events,this.recognizedPlace,Date.now(),frame.walkableArea);
+    this.options.callbacks.scene(this.latest);
+    const alert=this.options.announcement.announce(frame.events,Date.now());
+    if(alert)this.options.callbacks.alert(alert.text,alert.event.riskLevel);
+  }
+  private async processGeometry(generation:number,timestamp:number){
+    this.geometryBusy=true;
+    try{
+      const frame=await captureFrame(this.options.video,this.options.config);
+      if(!frame||!this.running||generation!==this.generation)return;
+      const grid=await this.options.segmentation!.segment(frame.blob,timestamp);
+      if(!this.running||generation!==this.generation)return;
+      this.segmentation=grid;
+      if(this.options.metricDepth){
+        try{this.metricDepth=await this.options.metricDepth.capture(timestamp);}catch{this.metricDepth=null;this.options.callbacks.depthFailure();}
+      }
+      if(!this.metricDepth&&this.options.relativeDepth&&this.relativeDepthEnabled&&timestamp-this.lastDepth>=(this.options.depthIntervalMs??8000)){
+        this.lastDepth=timestamp;
+        try{this.relativeDepth=await this.options.relativeDepth.estimate(frame.blob,timestamp);}
+        catch{this.relativeDepthEnabled=false;this.relativeDepth=null;this.options.callbacks.depthFailure();}
+      }
+      if(this.running&&generation===this.generation)this.publish(performance.now());
+    }catch{
+      if(this.running&&generation===this.generation){this.geometryEnabled=false;this.segmentation=null;this.metricDepth=null;this.relativeDepth=null;this.options.callbacks.segmentationFailure();}
+    }finally{this.geometryBusy=false;}
   }
   private async readDepth(detection:VisionDetection,now:number):Promise<DepthReading|null>{
     const key=detection.trackId??detection.id,previous=this.depthCache.get(key);
@@ -109,8 +156,10 @@ export class VisionPipeline {
         this.addSign(reading);
         const result=await this.place.recognize(reading);
         if(!this.running||generation!==this.generation)return;
-        if(result.place){this.recognizedPlace=result.place;this.options.callbacks.recognized(result.place);}
+        const door=this.closestDoor(reading);
+        if(result.place){this.recognizedPlace={...result.place,doorDirection:door?.horizontalDirection};this.options.callbacks.recognized(this.recognizedPlace);}
         if(result.candidate){
+          if(door)result.candidate.doorDirection=door.horizontalDirection;
           const key=normalizePlaceText(result.candidate.detectedText);
           if(!this.seenCandidates.has(key)) {this.seenCandidates.add(key);this.options.callbacks.candidate(result.candidate);}
         }
@@ -119,11 +168,18 @@ export class VisionPipeline {
       if(this.running&&generation===this.generation){this.ocrEnabled=false;this.options.callbacks.OCRFailure();}
     } finally {this.ocrBusy=false;}
   }
+  private closestDoor(reading:OCRDetection):VisionDetection|null {
+    if(!reading.boundingBox)return null;
+    const cx=reading.boundingBox.x+reading.boundingBox.width/2;
+    const doors=this.latest?.objects.filter(item=>item.type==='DOOR'&&Math.abs(item.boundingBox.x+item.boundingBox.width/2-cx)<.18&&
+      reading.boundingBox!.y<item.boundingBox.y+item.boundingBox.height*.5)??[];
+    return doors.sort((a,b)=>Math.abs(a.boundingBox.x+a.boundingBox.width/2-cx)-Math.abs(b.boundingBox.x+b.boundingBox.width/2-cx))[0]??null;
+  }
   private addSign(reading:OCRDetection){
     if(!reading.boundingBox)return;
     const boundingBox=reading.boundingBox;
     const sign:VisionDetection={
-      id:`ocr-${reading.timestamp}-${reading.text.slice(0,8)}`,type:'SIGN',confidence:reading.confidence,boundingBox,
+      id:`ocr-${reading.timestamp}-${reading.text.slice(0,8)}`,type:signTypeForText(reading.text),confidence:reading.confidence,boundingBox,
       horizontalDirection:classifyDirection(boundingBox),verticalPosition:classifyVertical(boundingBox),
       approximateDistance:null,timestamp:reading.timestamp,source:'OCR_SIGN',trackId:`SIGN:${normalizePlaceText(reading.text)}`,
     };
@@ -144,9 +200,11 @@ export class VisionPipeline {
     if(this.timer!==null){window.clearTimeout(this.timer);this.timer=null;}
     this.batteryCleanup?.();this.batteryCleanup=null;
     this.options.announcement.reset();
-    await Promise.allSettled([this.options.vision.close(),this.options.ocr.close(),this.options.depth.close()]);
+    await Promise.allSettled([this.options.vision.close(),this.options.ocr.close(),this.options.depth.close(),
+      this.options.segmentation?.close(),this.options.relativeDepth?.close(),this.options.metricDepth?.close()]);
     console.info('Basira vision session stopped',{frames:this.frames,detections:this.detections,averageInferenceMs:this.frames?Math.round(this.inferenceMs/this.frames):0});
     this.latest=null;this.signDetections=[];this.recognizedPlace=null;this.seenCandidates.clear();
     this.depthCache.clear();
+    this.segmentation=null;this.relativeDepth=null;this.metricDepth=null;this.latestObjects=[];
   }
 }

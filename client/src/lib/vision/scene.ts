@@ -1,4 +1,4 @@
-import type { HapticFeedbackProvider, ObstacleDetection, RecognizedPlace, SceneDescription } from '@shared/vision';
+import type { HapticFeedbackProvider, ObstacleDetection, RecognizedPlace, SceneDescription, WalkableAreaResult } from '@shared/vision';
 import { visionMessages } from '@/i18n/locales/vision';
 import { AlertDeduplicator } from './safety';
 
@@ -7,12 +7,13 @@ const objectPhrase=(event:ObstacleDetection,copy:VisionCopy)=>`${copy.object[eve
 
 export class SceneUnderstandingService {
   constructor(private readonly copy:VisionCopy) {}
-  summarize(events:ObstacleDetection[],recognizedPlace:RecognizedPlace|null,capturedAt:number):SceneDescription {
+  summarize(events:ObstacleDetection[],recognizedPlace:RecognizedPlace|null,capturedAt:number,walkableArea:WalkableAreaResult|null=null):SceneDescription {
     const top=events.slice(0,4);
     const phrases=top.map(event=>objectPhrase(event,this.copy));
-    const shortText=phrases.length?`${this.copy.scenePrefix}: ${phrases.slice(0,2).join('، ')}.`:this.copy.noDetections;
-    const detailedText=phrases.length?`${this.copy.sceneDetails}: ${phrases.join('، ')}.${recognizedPlace?` ${this.copy.placeRecognized(recognizedPlace.name)}.`:''}`:this.copy.noDetections;
-    return {shortText,detailedText,riskLevel:events[0]?.riskLevel??null,objects:events,recognizedPlace,capturedAt};
+    const pathText=walkableArea?.pathAhead==='BLOCKED'?this.copy.pathBlocked:walkableArea?.pathAhead==='UNKNOWN'?this.copy.pathUnknown:'';
+    const shortText=phrases.length?`${this.copy.scenePrefix}: ${phrases.slice(0,2).join('، ')}.${pathText?` ${pathText}`:''}`:pathText||this.copy.noDetections;
+    const detailedText=phrases.length?`${this.copy.sceneDetails}: ${phrases.join('، ')}.${recognizedPlace?` ${this.copy.placeRecognized(recognizedPlace.name)}.`:''}${pathText?` ${pathText}`:''}`:pathText||this.copy.noDetections;
+    return {shortText,detailedText,riskLevel:events[0]?.riskLevel??null,objects:events,recognizedPlace,walkableArea:walkableArea??undefined,capturedAt};
   }
 }
 
@@ -23,18 +24,24 @@ export class BrowserHapticFeedbackProvider implements HapticFeedbackProvider {
 /** Speaks only the highest-priority changed event; never queues every object. */
 export class VisionAnnouncementService {
   private deduplicator:AlertDeduplicator;
+  private hazardUntil=0;
   constructor(private readonly copy:VisionCopy,private readonly speak:(text:string)=>void,private readonly haptic:HapticFeedbackProvider,cooldownMs:number) {
     this.deduplicator=new AlertDeduplicator(cooldownMs);
   }
   announce(events:ObstacleDetection[],now:number):{text:string;event:ObstacleDetection}|null {
     const top=events[0];
+    if(top?.riskLevel==='INFORMATION'&&now<this.hazardUntil)return null;
     if(!top||!this.deduplicator.shouldAnnounce(top,now)) return null;
-    const text=top.type==='STAIRS_UNCERTAIN'||top.type==='STAIRS_DOWN'&&top.reason==='UNCERTAIN'
+    if(top.riskLevel==='HIGH'||top.riskLevel==='CRITICAL')this.hazardUntil=now+4000;
+    const text=top.type==='DROP_OFF_UNCERTAIN'?this.copy.uncertainDropOff
+      :top.type==='DROP_OFF'?this.copy.dropOff
+      :top.type==='STAIRS_DOWN'&&top.riskLevel==='CRITICAL'?this.copy.stairsDown
+      :top.type==='STAIRS_UNCERTAIN'||top.type==='STAIRS_DOWN'&&top.reason==='UNCERTAIN'
       ? this.copy.uncertainStairs
       : `${top.riskLevel==='CRITICAL'||top.riskLevel==='HIGH'?`${this.copy.alertPrefix}، `:''}${objectPhrase(top,this.copy)}.`;
     if(top.riskLevel==='CRITICAL')this.haptic.critical();
     this.speak(text);
     return {text,event:top};
   }
-  reset(){this.deduplicator.reset();}
+  reset(){this.deduplicator.reset();this.hazardUntil=0;}
 }

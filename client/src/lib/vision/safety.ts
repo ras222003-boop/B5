@@ -35,10 +35,11 @@ export class BasiraSafetyEngine {
     let reason: ObstacleDetection['reason'] = 'TYPE';
     switch (detection.type) {
       case 'STAIRS_DOWN':
+      case 'DROP_OFF':
         riskLevel = centered && reliableNear && detection.confidence >= 0.8 ? 'CRITICAL' : 'HIGH';
         reason = band === 'UNKNOWN' ? 'UNCERTAIN' : 'PROXIMITY'; break;
-      case 'STAIRS_UP': case 'STAIRS_UNCERTAIN':
-        riskLevel = 'HIGH'; reason = detection.type === 'STAIRS_UNCERTAIN' ? 'UNCERTAIN' : 'TYPE'; break;
+      case 'STAIRS_UP': case 'STAIRS_UNCERTAIN': case 'DROP_OFF_UNCERTAIN':
+        riskLevel = 'HIGH'; reason = detection.type.endsWith('UNCERTAIN') ? 'UNCERTAIN' : 'TYPE'; break;
       case 'VEHICLE':
         riskLevel = centered && reliableNear && detection.confidence >= 0.75 ? 'CRITICAL' : 'HIGH';
         reason = band === 'UNKNOWN' ? 'UNCERTAIN' : 'PROXIMITY'; break;
@@ -54,8 +55,18 @@ export class BasiraSafetyEngine {
     return { ...detection, riskLevel, distanceBand: band, reason };
   }
   classifyAll(detections: VisionDetection[]) {
-    return detections.map(d => this.classify(d)).sort((a,b) => rankRisk(b.riskLevel)-rankRisk(a.riskLevel) || b.confidence-a.confidence);
+    return detections.map(d => this.classify(d)).sort((a,b) => rankRisk(b.riskLevel)-rankRisk(a.riskLevel) || hazardPriority(b.type)-hazardPriority(a.type) || b.confidence-a.confidence);
   }
+}
+
+export function hazardPriority(type:VisionDetection['type']):number {
+  if(type==='DROP_OFF'||type==='DROP_OFF_UNCERTAIN'||type==='STAIRS_DOWN')return 7;
+  if(type==='VEHICLE')return 6;
+  if(type==='UNKNOWN_OBSTACLE')return 5;
+  if(type==='STAIRS_UP'||type==='STAIRS_UNCERTAIN')return 4;
+  if(type==='BARRIER'||type==='COLUMN'||type==='WALL')return 3;
+  if(['PERSON','CHAIR','TABLE','BICYCLE','CART','BOX'].includes(type))return 2;
+  return 1;
 }
 
 const bandRank: Record<DistanceBand, number> = { UNKNOWN: 0, FAR: 1, MEDIUM: 2, CLOSE: 3, VERY_CLOSE: 4 };

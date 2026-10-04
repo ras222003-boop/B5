@@ -9,6 +9,8 @@ import { permissionService, type PermissionState } from '@/lib/permissionService
 import { DEFAULT_VISION_CONFIG } from '@/lib/vision/config';
 import { CameraService, CameraServiceError } from '@/lib/vision/camera';
 import { MediaPipeVisionProvider, TesseractOCRProvider, UnavailableDepthProvider } from '@/lib/vision/providers';
+import { MonocularRelativeDepthProvider, NativeMetricDepthProvider, SegFormerSceneProvider } from '@/lib/vision/modelProviders';
+import { detectVisionCapabilities, type VisionCapabilities } from '@/lib/vision/capabilities';
 import { VisionPipeline } from '@/lib/vision/pipeline';
 import { BrowserHapticFeedbackProvider, VisionAnnouncementService } from '@/lib/vision/scene';
 import type { PlaceCandidate, RecognizedPlace, RiskLevel, SceneDescription } from '@shared/vision';
@@ -27,6 +29,9 @@ export default function Vision() {
   const [state,setState]=useState<'STOPPED'|'STARTING'|'WORKING'|'ANALYZING'>('STOPPED');
   const [error,setError]=useState('');
   const [OCRWarning,setOCRWarning]=useState('');
+  const [modelWarning,setModelWarning]=useState('');
+  const [depthWarning,setDepthWarning]=useState('');
+  const [capabilities,setCapabilities]=useState<VisionCapabilities|null>(null);
   const [lastAlert,setLastAlert]=useState('');
   const [risk,setRisk]=useState<RiskLevel|null>(null);
   const [scene,setScene]=useState<SceneDescription|null>(null);
@@ -55,16 +60,30 @@ export default function Vision() {
   const start=async()=>{
     if(state!=='STOPPED'||!videoRef.current)return;
     const run=++generation.current;
-    setError('');setOCRWarning('');setLastAlert('');setRisk(null);setSpokenSummary('');setState('STARTING');
+    setError('');setOCRWarning('');setModelWarning('');setDepthWarning('');setLastAlert('');setRisk(null);setSpokenSummary('');setState('STARTING');
     try {
+      const detected=detectVisionCapabilities();setCapabilities(detected);
       await cameraRef.current.start(videoRef.current);
       if(run!==generation.current){cameraRef.current.stop(videoRef.current);return;}
       setCameraPermission('allowed');
       const provider=await MediaPipeVisionProvider.open(DEFAULT_VISION_CONFIG);
       if(run!==generation.current){await provider.close();cameraRef.current.stop(videoRef.current);return;}
+      let segmentation:SegFormerSceneProvider|undefined;
+      try{segmentation=await SegFormerSceneProvider.open();}
+      catch{setModelWarning(t.segmentationFailure);}
+      if(run!==generation.current){await Promise.allSettled([provider.close(),segmentation?.close()]);cameraRef.current.stop(videoRef.current);return;}
+      let metricDepth:NativeMetricDepthProvider|undefined;
+      let relativeDepth:MonocularRelativeDepthProvider|undefined;
+      if(detected.nativeDepth&&window.BasiraNativeDepth)metricDepth=new NativeMetricDepthProvider(window.BasiraNativeDepth);
+      else if(detected.performanceTier==='HIGH'&&segmentation){
+        try{relativeDepth=await MonocularRelativeDepthProvider.open();}
+        catch{setDepthWarning(t.depthFailure);}
+      }
+      if(run!==generation.current){await Promise.allSettled([provider.close(),segmentation?.close(),relativeDepth?.close()]);cameraRef.current.stop(videoRef.current);return;}
       const currentBuildingId=sessionStorage.getItem('basira-current-building');
       const announcement=new VisionAnnouncementService(t,text=>speak(text,0.9,lang),new BrowserHapticFeedbackProvider(),DEFAULT_VISION_CONFIG.alertCooldownMs);
       const pipeline=new VisionPipeline({video:videoRef.current,vision:provider,ocr:new TesseractOCRProvider(),depth:new UnavailableDepthProvider(),
+        segmentation,relativeDepth,metricDepth,segmentationIntervalMs:detected.segmentationIntervalMs,depthIntervalMs:detected.depthIntervalMs,
         config:DEFAULT_VISION_CONFIG,copy:t,mode:'EXPLORATION',buildingId:currentBuildingId,floorId:null,announcement,
         callbacks:{
           scene:description=>{if(run===generation.current){setScene(description);setState('ANALYZING');}},
@@ -72,6 +91,8 @@ export default function Vision() {
           candidate:candidate=>{if(run===generation.current)setCandidates(previous=>[candidate,...previous].slice(0,10));},
           recognized:place=>{if(run===generation.current)setRecognized(place);},
           OCRFailure:()=>{if(run===generation.current)setOCRWarning(t.ocrFailure);},
+          segmentationFailure:()=>{if(run===generation.current)setModelWarning(t.segmentationFailure);},
+          depthFailure:()=>{if(run===generation.current)setDepthWarning(t.depthFailure);},
           fatal:()=>{if(run===generation.current){setError(t.providerFailure);void stop();}},
         },
       });
@@ -106,8 +127,11 @@ export default function Vision() {
     </section>
     {error&&<p role="alert" className="rounded-xl border border-red-400/50 p-4 text-red-200">{error}</p>}
     {OCRWarning&&<p role="status" aria-live="polite" className="text-amber-200">{OCRWarning}</p>}
+    {modelWarning&&<p role="status" aria-live="polite" className="text-amber-200">{modelWarning}</p>}
+    {depthWarning&&<p role="status" aria-live="polite" className="text-amber-200">{depthWarning}</p>}
     {!online&&<p role="status" className="rounded-xl border border-amber-300/40 p-4 text-amber-100">{t.offline}</p>}
-    <p className="text-sm text-stone-300">{t.depthUnavailable}</p>
+    <p className="text-sm text-stone-300">{capabilities?.nativeDepth?t.nativeDepthAvailable:t.depthUnavailable}</p>
+    {scene?.walkableArea&&<p role="status" className="text-amber-100">{scene.walkableArea.pathAhead==='BLOCKED'?t.pathBlocked:scene.walkableArea.pathAhead==='CLEAR'?t.pathClearObserved:t.pathUnknown}</p>}
     <div className="flex flex-wrap gap-3"><button className={secondary} type="button" disabled={state==='STOPPED'||state==='STARTING'} onClick={()=>report(false)}>{t.whatAhead}</button><button className={secondary} type="button" disabled={state==='STOPPED'||state==='STARTING'} onClick={()=>report(true)}>{t.describe}</button></div>
     <p aria-live="polite" role="status" className="min-h-6">{spokenSummary}</p>
     {recognized&&<p role="status" className="rounded-xl border border-emerald-300/40 p-4 text-emerald-100">{t.placeRecognized(recognized.name)}</p>}
