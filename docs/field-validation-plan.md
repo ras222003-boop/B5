@@ -28,3 +28,35 @@ Progress only after written review of the prior phase's hazards and failures. Su
 | Crash rate, battery use, thermal impact | Record device model, browser, duration, battery and temperature. |
 
 Report numerator/denominator, confidence intervals where appropriate, device/browser details, and all misses. Privacy review must precede any collection. No field values have been measured yet.
+
+## Basira Validation Gate (2026-10-04)
+
+This engineering gate is complete for the local evidence listed in
+[`validation-gate-report.md`](validation-gate-report.md). It does not replace a
+controlled field trial, a phone test, a screen-reader session, or review of a
+real building map.
+
+### Gate requirements
+
+The gate is **GO** only when all of these have evidence in the report:
+
+- fresh and B5-to-B6 upgrade migrations pass on an isolated real MySQL server;
+- official import, transaction rollback, RAMP routing, and map versioning pass;
+- browser smoke passes for Navigation, Permissions, Capabilities, Vision,
+  Mapping, Guidance, Shared Map, and Indoor Manager;
+- no critical browser runtime or authorization defect remains;
+- SavedPlace isolation and offline privacy checks pass;
+- camera tracks stop cleanly and automated accessibility has no critical
+  blocker;
+- the Android/iPhone and screen-reader checklists are ready to execute; and
+- the selected building map and route have been reviewed by a sighted
+  observer.
+
+### Current decision
+
+**NO-GO for controlled field validation.** The MySQL, API, browser, camera,
+offline shell, authorization, and automated accessibility evidence is positive,
+but no physical Android or iPhone, real screen reader, or real King Khalid
+University Faculty of Education map and Room 121 walkthrough was available in
+this gate. Do not test blind users yet. The next permitted step is a sighted,
+supervised walkthrough after the checklists and verified map are completed.

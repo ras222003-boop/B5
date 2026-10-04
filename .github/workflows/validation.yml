@@ -1,0 +1,42 @@
+name: Basira validation
+
+on:
+  push:
+    branches: [main, 'codex/**']
+  pull_request:
+    branches: [main]
+
+jobs:
+  check-test-build-and-mysql:
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: basira_ci_only
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -pbasira_ci_only"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.18.1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm check
+      - run: pnpm test
+      - run: pnpm build
+      - name: Validate fresh and B5 to B6 MySQL migrations
+        env:
+          DATABASE_URL: mysql://root:basira_ci_only@127.0.0.1:3306/basira_validation_ci
+        run: |
+          pnpm exec tsx scripts/validation-gate-db.ts fresh
+          pnpm exec tsx scripts/validation-gate-db.ts upgrade
