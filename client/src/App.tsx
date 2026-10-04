@@ -28,6 +28,7 @@ import NavigationAdmin from "./pages/NavigationAdmin";
 import NavigationPermissions from "./pages/NavigationPermissions";
 import Vision from "./pages/Vision";
 import Mapping from "./pages/Mapping";
+import Guidance from "./pages/Guidance";
 
 function Router() {
   return (
@@ -45,6 +46,7 @@ function Router() {
       <Route path="/navigation/permissions" component={NavigationPermissions} />
       <Route path="/navigation/vision" component={Vision} />
       <Route path="/navigation/mapping" component={Mapping} />
+      <Route path="/navigation/guidance" component={Guidance} />
       <Route path="/settings/privacy-permissions" component={NavigationPermissions} />
       <Route path="/navigation/admin" component={NavigationAdmin} />
       <Route path="/navigation/buildings/:id" component={BuildingPage} />

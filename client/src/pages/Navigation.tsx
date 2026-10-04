@@ -80,7 +80,7 @@ export default function Navigation() {
   };
   const prepareDestination = (result: SearchResult) => {
     sessionStorage.setItem('basira-navigation-destination', JSON.stringify({kind:result.kind,id:result.item.id}));
-    setDestination(result.item.name); setNotice(t.destinationReady);
+    setDestination(result.item.name); setNotice(t.destinationReady); navigate('/navigation/guidance');
   };
   const startSave = async () => {
     setShowSave(true);
@@ -128,6 +128,7 @@ export default function Navigation() {
       <Link className={secondary} href="/navigation/places?filter=recent">{t.recent}</Link>
       <Link className={secondary} href="/navigation/permissions">{t.permissions}</Link>
       <Link className={button} href="/navigation/vision">{vision.open}</Link>
+      <Link className={button} href="/navigation/guidance">التنقل مع بصيرة</Link>
     </div>
     {live}
     {results.length>0 && <section aria-labelledby="results-heading" className={panel}><div className="mb-3 flex flex-wrap items-center justify-between gap-3"><h2 id="results-heading" className="text-xl font-bold">{t.search}</h2>{currentBuilding && !includeOthers && <button type="button" className={secondary} onClick={()=>{setIncludeOthers(true);navApi.search(query,currentBuilding.id,true).then(data=>setResults(data.results)).catch(()=>setNotice(t.failed));}}>{t.otherBuildings}</button>}</div>
@@ -157,6 +158,7 @@ function NavigationAdminLink() {
 
 export function BuildingPage() {
   const t=useMessages(navigationMessages);
+  const [,navigate]=useLocation();
   const [,params]=useRoute('/navigation/buildings/:id');
   const id=params?.id??'';
   const [building,setBuilding]=useState<Building|null>(null);
@@ -167,7 +169,7 @@ export function BuildingPage() {
   const {notice,setNotice,live}=useNotice();
   useEffect(()=>{if(!id)return;Promise.all([navApi.building(id),navApi.floors(id),navApi.places(id),navApi.graph(id)]).then(([a,b,c,d])=>{setBuilding(a.building);setFloors(b.floors);setPlaces(c.places);setGraph(d);}).catch(()=>setNotice(t.failed));},[id]);
   const search=async (event:FormEvent)=>{event.preventDefault();try{setPlaces((await navApi.places(id,q)).places);}catch{setNotice(t.failed);}};
-  const select=(place:Place)=>{sessionStorage.setItem('basira-navigation-destination',JSON.stringify({kind:'place',id:place.id}));setNotice(t.destinationReady);};
+  const select=(place:Place)=>{sessionStorage.setItem('basira-navigation-destination',JSON.stringify({kind:'place',id:place.id}));setNotice(t.destinationReady);navigate('/navigation/guidance');};
   const groups=[{label:t.rooms,types:['ROOM','CLASSROOM','LAB']},{label:t.offices,types:['OFFICE']},{label:t.elevators,types:['ELEVATOR']},{label:t.stairs,types:['STAIRS']},{label:t.services,types:['RECEPTION','RESTROOM','WAITING_AREA','PHARMACY','CLINIC','SERVICE_POINT','PARKING']},{label:t.entrances,types:['ENTRANCE']},{label:t.exits,types:['EXIT','EMERGENCY_EXIT']}];
   return <Layout><div className="container space-y-6 py-10 text-stone-100"><Link className="text-amber-200 underline" href="/navigation">{t.title}</Link><h1 className="text-3xl font-black">{building?.name??t.loading}</h1>{building && <p>{t.buildingTypes[building.buildingType]} · {t.verification[building.verificationStatus]} · {t.mapStatuses[building.mapStatus]}</p>}
     <form onSubmit={search} role="search" className="flex gap-2"><label htmlFor="building-search" className="sr-only">{t.searchBuilding}</label><input id="building-search" className={input} value={q} onChange={e=>setQ(e.target.value)} placeholder={t.searchPlaceholder}/><button className={button}>{t.search}</button></form>
@@ -180,6 +182,7 @@ export function BuildingPage() {
 
 export function MyPlaces() {
   const t=useMessages(navigationMessages); const {formatDate}=useI18n();
+  const [,navigate]=useLocation();
   const [items,setItems]=useState<SavedPlace[]>([]); const [filter,setFilter]=useState<'all'|'favorites'|'recent'>(()=>new URLSearchParams(location.search).get('filter')==='recent'?'recent':'all');
   const [q,setQ]=useState(''); const [editing,setEditing]=useState<SavedPlace|null>(null); const [name,setName]=useState(''); const [notes,setNotes]=useState(''); const [category,setCategory]=useState<typeof savedCategories[number]>('OTHER');
   const {notice,setNotice,live}=useNotice();
@@ -192,6 +195,7 @@ export function MyPlaces() {
     if(kind==='favorite')await navigationRequest(`/saved-places/${item.id}/favorite`,json('POST',{isFavorite:!item.isFavorite}));
     if(kind==='select'||kind==='guide'){await navigationRequest(`/saved-places/${item.id}/select`,{method:'POST'});sessionStorage.setItem('basira-navigation-destination',JSON.stringify({kind:'saved',id:item.id}));}
     if(kind==='delete'||kind==='favorite')await load();
+    if(kind==='guide')navigate('/navigation/guidance');
     setNotice(kind==='delete'?t.removedSuccess:kind==='guide'?t.destinationReady:kind==='select'?t.selected:t.updatedSuccess);
   }catch{setNotice(t.failed);}};
   return <Layout><div className="container space-y-6 py-10 text-stone-100"><Link className="text-amber-200 underline" href="/navigation">{t.title}</Link><h1 className="text-3xl font-black">{t.myPlaces}</h1><p>{t.privacyHint}</p>
