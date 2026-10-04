@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { LANG_META, useI18n, type Lang } from "@/i18n";
 import { transcriptFromSpeechResults } from "@/lib/examFlow";
+import { speechEngine, speechInput } from '@/lib/speechEngine';
+import type { SpeechContext, SpeechPriority } from '@shared/speech';
 
 export type SpeechLanguage = Lang;
 
@@ -159,6 +161,8 @@ export function splitForSpeech(text: string): string[] {
 export interface SpeechSegment {
   text: string;
   lang?: SpeechLanguage;
+  context?: SpeechContext;
+  priority?: SpeechPriority;
   /** Silence after this segment, in ms. */
   pauseAfterMs?: number;
 }
@@ -170,127 +174,38 @@ export interface SpeechSegment {
  */
 export function useTextToSpeech() {
   const { lang: platformLang } = useI18n();
-  const [isSpeaking, setIsSpeaking] = useState(false);
-  const [isSupported] = useState(() => getSynth() !== null);
-  const runIdRef = useRef(0);
-  const timersRef = useRef<number[]>([]);
-
-  useEffect(() => {
-    const synth = getSynth();
-    if (!synth) return;
-    loadVoices();
-    const onVoices = () => loadVoices();
-    try {
-      synth.addEventListener?.("voiceschanged", onVoices);
-    } catch {
-      /* older engines */
-    }
-    return () => {
-      try {
-        synth.removeEventListener?.("voiceschanged", onVoices);
-      } catch {
-        /* ignore */
-      }
-    };
-  }, []);
-
-  const clearTimers = () => {
-    timersRef.current.forEach(id => window.clearTimeout(id));
-    timersRef.current = [];
-  };
-
-  const stop = useCallback(() => {
-    runIdRef.current += 1;
-    clearTimers();
-    try {
-      getSynth()?.cancel();
-    } catch {
-      /* ignore */
-    }
-    setIsSpeaking(false);
-  }, []);
-
+  const [state, setState] = useState(speechEngine.status);
+  const run = useRef(0);
+  useEffect(() => speechEngine.subscribe(setState), []);
+  const stop = useCallback(() => { run.current++; speechEngine.stop(); }, []);
   const speakSequence = useCallback((segments: SpeechSegment[], rateMultiplier = 1): boolean => {
-    const synth = getSynth();
-    if (!synth || typeof SpeechSynthesisUtterance === "undefined") return false;
-    stop();
-    const runId = runIdRef.current;
-    const queue = segments.flatMap(segment => {
-      const lang = segment.lang ?? detectLanguage(segment.text, platformLang);
-      const chunks = splitForSpeech(segment.text);
-      return chunks.map((chunk, index) => ({ text: chunk, lang, pauseAfterMs: index === chunks.length - 1 ? segment.pauseAfterMs ?? 0 : 120 }));
-    });
-    if (!queue.length) return false;
-
-    const voices = loadVoices();
-    const speakAt = (index: number) => {
-      if (runIdRef.current !== runId) return;
-      if (index >= queue.length) {
-        setIsSpeaking(false);
-        return;
+    const filtered = segments.filter(segment => segment.text.trim());
+    if (!filtered.length) return false;
+    run.current++;
+    speechEngine.replaceAtPriority(filtered[0].priority ?? 'INFORMATION');
+    const id = run.current;
+    let epoch = speechEngine.cancellationEpoch;
+    void (async () => {
+      for (const segment of filtered) {
+        if (id !== run.current || epoch !== speechEngine.cancellationEpoch) return;
+        const language = segment.lang ?? detectLanguage(segment.text, platformLang);
+        const done = speechEngine.enqueue(speechInput(segment.text, language, segment.context ?? 'GENERAL', rateMultiplier), segment.priority ?? 'INFORMATION', segment.pauseAfterMs ?? 0);
+        epoch = speechEngine.cancellationEpoch;
+        await done;
       }
-      const item = queue[index];
-      const profile = VOICE_PROFILES[item.lang];
-      try {
-        const utterance = new SpeechSynthesisUtterance(item.text);
-        utterance.lang = LANG_META[item.lang].speechLang;
-        const voice = pickBestVoice(voices, item.lang);
-        if (voice) utterance.voice = voice;
-        utterance.rate = Math.min(1.6, Math.max(0.5, profile.rate * rateMultiplier));
-        utterance.pitch = profile.pitch;
-        utterance.volume = profile.volume;
-        utterance.onstart = () => {
-          if (runIdRef.current === runId) setIsSpeaking(true);
-        };
-        const next = () => {
-          if (runIdRef.current !== runId) return;
-          if (item.pauseAfterMs > 0) timersRef.current.push(window.setTimeout(() => speakAt(index + 1), item.pauseAfterMs));
-          else speakAt(index + 1);
-        };
-        utterance.onend = next;
-        utterance.onerror = event => {
-          // "interrupted"/"canceled" come from stop(); other errors skip to the next chunk.
-          if (event.error === "interrupted" || event.error === "canceled") return;
-          next();
-        };
-        synth.speak(utterance);
-        if (synth.paused) synth.resume();
-      } catch {
-        setIsSpeaking(false);
-      }
-    };
-    setIsSpeaking(true);
-    speakAt(0);
+    })();
     return true;
   }, [platformLang, stop]);
-
-  /** Backwards-compatible: `rate` is a multiplier around the tuned per-language rate (0.9 ≈ default). */
-  const speak = useCallback((text: string, rate: number = 0.9, forceLang?: SpeechLanguage) => {
-    return speakSequence([{ text, lang: forceLang }], rate / 0.9);
+  const speak = useCallback((text: string, rate = 0.9, forceLang?: SpeechLanguage, context: SpeechContext = 'GENERAL') => {
+    return speakSequence([{ text, lang: forceLang, context }], rate / 0.9);
   }, [speakSequence]);
-
-  /** Reads a question, pauses, then reads each option with its label and a shorter pause. */
   const speakQuestion = useCallback((question: string, options: readonly string[] = [], forceLang?: SpeechLanguage, rate = 0.9) => {
-    const lang = forceLang ?? detectLanguage([question, ...options].join(" "), platformLang);
+    const lang = forceLang ?? detectLanguage([question, ...options].join(' '), platformLang);
     const profile = VOICE_PROFILES[lang];
-    const segments: SpeechSegment[] = [{ text: question, lang, pauseAfterMs: options.length ? profile.questionPauseMs : 0 }];
-    options.forEach((option, index) => segments.push({ text: option, lang, pauseAfterMs: index === options.length - 1 ? 0 : profile.optionPauseMs }));
-    return speakSequence(segments, rate / 0.9);
+    return speakSequence([{ text: question, lang, context: 'QUESTION', pauseAfterMs: options.length ? profile.questionPauseMs : 0 }, ...options.map((text, index) => ({ text, lang, context: 'ANSWER_OPTION' as const, pauseAfterMs: index === options.length - 1 ? 0 : profile.optionPauseMs }))], rate / 0.9);
   }, [platformLang, speakSequence]);
-
-  useEffect(() => () => {
-    runIdRef.current += 1;
-    clearTimers();
-    try {
-      getSynth()?.cancel();
-    } catch {
-      /* ignore */
-    }
-  }, []);
-
-  return { speak, speakQuestion, speakSequence, stop, isSpeaking, isSupported };
+  return { speak, speakQuestion, speakSequence, stop, isSpeaking: state.isSpeaking, isSupported: true, speechMode: state.mode };
 }
-
 /** Text-to-speech with an explicit language override control ("auto" follows the text/platform). */
 export function useTextToSpeechWithLanguage() {
   const [selectedLang, setSelectedLang] = useState<SpeechLanguage | "auto">("auto");

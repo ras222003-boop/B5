@@ -1,6 +1,6 @@
 import type { NavigationIntent } from '@shared/guidance';
 import type { GuidanceLanguage } from './instructions';
-import { detectLanguage, pickBestVoice, VOICE_PROFILES } from '@/hooks/useSpeech';
+import { speechEngine, speechInput } from '@/lib/speechEngine';
 
 const normalize=(text:string)=>text.normalize('NFKC').toLocaleLowerCase().replace(/[ًٌٍَُِّْـ،؟.!]/g,' ').replace(/\s+/g,' ').trim();
 /** Token/phrase intent matching tolerates wake words, filler and common synonyms. */
@@ -40,22 +40,25 @@ export class AnnouncementPriorityQueue {
   clear(){this.interrupt();this.current=null;this.pending=[];this.last.clear();}
   get active(){return this.current;}
 }
-/** Uses the existing voice selection/profile while exposing utterance completion to the queue. */
+/** Navigation shares the premium audio player and its browser fallback with the rest of Basira. */
 export class VoiceNavigationService {
   readonly queue:AnnouncementPriorityQueue;
   private muted=false;
   constructor(private language:GuidanceLanguage='ar'){
-    this.queue=new AnnouncementPriorityQueue((item,done)=>this.speakNow(item.text,done),()=>this.stop());
+    this.queue=new AnnouncementPriorityQueue((item,done)=>this.speakNow(item,done),()=>this.stop());
   }
   setLanguage(value:GuidanceLanguage){this.language=value;}
   setScreenReaderMode(enabled:boolean){this.muted=enabled;if(enabled)this.queue.clear();}
   announce(text:string,priority:AnnouncementPriority,key=text,force=false){return this.queue.enqueue({text,priority,key,at:Date.now(),force});}
-  private speakNow(text:string,done:()=>void){
-    if(this.muted||typeof window==='undefined'||!('speechSynthesis'in window)||typeof SpeechSynthesisUtterance==='undefined'){done();return;}
-    try{const language=detectLanguage(text,this.language);const utterance=new SpeechSynthesisUtterance(text);utterance.lang=language==='ar'?'ar-SA':language==='en'?'en-US':'zh-CN';utterance.rate=VOICE_PROFILES[language].rate;const voice=pickBestVoice(window.speechSynthesis.getVoices(),language);if(voice)utterance.voice=voice;utterance.onend=done;utterance.onerror=done;window.speechSynthesis.speak(utterance);}catch{done();}
+  prefetch(key:string,text:string){speechEngine.prefetch(key,speechInput(text,this.language,'NAVIGATION',1.05));}
+  invalidateRoute(){speechEngine.clearPrefetch();}
+  private speakNow(item:Announcement,done:()=>void){
+    if(this.muted){done();return;}
+    const context=item.priority==='CRITICAL_SAFETY'||item.priority==='HIGH_SAFETY'?'SAFETY':'NAVIGATION';
+    void speechEngine.enqueue(speechInput(item.text,this.language,context,context==='SAFETY'?1:1.05),item.priority,0,item.key).then(done);
   }
-  stop(){try{if(typeof window!=='undefined'&&'speechSynthesis'in window)window.speechSynthesis.cancel();}catch{/* TTS is optional */}}
-  close(){this.queue.clear();}
+  stop(){speechEngine.stop();}
+  close(){this.queue.clear();speechEngine.clearPrefetch();}
 }
 export class HapticNavigationService {
   pulse(kind:'CONTINUE'|'RIGHT'|'LEFT'|'HAZARD'|'STOP'|'ARRIVAL'){

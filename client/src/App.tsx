@@ -1,6 +1,6 @@
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { lazy, Suspense, useState } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import NotFound from "@/pages/NotFound";
 import { Route, Switch } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
@@ -23,7 +23,9 @@ import FloatingChatWidget from "./components/FloatingChatWidget";
 import { About, Terms, Privacy, RefundPolicy, Contact } from "./pages/Information";
 import Support from "./pages/Support";
 import Account from "./pages/Account";
+import { speechEngine } from './lib/speechEngine';
 const Navigation=lazy(()=>import('./pages/Navigation'));
+const VoiceSettings=lazy(()=>import('./pages/VoiceSettings'));
 const BuildingPage=lazy(()=>import('./pages/Navigation').then(page=>({default:page.BuildingPage})));
 const MyPlaces=lazy(()=>import('./pages/Navigation').then(page=>({default:page.MyPlaces})));
 const NavigationAdmin=lazy(()=>import('./pages/NavigationAdmin'));
@@ -58,6 +60,7 @@ function Router() {
       <Route path="/navigation/indoor-manager" component={IndoorManager} />
       <Route path="/navigation/capabilities" component={NavigationCapabilities} />
       <Route path="/settings/privacy-permissions" component={NavigationPermissions} />
+      <Route path="/settings/voice" component={VoiceSettings} />
       <Route path="/navigation/admin" component={NavigationAdmin} />
       <Route path="/navigation/buildings/:id" component={BuildingPage} />
       <Route path="/how-it-works" component={HowItWorks} />
@@ -82,6 +85,14 @@ function LocalizedToaster() {
   return <Toaster dir={dir} position={dir === "rtl" ? "top-left" : "top-right"} />;
 }
 
+function VoiceOutputStatus() {
+  const { lang } = useI18n();
+  const [state, setState] = useState(speechEngine.status);
+  useEffect(() => speechEngine.subscribe(setState), []);
+  if (!state.isSpeaking || state.mode !== 'LOCAL') return null;
+  return <p role="status" className="fixed bottom-3 start-3 z-50 rounded-lg bg-stone-950 px-3 py-2 text-sm text-amber-200 shadow-lg">{lang === 'ar' ? 'الصوت المحلي قيد الاستخدام' : lang === 'en' ? 'Using local browser voice' : '正在使用浏览器本地语音'}</p>;
+}
+
 function App() {
   const [isWelcomeVisible, setIsWelcomeVisible] = useState(true);
 
@@ -91,6 +102,7 @@ function App() {
         <ThemeProvider defaultTheme="light">
           <TooltipProvider>
             <LocalizedToaster />
+            <VoiceOutputStatus />
             <Router />
             <VoiceGuide />
             <FloatingChatWidget />

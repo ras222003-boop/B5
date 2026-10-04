@@ -35,6 +35,13 @@
       "authorization",
       "cookie",
       "session",
+      "text",
+      "question",
+      "answer",
+      "imagebase64",
+      "messages",
+      "description",
+      "location",
     ],
     maxBodyLength: 10240,
     // UI event logging privacy policy:
@@ -238,6 +245,9 @@
   }
 
   function logUiEvent(kind, payload) {
+    // Exam content, spoken text, private places and scene descriptions must not
+    // enter development session-replay logs through labels or element text.
+    if (/^\/(exam-demo|navigation\/guidance|navigation\/vision|navigation\/mapping)/.test(location.pathname)) return;
     var entry = {
       timestamp: Date.now(),
       kind: kind,

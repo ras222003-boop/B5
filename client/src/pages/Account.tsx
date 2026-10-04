@@ -34,7 +34,7 @@ const social: { id: Provider; mark: string }[] = [
 export default function Account() {
   const t = useMessages(accountMessages);
   const navigation = useMessages(navigationMessages);
-  const { formatDate } = useI18n();
+  const { formatDate, lang } = useI18n();
   const { data: session, isPending, refetch } = authClient.useSession();
   const [mode, setMode] = useState<"login" | "signup">("login");
   const [name, setName] = useState("");
@@ -194,6 +194,10 @@ export default function Account() {
         <section className="mb-8 rounded-2xl border border-amber-200/20 bg-card p-6">
           <h2 className="text-xl font-bold text-white">{navigation.permissions}</h2>
           <Link href="/settings/privacy-permissions" className="mt-3 inline-flex min-h-12 items-center rounded-xl border border-amber-300/40 px-4 font-bold text-amber-200 hover:bg-amber-300/10">{navigation.permissionTitle}</Link>
+        </section>
+        <section className="mb-8 rounded-2xl border border-amber-200/20 bg-card p-6">
+          <h2 className="text-xl font-bold text-white">{lang === 'ar' ? 'إعدادات الصوت' : lang === 'en' ? 'Voice settings' : '语音设置'}</h2>
+          <Link href="/settings/voice" className="mt-3 inline-flex min-h-12 items-center rounded-xl border border-amber-300/40 px-4 font-bold text-amber-200">{lang === 'ar' ? 'اختر الصوت ونمط العربية' : lang === 'en' ? 'Choose voice and Arabic style' : '选择语音和阿拉伯语风格'}</Link>
         </section>
         {oauthNotice && (
           <p
