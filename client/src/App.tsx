@@ -27,6 +27,7 @@ import Navigation, { BuildingPage, MyPlaces } from "./pages/Navigation";
 import NavigationAdmin from "./pages/NavigationAdmin";
 import NavigationPermissions from "./pages/NavigationPermissions";
 import Vision from "./pages/Vision";
+import Mapping from "./pages/Mapping";
 
 function Router() {
   return (
@@ -43,6 +44,7 @@ function Router() {
       <Route path="/navigation/places" component={MyPlaces} />
       <Route path="/navigation/permissions" component={NavigationPermissions} />
       <Route path="/navigation/vision" component={Vision} />
+      <Route path="/navigation/mapping" component={Mapping} />
       <Route path="/settings/privacy-permissions" component={NavigationPermissions} />
       <Route path="/navigation/admin" component={NavigationAdmin} />
       <Route path="/navigation/buildings/:id" component={BuildingPage} />
