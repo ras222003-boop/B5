@@ -13,6 +13,7 @@ import { BasiraNavigationEngine } from '@/lib/guidance/engine';
 import { authorizedSavedPlace } from '@/lib/guidance/destination';
 import { RoutePlanner, resolveDestination, trustedOrigin } from '@/lib/guidance/route';
 import { VoiceCommandListener, VoiceNavigationService, HapticNavigationService, NavigationIntentService } from '@/lib/guidance/voice';
+import { guidancePhrases } from '@/lib/guidance/systemPhrases';
 import { NavigationInstructionGenerator, type DirectionStyle, type GuidanceLanguage } from '@/lib/guidance/instructions';
 import { getSpeechPreferences, saveSpeechPreferences, speechEngine } from '@/lib/speechEngine';
 import type { ArabicStyle } from '@shared/speech';
@@ -55,6 +56,7 @@ export default function Guidance(){
   const mapVersionRef=useRef(1),deferredMapRef=useRef<{graph:BuildingGraph;version:number}|null>(null);
   const mapSync=useRef(new SharedMapSyncService());
   const hazardActive=useRef(false);
+  const spoken=guidancePhrases(language,arabicStyle);
   const languageRef=useRef(language),styleRef=useRef(style),selectedRef=useRef<SearchResult|null>(null);
   const handlerRef=useRef<(command:NavigationIntent)=>Promise<void>>(async()=>{});
   useEffect(()=>{languageRef.current=language;styleRef.current=style;voice.current.setLanguage(language);navigation.current?.configure(language,style,arabicStyle);sync(navigation.current);lastInstruction.current='';voice.current.invalidateRoute();},[language,style,arabicStyle]);
@@ -67,9 +69,9 @@ export default function Guidance(){
   const updateLocation=(value:LocalizationEstimate)=>{
     setEstimate(value);const engine=navigation.current;if(!engine)return;
     const result=engine.updateLocation(value,Date.now());sync(engine);
-    if(result==='LOST'){voice.current.close();announce('تعذر تحديد موقعك بدقة. توقف وأعد تحديد موقعك باستخدام لوحة معروفة أو QR أو تأكيد يدوي.','RELOCALIZATION','location-lost');haptic.current.pulse('STOP');}
-    if(result==='RECOVERED'){announce('تم تحديد موقعك، وسأتابع التوجيه.','RELOCALIZATION','location-recovered');emitInstruction(true);}
-    if(result==='OFF_ROUTE'){announce('ابتعدت عن المسار الحالي. سأعيد حساب الطريق.','RELOCALIZATION','off-route');emitInstruction(true);}
+    if(result==='LOST'){voice.current.close();announce(spoken.lost,'RELOCALIZATION','location-lost');haptic.current.pulse('STOP');}
+    if(result==='RECOVERED'){announce(spoken.recovered,'RELOCALIZATION','location-recovered');emitInstruction(true);}
+    if(result==='OFF_ROUTE'){announce(spoken.offRoute,'RELOCALIZATION','off-route');emitInstruction(true);}
     if(result==='PROGRESS')emitInstruction();
   };
   const anchorNode=(node:MapNode,source:'MANUAL'|'QR'|'NFC'='MANUAL')=>{
@@ -155,14 +157,14 @@ export default function Guidance(){
       case 'CONFIRM_LOCATION':{const words=command.query.toLocaleLowerCase();const matches=graphRef.current?.nodes.filter(n=>nodeLabel(n,placesRef.current,floorsRef.current).toLocaleLowerCase().includes(words))??[];if(matches.length===1)anchorNode(matches[0]);else announce(matches.length?'الموقع غير محدد بما يكفي. اذكر اسمًا أدق.':'لم أجد هذا الموقع في الخريطة.');break;}
       case 'CONFIRM_ARRIVAL':{if(engine?.considerArrival(null,false,null,true)){sync(engine);emitInstruction(true);void stopCamera();motion.current?.stop();motion.current=null;}else announce('لا أستطيع تأكيد الوصول بعد؛ أحتاج موقعًا موثوقًا وقربًا من الوجهة.');break;}
       case 'NAVIGATE_TO':{setQuery(command.query);try{const found=(await navApi.search(command.query,graphRef.current?.building.id??sessionStorage.getItem('basira-current-building'),true)).results[0];if(found){await choose(found);announce(`وجدت ${found.item.name}. ثبت موقعك ثم قل ابدأ التوجيه أو اضغط البدء.`);}else announce('لم أجد الوجهة المطلوبة.');}catch{const local=placesRef.current.find(p=>[p.name,p.roomNumber??'',...p.aliases].some(v=>v.toLocaleLowerCase().includes(command.query.toLocaleLowerCase())));if(local)await choose({kind:'place',item:local,priority:0});else announce('البحث غير متاح الآن.');}break;}
-      case 'WHERE_AM_I':{const loc=localization.current.fusion.current(Date.now());if(loc.state!=='TRACKING'||loc.confidence<.55)announce('موقعي الحالي غير مؤكد بما يكفي.');else{const nearby=graphRef.current?.nodes.filter(n=>n.floorId===loc.floorId&&n.placeId).sort((a,b)=>Math.hypot(a.x-loc.x!,a.y-loc.y!)-Math.hypot(b.x-loc.x!,b.y-loc.y!))[0];const name=placesRef.current.find(p=>p.id===nearby?.placeId)?.name??'موضع معروف';announce(`أنت في ${floorsRef.current.find(f=>f.id===loc.floorId)?.name??'الطابق الحالي'}، بالقرب من ${name}.`);}break;}
-      case 'WHAT_IS_AHEAD':announce(latestScene.current?.shortText??'الرؤية غير متاحة الآن؛ لا أستطيع وصف ما أمامك.');break;
+      case 'WHERE_AM_I':{const loc=localization.current.fusion.current(Date.now());if(loc.state!=='TRACKING'||loc.confidence<.55)announce(spoken.whereUncertain);else{const nearby=graphRef.current?.nodes.filter(n=>n.floorId===loc.floorId&&n.placeId).sort((a,b)=>Math.hypot(a.x-loc.x!,a.y-loc.y!)-Math.hypot(b.x-loc.x!,b.y-loc.y!))[0];const name=placesRef.current.find(p=>p.id===nearby?.placeId)?.name??(language==='en'?'a known place':language==='zh-CN'?'已知地点':'موضع معروف');const floor=floorsRef.current.find(f=>f.id===loc.floorId)?.name??(language==='en'?'the current floor':language==='zh-CN'?'当前楼层':'الطابق الحالي');announce(spoken.whereKnown(floor,name));}break;}
+      case 'WHAT_IS_AHEAD':announce(latestScene.current?.shortText??spoken.visionUnavailable);break;
       case 'NEAREST_PLACE':{const loc=localization.current.fusion.current(Date.now());if(!graphRef.current||loc.state!=='TRACKING'){announce('أحتاج موقعًا موثوقًا وخريطة للعثور على الأقرب.');break;}const planner=engine?.planner??new RoutePlanner(graphRef.current.building,graphRef.current.nodes,graphRef.current.edges);const origin=trustedOrigin(planner.nodes,loc);const found=origin?planner.nearestPlace(origin.id,placesRef.current,kindOf(command.query),engine?.constraints.active()??[]):null;announce(found?`أقرب ${command.query} قابل للوصول: ${found.place.name}، على المسار المحسوب تقريبًا ${Math.round(found.route.totalDistance)} مترًا.`:'لم أجد مكانًا من هذا النوع يمكن الوصول إليه بالخريطة الحالية.');break;}
       case 'REPEAT_INSTRUCTION':emitInstruction(true);break;
       case 'PAUSE_NAVIGATION':engine?.pause();sync(engine);haptic.current.pulse('STOP');announce('توقف التوجيه مؤقتًا.');break;
       case 'RESUME_NAVIGATION':engine?.resume();sync(engine);emitInstruction(true);break;
-      case 'CANCEL_NAVIGATION':engine?.cancel();sync(engine);motion.current?.stop();motion.current=null;void stopCamera();announce('أُلغي التنقل.');break;
-      case 'REROUTE':if(engine?.reroute('USER_REQUEST')){sync(engine);announce('سأعيد حساب المسار.','RELOCALIZATION');emitInstruction(true);}else announce('لا أستطيع إيجاد مسار موثوق حاليًا.');break;
+      case 'CANCEL_NAVIGATION':engine?.cancel();sync(engine);motion.current?.stop();motion.current=null;void stopCamera();announce(spoken.cancelled);break;
+      case 'REROUTE':if(engine?.reroute('USER_REQUEST')){sync(engine);announce(spoken.rerouting,'RELOCALIZATION');emitInstruction(true);}else announce('لا أستطيع إيجاد مسار موثوق حاليًا.');break;
       case 'SAVE_PLACE':{const loc=localization.current.fusion.current(Date.now());if(loc.state!=='TRACKING'||loc.confidence<.65||loc.x===null||loc.y===null){announce('أحتاج موقعًا موثوقًا قبل الحفظ.');break;}try{await navigationRequest('/saved-places',json('POST',{name:command.name,category:'OTHER',buildingId:loc.buildingId,floorId:loc.floorId,localX:loc.x,localY:loc.y,localizationConfidence:loc.confidence}));announce(`حُفظ المكان باسم ${command.name}.`);}catch{announce('تعذر حفظ المكان. تحقق من تسجيل الدخول.');}break;}
       default:announce('لم أفهم الأمر. يمكنك قول: أين أنا، ماذا أمامي، أو خذيني إلى مكان.');
     }
