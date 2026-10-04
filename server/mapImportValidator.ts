@@ -65,7 +65,7 @@ export class MapImportValidator {
       edgePairs.add(pair);
       if (from.floorId !== to.floorId) {
         summary.transitions++;
-        if (!['STAIRS','ELEVATOR'].includes(item.pathType)) errors.push(`Edge ${item.id} crosses floors without a supported transition`);
+        if (!['STAIRS','ELEVATOR','RAMP'].includes(item.pathType)) errors.push(`Edge ${item.id} crosses floors without a supported transition`);
         if (item.pathType === 'STAIRS' && (from.nodeType !== 'STAIRS' || to.nodeType !== 'STAIRS')) warnings.push(`Stairs edge ${item.id} has unlabelled endpoints`);
         if (item.pathType === 'ELEVATOR' && (from.nodeType !== 'ELEVATOR' || to.nodeType !== 'ELEVATOR')) warnings.push(`Elevator edge ${item.id} has unlabelled endpoints`);
       } else if (['STAIRS','ELEVATOR'].includes(item.pathType)) warnings.push(`Transition edge ${item.id} stays on one floor`);

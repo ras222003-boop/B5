@@ -36,8 +36,8 @@ describe('B6 organization route authorization and import boundary (simulated HTT
     await vi.waitFor(()=>expect(status).toHaveBeenCalledWith(409));expect(json).toHaveBeenCalledWith({error:'import_changed_or_invalid'});expect(mocks.connection.rollback).toHaveBeenCalled();expect(mocks.connection.execute).not.toHaveBeenCalled();
   });
   it.each([false,true])('approves a valid draft with pre-existing matching floor: %s',async(existingFloor)=>{
-    const floor='44444444-4444-4444-8444-444444444444',place='55555555-5555-4555-8555-555555555555',from='66666666-6666-4666-8666-666666666666',to='77777777-7777-4777-8777-777777777777',edge='88888888-8888-4888-8888-888888888888';
-    const raw={format:'BASIRA_JSON',version:1,floors:[{id:floor,floorNumber:0,name:'Ground'}],places:[{id:place,floorId:floor,name:'Room 121',roomNumber:'121',placeType:'CLASSROOM',x:5,y:0}],nodes:[{id:from,floorId:floor,x:0,y:0,nodeType:'ENTRANCE'},{id:to,floorId:floor,placeId:place,x:5,y:0,nodeType:'ROOM'}],edges:[{id:edge,fromNodeId:from,toNodeId:to,distanceMeters:5,pathType:'CORRIDOR'}]};
+    const floor='44444444-4444-4444-8444-444444444444',upper='99999999-9999-4999-8999-999999999999',place='55555555-5555-4555-8555-555555555555',from='66666666-6666-4666-8666-666666666666',to='77777777-7777-4777-8777-777777777777',room='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',edge='88888888-8888-4888-8888-888888888888',corridor='bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+    const raw={format:'BASIRA_JSON',version:1,floors:[{id:floor,floorNumber:0,name:'Ground'},{id:upper,floorNumber:1,name:'First'}],places:[{id:place,floorId:upper,name:'Room 121',roomNumber:'121',placeType:'CLASSROOM',x:5,y:0}],nodes:[{id:from,floorId:floor,x:0,y:0,nodeType:'ENTRANCE'},{id:to,floorId:upper,x:0,y:0,nodeType:'CORRIDOR'},{id:room,floorId:upper,placeId:place,x:5,y:0,nodeType:'ROOM'}],edges:[{id:edge,fromNodeId:from,toNodeId:to,distanceMeters:5,pathType:'RAMP',wheelchairAccessible:true},{id:corridor,fromNodeId:to,toNodeId:room,distanceMeters:5,pathType:'CORRIDOR'}]};
     const checked=new MapImportValidator().validate(raw),payload=JSON.stringify(checked.document),hash=createHash('sha256').update(payload).digest('hex');
     mocks.getSession.mockResolvedValue({user:{id:'admin'}});
     mocks.query.mockImplementation(async(sql:string)=>[[sql.includes('basira_navigation_roles')?{role:'admin'}:sql.includes('basira_organizations')?{id:org}:undefined].filter(Boolean)]);
@@ -56,7 +56,9 @@ describe('B6 organization route authorization and import boundary (simulated HTT
     await vi.waitFor(()=>expect(json).toHaveBeenCalledWith({status:'APPROVED',version:2,summary:checked.report.summary}));
     const writes=mocks.connection.execute.mock.calls.map(([sql])=>String(sql)).join('\n');
     for(const table of ['basira_places','basira_map_nodes','basira_map_edges','basira_map_versions','basira_map_change_log','basira_organization_map_audit_log'])expect(writes).toContain(table);
-    expect(writes.includes('INSERT INTO basira_floors')).toBe(!existingFloor);
+    expect(mocks.connection.execute.mock.calls.filter(([sql])=>String(sql).startsWith('INSERT INTO basira_floors'))).toHaveLength(existingFloor?1:2);
+    const rampInsert=mocks.connection.execute.mock.calls.find(([sql,params])=>String(sql).startsWith('INSERT INTO basira_map_edges')&&params[5]==='RAMP');
+    expect(rampInsert?.[1].slice(7,11)).toEqual([0,1,1,0]);
     expect(mocks.connection.commit).toHaveBeenCalledOnce();expect(mocks.connection.rollback).not.toHaveBeenCalled();
   });
 });
