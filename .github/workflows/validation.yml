@@ -28,15 +28,17 @@ jobs:
           version: 10.18.1
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm check
       - run: pnpm test
       - run: pnpm build
-      - name: Validate fresh and B5 to B6 MySQL migrations
+      - name: Validate fresh MySQL migrations
         env:
-          DATABASE_URL: mysql://root:basira_ci_only@127.0.0.1:3306/basira_validation_ci
-        run: |
-          pnpm exec tsx scripts/validation-gate-db.ts fresh
-          pnpm exec tsx scripts/validation-gate-db.ts upgrade
+          DATABASE_URL: mysql://root:basira_ci_only@127.0.0.1:3306/basira_validation_fresh
+        run: pnpm exec tsx scripts/validation-gate-db.ts fresh
+      - name: Validate B5 to B6 MySQL upgrade
+        env:
+          DATABASE_URL: mysql://root:basira_ci_only@127.0.0.1:3306/basira_validation_upgrade
+        run: pnpm exec tsx scripts/validation-gate-db.ts upgrade
