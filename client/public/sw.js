@@ -1,12 +1,15 @@
 /* B6 bounded, opt-in runtime caches. Never cache authentication or personal API data. */
-const SHELL='basira-shell-v1',MAPS='basira-public-maps-v1',ASSETS='basira-assets-v1',VISION='basira-vision-v1';
+const SHELL='basira-shell-v3',MAPS='basira-public-maps-v3',ASSETS='basira-assets-v3',VISION='basira-vision-v3';
 self.addEventListener('install',event=>{event.waitUntil(caches.open(SHELL).then(cache=>cache.add('/')));self.skipWaiting();});
 self.addEventListener('activate',event=>{event.waitUntil((async()=>{for(const key of await caches.keys())if(key.startsWith('basira-')&&![SHELL,MAPS,ASSETS,VISION].includes(key))await caches.delete(key);await self.clients.claim();})());});
 async function storeBounded(cacheName,request,response,maxBytes,maxEntries){
   if(!response.ok||response.type!=='basic'||/private|no-store/i.test(response.headers.get('Cache-Control')||''))return;
-  const size=Number(response.headers.get('Content-Length'));
-  if(!Number.isFinite(size)||size<=0||size>maxBytes)return;
-  const cache=await caches.open(cacheName);await cache.put(request,response.clone());
+  let size=Number(response.headers.get('Content-Length')),cacheResponse=response.clone();
+  if(!Number.isFinite(size)||size<=0){
+    try{const bytes=await cacheResponse.arrayBuffer();size=bytes.byteLength;if(size<=maxBytes)cacheResponse=new Response(bytes,{headers:response.headers,status:response.status,statusText:response.statusText});}catch{return;}
+  }
+  if(size>maxBytes)return;
+  const cache=await caches.open(cacheName);try{await cache.put(request,cacheResponse);}catch{return;}
   const keys=await cache.keys();for(const old of keys.slice(0,Math.max(0,keys.length-maxEntries)))await cache.delete(old);
 }
 self.addEventListener('fetch',event=>{

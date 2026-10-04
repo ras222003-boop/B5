@@ -31,7 +31,7 @@ export default function Footer() {
             <a href={`mailto:${email}`} className="flex items-center gap-2 break-all text-sm text-stone-300 transition-colors hover:text-amber-200"><Mail aria-hidden="true" className="h-4 w-4 shrink-0 text-amber-300" /><span dir="ltr">{email}</span></a>
           </div>
         </div>
-        <div className="mt-12 flex flex-wrap items-center justify-between gap-3 border-t border-amber-200/10 pt-6 text-xs text-stone-500"><span>{t.footer.rights(new Date().getFullYear())}</span><span>{t.footer.mission}</span></div>
+        <div className="mt-12 flex flex-wrap items-center justify-between gap-3 border-t border-amber-200/10 pt-6 text-xs text-stone-400"><span>{t.footer.rights(new Date().getFullYear())}</span><span>{t.footer.mission}</span></div>
       </div>
     </footer>
   );

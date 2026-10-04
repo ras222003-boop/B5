@@ -22,6 +22,15 @@ describe('B6 organization route authorization and import boundary (simulated HTT
     const draft=response();post('/organizations/:orgId/buildings/:buildingId/imports')(request({}),draft.res);await vi.waitFor(()=>expect(draft.status).toHaveBeenCalledWith(403));
     expect(mocks.execute).not.toHaveBeenCalled();
   });
+  it('accepts a real Better Auth style opaque user ID for organization membership',async()=>{
+    const userId='6CoRn9NPVdA7Y8hl3IemqX4Fg8gbNtkR';
+    mocks.getSession.mockResolvedValue({user:{id:'global-admin'}});
+    mocks.query.mockImplementation(async(sql:string)=>[[sql.includes('basira_navigation_roles')?{role:'admin'}:sql.includes('basira_organizations')?{id:org}:sql.includes('FROM `user`')?{id:userId}:undefined].filter(Boolean)]);
+    mocks.execute.mockResolvedValue([{affectedRows:1}]);
+    const {res,json}=response();post('/organizations/:orgId/members')(request({userId,role:'mapper'}),res);
+    await vi.waitFor(()=>expect(json).toHaveBeenCalledWith({ok:true}));
+    expect(mocks.execute.mock.calls.some(([sql,params])=>String(sql).includes('basira_organization_memberships')&&params[1]===userId)).toBe(true);
+  });
   it('rejects an invalid import preview without writing B1 or a draft',async()=>{
     mocks.getSession.mockResolvedValue({user:{id:'admin'}});
     mocks.query.mockImplementation(async(sql:string)=>[[sql.includes('basira_navigation_roles')?{role:'admin'}:sql.includes('basira_organizations')?{id:org}:sql.includes('basira_buildings')?{id:building}:undefined].filter(Boolean)]);
