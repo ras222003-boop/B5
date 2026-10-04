@@ -35,6 +35,10 @@ export async function ensureSchema() {
     for (const statement of localization.split(";").map(s => s.trim()).filter(Boolean)) {
       await connection.query(statement);
     }
+    const sharedMap = await readFile(resolve(process.cwd(), "server/migrations/0005_shared_map.sql"), "utf8");
+    for (const statement of sharedMap.split(";").map(s => s.trim()).filter(Boolean)) {
+      await connection.query(statement);
+    }
     for (const [column,definition] of Object.entries({local_x:'decimal(12,3) NULL',local_y:'decimal(12,3) NULL',localization_confidence:'decimal(4,3) NULL'})) {
       const [existing] = await connection.query<any[]>("SELECT 1 FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='basira_saved_places' AND column_name=? LIMIT 1",[column]);
       if (!existing.length) await connection.query(`ALTER TABLE basira_saved_places ADD COLUMN ${column} ${definition}`);
