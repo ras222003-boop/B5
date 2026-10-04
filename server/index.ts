@@ -7,6 +7,7 @@ import { auth, providerReady } from "./auth";
 import { ensureSchema } from "./migrations";
 import { registerSupportRoutes, startTicketMailWorker } from "./support";
 import { registerOcrRoute } from "./ocr";
+import { registerNavigationRoutes } from "./navigation";
 import { toExamLanguage, assistantSystem, guideSystem, aiFallback, pdfLabels, escapeHtml } from "./locale";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -66,6 +67,7 @@ async function startServer() {
   // Parse JSON bodies up to 20MB for image data
   app.use(express.json({ limit: "20mb" }));
   registerSupportRoutes(app);
+  registerNavigationRoutes(app);
   startTicketMailWorker();
 
   // Structured OCR: 3 languages, EXIF rotation, contrast reference, quality report.

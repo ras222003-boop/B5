@@ -5,16 +5,20 @@ import { motion, AnimatePresence } from "framer-motion";
 import BrandLogo from "./BrandLogo";
 import LanguageSelector from "./LanguageSelector";
 import { useCommonMessages } from "@/i18n";
+import { useMessages } from "@/i18n";
+import { navigationMessages } from "@/i18n/locales/navigation";
 
 export default function Navbar() {
   const [open, setOpen] = useState(false);
   const [location] = useLocation();
   const t = useCommonMessages();
+  const navigation = useMessages(navigationMessages);
 
   const links = [
     { href: "/", label: t.nav.home },
     { href: "/about", label: t.nav.about },
     { href: "/features", label: t.nav.services },
+    { href: "/navigation", label: navigation.title },
     { href: "/exam-demo", label: t.nav.examDemo },
     { href: "/assistant", label: t.nav.assistant },
     { href: "/support", label: t.nav.support },
