@@ -4,7 +4,7 @@ import type { VisionDetection } from '@shared/vision';
 import { navApi } from '@/lib/navigationApi';
 import { DEFAULT_VISION_CONFIG } from './config';
 import { classifyCameraError } from './camera';
-import { VisualPlaceRecognitionService, matchPlace, normalizePlaceText } from './placeRecognition';
+import { VisualPlaceRecognitionService, matchPlace, normalizePlaceText, signTypeForText } from './placeRecognition';
 import { AlertDeduplicator, BasiraSafetyEngine, classifyDirection } from './safety';
 
 const detection=(changes:Partial<VisionDetection>={}):VisionDetection=>({
@@ -73,6 +73,12 @@ describe('place recognition and permission errors',()=>{
     const result=await new VisualPlaceRecognitionService('b1','f1').recognize({text:'Room 121',confidence:0.9,boundingBox:null,timestamp:10,language:'en'});
     expect(result.place?.placeId).toBe('p1');
     expect(search).toHaveBeenCalledWith('121','b1');
+  });
+  it('identifies entrance and exit signs from multilingual OCR text',()=>{
+    expect(signTypeForText('مخرج')).toBe('EXIT');
+    expect(signTypeForText('Exit')).toBe('EXIT');
+    expect(signTypeForText('入口')).toBe('ENTRANCE');
+    expect(signTypeForText('Room 121')).toBe('SIGN');
   });
   it('distinguishes camera denial, settings and absence without starting a camera',()=>{
     expect(classifyCameraError({name:'NotAllowedError'},'prompt')).toBe('DENIED');

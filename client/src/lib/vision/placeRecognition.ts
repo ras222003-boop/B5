@@ -1,4 +1,4 @@
-import type { OCRDetection, PlaceCandidate, RecognizedPlace } from '@shared/vision';
+import type { OCRDetection, PlaceCandidate, RecognizedPlace, VisionObjectType } from '@shared/vision';
 import type { Place } from '@shared/navigation';
 import { navApi } from '@/lib/navigationApi';
 
@@ -9,6 +9,13 @@ export function normalizePlaceText(text:string) {
 }
 const relevant = /(?:قاعة|غرفة|مكتب|قسم|مختبر|مصعد|مخرج|مدخل|صيدلية|عيادة|طوارئ|استقبال|\b(?:room|classroom|office|department|lab|elevator|lift|exit|entrance|pharmacy|clinic|emergency|reception)\b|教室|房间|办公室|出口|入口|药房|电梯|诊所|接待|^\d{2,4}$)/i;
 export function isNavigationText(text:string) { return relevant.test(normalizePlaceText(text)); }
+export function signTypeForText(text:string):VisionObjectType {
+  const normalized=normalizePlaceText(text);
+  if(/(?:مخرج|\bexit\b|出口)/i.test(normalized))return 'EXIT';
+  if(/(?:مدخل|\bentrance\b|入口)/i.test(normalized))return 'ENTRANCE';
+  if(/(?:مصعد|\belevator\b|\blift\b|电梯)/i.test(normalized))return 'ELEVATOR';
+  return 'SIGN';
+}
 export function suggestedType(text:string):PlaceCandidate['suggestedType'] {
   const value=normalizePlaceText(text);
   if (/(قاعة|room|classroom|教室|房间|^\d{2,4}$)/i.test(value)) return 'CLASSROOM';
