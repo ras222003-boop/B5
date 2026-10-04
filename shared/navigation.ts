@@ -47,11 +47,10 @@ export interface SavedPlace {
   buildingName?: string | null; floorName?: string | null;
 }
 
-/** No B2–B5 implementation is implied by these contracts. */
-export interface VisionProvider { observe(): AsyncIterable<unknown> }
+/** B2 contracts are re-exported for existing B1 import paths. */
+export type { VisionProvider, OCRProvider, DepthProvider, ObstacleProvider, HapticFeedbackProvider,
+  VisionDetection, ObstacleDetection, SceneDescription, DepthReading, OCRDetection, PlaceCandidate, RiskLevel } from './vision';
 export interface IndoorLocalizationProvider { locate(buildingId: string): Promise<{ floorId: string; x: number; y: number } | null> }
-export interface DepthProvider { measure(): Promise<unknown> }
-export interface ObstacleProvider { detect(frame: unknown): Promise<unknown[]> }
 export interface NavigationProvider { prepareDestination(placeId: string): Promise<void> }
 export interface AutoMapperProvider { importGraph(buildingId: string, nodes: MapNode[], edges: MapEdge[]): Promise<void> }
 export interface VoiceNavigationProvider { announce(instruction: string): Promise<void> }

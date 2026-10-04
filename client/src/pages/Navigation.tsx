@@ -4,6 +4,7 @@ import { MapPin, Search, BookmarkPlus, Building2, LocateFixed } from 'lucide-rea
 import Layout from '@/components/Layout';
 import { useI18n, useMessages } from '@/i18n';
 import { navigationMessages } from '@/i18n/locales/navigation';
+import { visionMessages } from '@/i18n/locales/vision';
 import { navApi, navigationRequest, json, type SearchResult, type BuildingGraph } from '@/lib/navigationApi';
 import { permissionService } from '@/lib/permissionService';
 import { savedCategories, type Building, type Floor, type Place, type SavedPlace } from '@shared/navigation';
@@ -20,6 +21,7 @@ function useNotice() {
 
 export default function Navigation() {
   const t = useMessages(navigationMessages);
+  const vision = useMessages(visionMessages);
   const [, navigate] = useLocation();
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<SearchResult[]>([]);
@@ -125,6 +127,7 @@ export default function Navigation() {
       <Link className={secondary} href={currentBuilding?`/navigation/buildings/${currentBuilding.id}`:'/navigation#known-buildings'}>{t.map}</Link>
       <Link className={secondary} href="/navigation/places?filter=recent">{t.recent}</Link>
       <Link className={secondary} href="/navigation/permissions">{t.permissions}</Link>
+      <Link className={button} href="/navigation/vision">{vision.open}</Link>
     </div>
     {live}
     {results.length>0 && <section aria-labelledby="results-heading" className={panel}><div className="mb-3 flex flex-wrap items-center justify-between gap-3"><h2 id="results-heading" className="text-xl font-bold">{t.search}</h2>{currentBuilding && !includeOthers && <button type="button" className={secondary} onClick={()=>{setIncludeOthers(true);navApi.search(query,currentBuilding.id,true).then(data=>setResults(data.results)).catch(()=>setNotice(t.failed));}}>{t.otherBuildings}</button>}</div>
