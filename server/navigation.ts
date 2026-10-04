@@ -6,6 +6,9 @@ import { auth, pool } from './auth';
 import { buildingTypes, placeTypes, nodeTypes, savedCategories, verificationStatuses, accessibilityLevels } from '../shared/navigation';
 import { registerLocalizationRoutes } from './localization';
 import { registerSharedMapRoutes } from './sharedMap';
+import { registerOrganizationRoutes } from './organizations';
+import { SAFE_DEFAULT_FLAGS, type SafetyFlags } from '../shared/safetyFlags';
+import { allowedNavigationMutation } from './navigationSecurity';
 
 const id = z.string().uuid();
 const name = z.string().trim().min(1).max(255);
@@ -76,9 +79,21 @@ async function identity(req: Request) {
   const grant = await one('SELECT role FROM basira_navigation_roles WHERE user_id=?', [session.user.id]);
   return { userId: session.user.id, role: grant?.role as 'mapper' | 'admin' | null ?? null };
 }
-async function editor(req: Request, res: Response) {
+async function editor(req: Request, res: Response, buildingId?: string) {
   const actor = await identity(req);
   if (!actor.userId) { res.status(401).json({ error: 'sign_in_required' }); return null; }
+  if (buildingId) {
+    const building = await one('SELECT organization_id,verification_status FROM basira_buildings WHERE id=?',[buildingId]);
+    if (!building) { res.status(404).json({error:'building_not_found'}); return null; }
+    // Official maps change only through a reviewed, versioned workflow.
+    if (building.verificationStatus === 'OFFICIAL') { res.status(409).json({error:'official_map_requires_review'}); return null; }
+    if (actor.role === 'admin') return actor;
+    if (building.organizationId) {
+      const member = await one('SELECT role FROM basira_organization_memberships WHERE organization_id=? AND user_id=?',[building.organizationId,actor.userId]);
+      if (!['organization_admin','mapper'].includes(member?.role)) { res.status(403).json({error:'organization_mapper_required'}); return null; }
+      return actor;
+    }
+  }
   if (!actor.role) { res.status(403).json({ error: 'mapper_role_required' }); return null; }
   return actor;
 }
@@ -128,8 +143,17 @@ export class PlaceSearchService {
 export function registerNavigationRoutes(app: Express) {
   const api = express.Router();
   app.use('/api/navigation', api);
+  api.use((req,res,next)=>{
+    if(['GET','HEAD','OPTIONS'].includes(req.method)||allowedNavigationMutation(req.get('origin'),req.get('host'),req.get('sec-fetch-site')))return next();
+    res.status(403).json({error:'cross_site_write_denied'});
+  });
   registerLocalizationRoutes(api);
   registerSharedMapRoutes(api);
+  registerOrganizationRoutes(api);
+  api.get('/safety-flags',(_req,res)=>{
+    const flags=Object.fromEntries(Object.keys(SAFE_DEFAULT_FLAGS).map(key=>[key,process.env[`BASIRA_${key.replace(/[A-Z]/g,letter=>`_${letter}`).toUpperCase()}`]==='true'])) as unknown as SafetyFlags;
+    res.set('Cache-Control','no-store').json(flags);
+  });
   api.get('/access', asyncRoute(async (req, res) => res.set('Cache-Control','no-store').json(await identity(req))));
   api.get('/buildings', asyncRoute(async (req, res) => {
     const q = queryText(req);
@@ -151,6 +175,7 @@ export function registerNavigationRoutes(app: Express) {
   api.post('/buildings', asyncRoute(async (req,res) => {
     const actor=await editor(req,res); if (!actor) return;
     const data=parse(buildingInput,req,res); if (!data) return;
+    if ((data.verificationStatus && data.verificationStatus !== 'DISCOVERED') || (data.mapStatus && data.mapStatus !== 'UNMAPPED')) return res.status(403).json({error:'map_status_requires_review'});
     const newId=randomUUID();
     await pool.execute(`INSERT INTO basira_buildings (id,name,alternative_names,organization_name,building_type,description,address,latitude,longitude,number_of_floors,status,map_status,verification_status,created_by) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
       [newId,data.name,JSON.stringify(data.alternativeNames),value(data.organizationName),data.buildingType,value(data.description),value(data.address),value(data.latitude),value(data.longitude),value(data.numberOfFloors),data.status??'ACTIVE',data.mapStatus??'UNMAPPED',data.verificationStatus??'DISCOVERED',actor.userId]);
@@ -158,8 +183,9 @@ export function registerNavigationRoutes(app: Express) {
   }));
   api.patch('/buildings/:id', asyncRoute(async (req,res) => {
     if (!uuid(req)) return res.status(400).json({error:'invalid_id'});
-    const actor=await editor(req,res); if (!actor) return;
+    const actor=await editor(req,res,req.params.id); if (!actor) return;
     const data=parse(buildingInput.partial(),req,res); if (!data) return;
+    if (data.verificationStatus !== undefined || data.mapStatus === 'MAPPED') return res.status(403).json({error:'official_map_requires_review'});
     const columns: Record<string,string>={name:'name',alternativeNames:'alternative_names',organizationName:'organization_name',buildingType:'building_type',description:'description',address:'address',latitude:'latitude',longitude:'longitude',numberOfFloors:'number_of_floors',status:'status',mapStatus:'map_status',verificationStatus:'verification_status'};
     const entries=Object.entries(data); if (!entries.length) return res.status(400).json({error:'empty_update'});
     await pool.execute(`UPDATE basira_buildings SET ${entries.map(([k])=>`${columns[k]}=?`).join(',')} WHERE id=?`,[...entries.map(([k,v])=>k==='alternativeNames'?JSON.stringify(v):value(v)),req.params.id]);
@@ -172,7 +198,7 @@ export function registerNavigationRoutes(app: Express) {
   }));
   api.post('/buildings/:id/floors', asyncRoute(async (req,res) => {
     if (!uuid(req)) return res.status(400).json({error:'invalid_id'});
-    const actor=await editor(req,res); if (!actor) return;
+    const actor=await editor(req,res,req.params.id); if (!actor) return;
     const data=parse(floorInput,req,res); if (!data) return;
     if (!await exists('basira_buildings',req.params.id)) return res.status(404).json({error:'building_not_found'});
     const newId=randomUUID();
@@ -187,8 +213,9 @@ export function registerNavigationRoutes(app: Express) {
   }));
   api.post('/buildings/:id/places', asyncRoute(async (req,res) => {
     if (!uuid(req)) return res.status(400).json({error:'invalid_id'});
-    const actor=await editor(req,res); if (!actor) return;
+    const actor=await editor(req,res,req.params.id); if (!actor) return;
     const data=parse(placeInput,req,res); if (!data) return;
+    if (data.verificationStatus && data.verificationStatus !== 'DISCOVERED') return res.status(403).json({error:'official_map_requires_review'});
     if (!await exists('basira_floors',data.floorId,req.params.id)) return res.status(400).json({error:'floor_building_mismatch'});
     const newId=randomUUID();
     await pool.execute(`INSERT INTO basira_places (id,building_id,floor_id,name,room_number,aliases,department_name,description,place_type,local_x,local_y,latitude,longitude,entrance_direction,accessibility_information,verification_status,confidence_score,is_public,created_by) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
@@ -202,9 +229,10 @@ export function registerNavigationRoutes(app: Express) {
   }));
   api.patch('/places/:id', asyncRoute(async (req,res) => {
     if (!uuid(req)) return res.status(400).json({error:'invalid_id'});
-    const actor=await editor(req,res); if (!actor) return;
-    const data=parse(placeInput.partial(),req,res); if (!data) return;
     const current=await one('SELECT * FROM basira_places WHERE id=?',[req.params.id]); if (!current) return res.status(404).json({error:'not_found'});
+    const actor=await editor(req,res,current.buildingId); if (!actor) return;
+    const data=parse(placeInput.partial(),req,res); if (!data) return;
+    if (data.verificationStatus !== undefined) return res.status(403).json({error:'official_map_requires_review'});
     if (data.floorId && !await exists('basira_floors',data.floorId,current.buildingId)) return res.status(400).json({error:'floor_building_mismatch'});
     const columns:Record<string,string>={name:'name',roomNumber:'room_number',aliases:'aliases',departmentName:'department_name',floorId:'floor_id',description:'description',placeType:'place_type',localX:'local_x',localY:'local_y',latitude:'latitude',longitude:'longitude',entranceDirection:'entrance_direction',accessibilityInformation:'accessibility_information',verificationStatus:'verification_status',confidenceScore:'confidence_score',isPublic:'is_public'};
     const entries=Object.entries(data); if (!entries.length) return res.status(400).json({error:'empty_update'});
@@ -294,7 +322,7 @@ export function registerNavigationRoutes(app: Express) {
   }));
   api.post('/buildings/:id/nodes', asyncRoute(async (req,res) => {
     if (!uuid(req)) return res.status(400).json({error:'invalid_id'});
-    const actor=await editor(req,res); if (!actor) return;
+    const actor=await editor(req,res,req.params.id); if (!actor) return;
     const data=parse(nodeInput,req,res); if (!data) return;
     if (!await exists('basira_floors',data.floorId,req.params.id)) return res.status(400).json({error:'floor_building_mismatch'});
     if (data.placeId) { const p=await one('SELECT floor_id FROM basira_places WHERE id=? AND building_id=?',[data.placeId,req.params.id]); if (!p||p.floorId!==data.floorId) return res.status(400).json({error:'place_floor_mismatch'}); }
@@ -305,7 +333,7 @@ export function registerNavigationRoutes(app: Express) {
   }));
   api.post('/buildings/:id/edges', asyncRoute(async (req,res) => {
     if (!uuid(req)) return res.status(400).json({error:'invalid_id'});
-    const actor=await editor(req,res); if (!actor) return;
+    const actor=await editor(req,res,req.params.id); if (!actor) return;
     const data=parse(edgeInput,req,res); if (!data) return;
     if (data.fromNodeId===data.toNodeId || !await exists('basira_map_nodes',data.fromNodeId,req.params.id) || !await exists('basira_map_nodes',data.toNodeId,req.params.id)) return res.status(400).json({error:'invalid_nodes'});
     const newId=randomUUID();

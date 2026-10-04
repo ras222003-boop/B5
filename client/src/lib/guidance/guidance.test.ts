@@ -51,6 +51,16 @@ describe('B4 route planning and guidance',()=>{
     const invalid=planner([...edges,edge('shortcut','a','room1',1)]).plan('a',target,'SHORTEST');
     expect(invalid?.orderedEdges.some(e=>e.id==='shortcut')).toBe(false);
   });
+  it('routes across floors by an accessible ramp and names the ramp correctly',()=>{
+    const points=[node('r0',0,0),node('r1',0,4,'f1','p122')];
+    const links=[edge('ramp','r0','r1',4,{pathType:'RAMP',hasRamp:true,wheelchairAccessible:true})];
+    const target={...destination,id:'p122',nodeId:'r1',floorId:'f1'};
+    const route=planner(links,points).plan('r0',target,'ACCESSIBLE');
+    expect(route?.orderedEdges[0].pathType).toBe('RAMP');
+    expect(new NavigationInstructionGenerator(floors,'ar').forEdge(route!,0,.9).text).toContain('المنحدر');
+    expect(new NavigationInstructionGenerator(floors,'en').forEdge(route!,0,.9).text).toContain('ramp');
+    expect(new NavigationInstructionGenerator(floors,'zh-CN').forEdge(route!,0,.9).text).toContain('坡道');
+  });
   it('returns no route for disconnected or entirely closed graph',()=>{
     expect(planner(edges.filter(e=>!['ab','ad'].includes(e.id))).plan('a',destination)).toBeNull();
   });

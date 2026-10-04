@@ -3,7 +3,7 @@ import { createServer } from "http";
 import path from "path";
 import { fileURLToPath } from "url";
 import { toNodeHandler } from "better-auth/node";
-import { auth, providerReady } from "./auth";
+import { auth, pool, providerReady } from "./auth";
 import { ensureSchema } from "./migrations";
 import { registerSupportRoutes, startTicketMailWorker } from "./support";
 import { registerOcrRoute } from "./ocr";
@@ -57,6 +57,16 @@ async function startServer() {
   app.get("/api/health", (_req, res) => {
     res.status(200).json({ status: "ok" });
   });
+  app.get('/api/readiness',async(_req,res)=>{
+    const capabilities:{api:'READY';database:'READY'|'DOWN';authentication:'READY'|'DOWN';mapCore:'READY'|'DOWN';optionalModels:'DEGRADED'|'AVAILABLE'}={api:'READY',database:'DOWN',authentication:'DOWN',mapCore:'DOWN',optionalModels:'DEGRADED'};
+    try{await pool.query('SELECT 1');capabilities.database='READY';}catch{/* DB required */}
+    if(capabilities.database==='READY'){
+      try{await pool.query('SELECT 1 FROM `user` LIMIT 1');capabilities.authentication='READY';}catch{/* auth schema required */}
+      try{await pool.query('SELECT 1 FROM basira_buildings LIMIT 1');capabilities.mapCore='READY';}catch{/* navigation schema required */}
+    }
+    const ready=capabilities.database==='READY'&&capabilities.authentication==='READY'&&capabilities.mapCore==='READY';
+    res.set('Cache-Control','no-store').status(ready?200:503).json({status:ready?'READY':'DOWN',capabilities});
+  });
 
   app.get("/api/auth/providers", (_req, res) => {
     res.set("Cache-Control", "no-store").json({ providers: providerReady, emailPassword: true });
@@ -65,6 +75,7 @@ async function startServer() {
   app.all("/api/auth/*", toNodeHandler(auth));
 
   // Parse JSON bodies up to 20MB for image data
+  app.use('/api/navigation/organizations',express.json({limit:'1mb'}));
   app.use(express.json({ limit: "20mb" }));
   registerSupportRoutes(app);
   registerNavigationRoutes(app);

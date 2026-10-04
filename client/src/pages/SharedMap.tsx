@@ -17,14 +17,16 @@ type Issue={id:string;type:IssueType;duration:IssueDuration;description:string;s
 export default function SharedMap(){
   const [buildings,setBuildings]=useState<Building[]>([]),[buildingId,setBuildingId]=useState(()=>sessionStorage.getItem('basira-current-building')??'');
   const [floors,setFloors]=useState<Floor[]>([]),[places,setPlaces]=useState<Place[]>([]),[candidates,setCandidates]=useState<Candidate[]>([]),[contributions,setContributions]=useState<SharedMapContribution[]>([]),[issues,setIssues]=useState<Issue[]>([]);
-  const [role,setRole]=useState<string|null>(null),[version,setVersion]=useState(1),[history,setHistory]=useState<{version:number;action:string;entity_type:string;entity_id:string}[]>([]);
+  const [globalRole,setGlobalRole]=useState<string|null>(null),[organizationRoles,setOrganizationRoles]=useState<Record<string,string>>({}),[version,setVersion]=useState(1),[history,setHistory]=useState<{version:number;action:string;entity_type:string;entity_id:string}[]>([]);
   const [floorId,setFloorId]=useState(''),[name,setName]=useState(''),[room,setRoom]=useState(''),[x,setX]=useState(''),[y,setY]=useState(''),[placeType,setPlaceType]=useState<Place['placeType']>('ROOM'),[type,setType]=useState<ContributionType>('PLACE'),[targetPlaceId,setTargetPlaceId]=useState('');
   const [issueType,setIssueType]=useState<IssueType>('PLACE_MISSING'),[issueDuration,setIssueDuration]=useState<IssueDuration>('UNKNOWN'),[issueDescription,setIssueDescription]=useState('');
   const [consent,setConsent]=useState(false),[notice,setNotice]=useState(''),[busy,setBusy]=useState(false);
   const [reviewActions,setReviewActions]=useState<Record<string,MapDecision>>({}),[resolveConflicts,setResolveConflicts]=useState<Record<string,boolean>>({});
   const [details,setDetails]=useState<Record<string,{current:Record<string,unknown>|null;conflicts:{id:string;kind:string;status:string}[]}>>({});
   const [detailId,setDetailId]=useState('');
-  useEffect(()=>{navApi.buildings().then(result=>setBuildings(result.buildings)).catch(()=>setNotice('تعذر تحميل المباني.'));navApi.access().then(result=>setRole(result.role)).catch(()=>setRole(null));},[]);
+  const selectedBuilding=buildings.find(item=>item.id===buildingId),memberRole=selectedBuilding?.organizationId?organizationRoles[selectedBuilding.organizationId]:null;
+  const role=globalRole==='admin'?'admin':selectedBuilding?.organizationId?(['organization_admin','reviewer'].includes(memberRole??'')?'mapper':null):globalRole;
+  useEffect(()=>{navApi.buildings().then(result=>setBuildings(result.buildings)).catch(()=>setNotice('تعذر تحميل المباني.'));navApi.access().then(result=>{setGlobalRole(result.role);if(result.userId)navigationRequest<{organizations:{id:string;member_role?:string}[]}>('/organizations').then(data=>setOrganizationRoles(Object.fromEntries(data.organizations.map(org=>[org.id,org.member_role??''])))).catch(()=>{});}).catch(()=>setGlobalRole(null));},[]);
   const load=async(id:string)=>{
     if(!id)return;
     const [f,p,v,c]=await Promise.all([navApi.floors(id),navApi.places(id),sharedMapApi.version(id),navigationRequest<{candidates:Candidate[]}>(`/shared-map/buildings/${id}/candidates`)]);

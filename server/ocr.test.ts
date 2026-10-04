@@ -97,14 +97,17 @@ describe("real Sharp image preparation", () => {
     await expect(prepareOcrImage(dataUrl(Buffer.alloc(200, 42)))).rejects.toMatchObject({ code: "unreadable_image" });
   });
 
-  it("honors real EXIF orientation and downsizes large camera images", async () => {
+  it("honors real EXIF orientation", async () => {
     const rotatedJpeg = await sharp({ create: { width: 1200, height: 800, channels: 3, background: "#ffffff" } })
       .jpeg().withMetadata({ orientation: 6 }).toBuffer();
     const rotated = await prepareOcrImage(dataUrl(rotatedJpeg, "jpeg"));
     expect(rotated.width).toBe(800);
     expect(rotated.height).toBe(1200);
+  });
 
-    const large = await sharp({ create: { width: 4000, height: 5000, channels: 3, background: "#ffffff" } }).jpeg().toBuffer();
+  it("downsizes a large camera image", async () => {
+    // Exceed both output limits without allocating a 20 MP image during parallel test runs.
+    const large = await sharp({ create: { width: 3000, height: 3800, channels: 3, background: "#ffffff" } }).jpeg().toBuffer();
     const resized = await prepareOcrImage(dataUrl(large, "jpeg"));
     expect(resized.width).toBeLessThanOrEqual(2600);
     expect(resized.height).toBeLessThanOrEqual(3600);

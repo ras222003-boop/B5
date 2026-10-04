@@ -2,10 +2,12 @@ import { randomUUID } from 'node:crypto';
 import type { PoolConnection } from 'mysql2/promise';
 import type { ContributionProposal, ContributionSource, ContributionType, MapDecision } from '../shared/sharedMap';
 
-type Entity='PLACE'|'MAP_NODE'|'MAP_EDGE';
+type Entity='BUILDING'|'FLOOR'|'PLACE'|'MAP_NODE'|'MAP_EDGE';
 export type Change={action:MapDecision|'ROLLBACK';entityType:Entity;entityId:string;before:Record<string,unknown>|null;after:Record<string,unknown>|null};
-const tables:Record<Entity,string>={PLACE:'basira_places',MAP_NODE:'basira_map_nodes',MAP_EDGE:'basira_map_edges'};
+const tables:Record<Entity,string>={BUILDING:'basira_buildings',FLOOR:'basira_floors',PLACE:'basira_places',MAP_NODE:'basira_map_nodes',MAP_EDGE:'basira_map_edges'};
 const columns:Record<Entity,string[]>={
+  BUILDING:['id','name','alternative_names','organization_name','building_type','description','address','latitude','longitude','number_of_floors','status','map_status','verification_status','created_by','organization_id','official_map_source','official_approved_by','official_reviewed_at'],
+  FLOOR:['id','building_id','floor_number','name','description','floor_plan_reference','local_origin'],
   PLACE:['id','building_id','floor_id','name','room_number','aliases','department_name','description','place_type','local_x','local_y','latitude','longitude','entrance_direction','accessibility_information','verification_status','confidence_score','is_public','created_by'],
   MAP_NODE:['id','building_id','floor_id','place_id','x','y','node_type','accessibility_level'],
   MAP_EDGE:['id','building_id','from_node_id','to_node_id','distance_meters','direction','path_type','accessibility_level','has_stairs','has_ramp','wheelchair_accessible','visually_impaired_friendly','temporarily_closed','risk_level'],
@@ -95,7 +97,7 @@ export async function applyApprovedContribution(connection:PoolConnection,buildi
   throw new Error('review_action_required');
 }
 
-export async function advanceMapVersion(connection:PoolConnection,buildingId:string,changes:Change[],sourceType:ContributionSource|'ROLLBACK',reviewedBy:string):Promise<number>{
+export async function advanceMapVersion(connection:PoolConnection,buildingId:string,changes:Change[],sourceType:ContributionSource|'ROLLBACK'|'OFFICIAL_IMPORT',reviewedBy:string):Promise<number>{
   if(!changes.length)throw new Error('no_map_change');
   await connection.execute('INSERT IGNORE INTO basira_map_versions (building_id,current_version) VALUES (?,1)',[buildingId]);
   const [versions]=await connection.query<any[]>('SELECT current_version FROM basira_map_versions WHERE building_id=? FOR UPDATE',[buildingId]);

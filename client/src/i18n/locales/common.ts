@@ -6,7 +6,7 @@ export const commonMessages = defineMessages({
     brand: { name: "بصيرة", company: "Aurum Nexus", logoAlt: "شعار شركة Aurum Nexus", homeLabel: "بصيرة - الصفحة الرئيسية" },
     meta: {
       title: "بصيرة - منصة الاختبارات الذكية لذوي الإعاقة البصرية",
-      description: "منصة ذكية تمكّن ذوي الإعاقة البصرية من أداء الاختبارات التعليمية باستقلالية تامة عبر الذكاء الاصطناعي والتقنيات المساعدة",
+      description: "منصة تقدم أدوات مساعدة للاختبارات والتعليم والتنقل مع توضيح حدود قدراتها.",
     },
     nav: {
       ariaLabel: "التنقل الرئيسي",
@@ -186,7 +186,7 @@ export const commonMessages = defineMessages({
     brand: { name: "Basira", company: "Aurum Nexus", logoAlt: "Aurum Nexus 公司标志", homeLabel: "Basira - 首页" },
     meta: {
       title: "Basira - 面向视障人士的智能考试平台",
-      description: "借助人工智能与辅助技术，帮助视障人士完全独立地完成教育考试的智能平台",
+      description: "为考试、教育和导航提供辅助工具，并明确说明其能力限制。",
     },
     nav: {
       ariaLabel: "主导航",

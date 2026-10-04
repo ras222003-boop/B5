@@ -19,6 +19,7 @@ import type { LocalizationEstimate } from '@shared/localization';
 import { BasiraLocalizationEngine } from '@/lib/localization/engine';
 import { navApi, navigationRequest, json } from '@/lib/navigationApi';
 import { emptyProposal, observedEvidence, sharedMapApi } from '@/lib/sharedMap';
+import { loadSafetyFlags } from '@/lib/safetyFlags';
 
 const button='inline-flex min-h-14 items-center justify-center rounded-xl bg-amber-300 px-6 py-3 text-lg font-bold text-stone-950 hover:bg-amber-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-300';
 const secondary='inline-flex min-h-14 items-center justify-center rounded-xl border border-amber-300/50 px-6 py-3 text-lg font-bold text-amber-100 hover:bg-amber-300/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-300';
@@ -67,6 +68,7 @@ export default function Vision() {
     generation.current++;
     cameraRef.current.stop(videoRef.current??undefined);
     void pipelineRef.current?.stop();pipelineRef.current=null;
+    stopSpeaking();
   },[]);
   useEffect(()=>{const onHidden=()=>{if(document.hidden)void stop();};document.addEventListener('visibilitychange',onHidden);return()=>document.removeEventListener('visibilitychange',onHidden);},[stop]);
 
@@ -75,6 +77,7 @@ export default function Vision() {
     const run=++generation.current;
     setError('');setOCRWarning('');setModelWarning('');setDepthWarning('');setLastAlert('');setRisk(null);setSpokenSummary('');setState('STARTING');
     try {
+      const safetyFlags=await loadSafetyFlags();
       const detected=detectVisionCapabilities();setCapabilities(detected);
       await cameraRef.current.start(videoRef.current);
       if(run!==generation.current){cameraRef.current.stop(videoRef.current);return;}
@@ -87,7 +90,7 @@ export default function Vision() {
       if(run!==generation.current){await Promise.allSettled([provider.close(),segmentation?.close()]);cameraRef.current.stop(videoRef.current);return;}
       let metricDepth:NativeMetricDepthProvider|undefined;
       let relativeDepth:MonocularRelativeDepthProvider|undefined;
-      if(detected.nativeDepth&&window.BasiraNativeDepth)metricDepth=new NativeMetricDepthProvider(window.BasiraNativeDepth);
+      if(safetyFlags.metricDepth&&detected.nativeDepth&&window.BasiraNativeDepth)metricDepth=new NativeMetricDepthProvider(window.BasiraNativeDepth);
       else if(detected.performanceTier==='HIGH'&&segmentation){
         try{relativeDepth=await MonocularRelativeDepthProvider.open();}
         catch{setDepthWarning(t.depthFailure);}
@@ -99,7 +102,7 @@ export default function Vision() {
       const announcement=new VisionAnnouncementService(t,text=>speak(text,0.9,lang),new BrowserHapticFeedbackProvider(),DEFAULT_VISION_CONFIG.alertCooldownMs);
       const pipeline=new VisionPipeline({video:videoRef.current,vision:provider,ocr:new TesseractOCRProvider(),depth:new UnavailableDepthProvider(),
         segmentation,relativeDepth,metricDepth,segmentationIntervalMs:detected.segmentationIntervalMs,depthIntervalMs:detected.depthIntervalMs,
-        config:DEFAULT_VISION_CONFIG,copy:t,mode:'EXPLORATION',buildingId:currentBuildingId,floorId:null,announcement,
+        config:DEFAULT_VISION_CONFIG,copy:t,mode:'EXPLORATION',buildingId:currentBuildingId,floorId:null,announcement,safetyFlags,
         callbacks:{
           scene:description=>{if(run===generation.current){setScene(description);setState('ANALYZING');}},
           alert:(text,level)=>{if(run===generation.current){setLastAlert(text);setRisk(level);}},

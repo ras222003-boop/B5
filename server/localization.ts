@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { auth, pool } from './auth';
 import { suggestionTypes } from '../shared/localization';
 import { advanceMapVersion, type Change } from './sharedMapPromotion';
+import { canOrganization } from './organizationPolicy';
 
 const id=z.string().uuid();
 const position=z.number().finite().min(-100000).max(100000);
@@ -31,13 +32,25 @@ async function actor(req:Request,res:Response):Promise<Actor|null>{
   const session=await auth.api.getSession({headers:fromNodeHeaders(req.headers)});
   if(!session){res.status(401).json({error:'sign_in_required'});return null;}
   const grant=await one('SELECT role FROM basira_navigation_roles WHERE user_id=?',[session.user.id]);
-  if(!canManageMapping(grant?.role)){res.status(403).json({error:'mapper_role_required'});return null;}
-  return {userId:session.user.id,role:grant.role};
+  return {userId:session.user.id,role:canManageMapping(grant?.role)?grant.role:null};
+}
+async function mappingAccess(viewer:Actor,buildingId:string,res:Response,action:'map'|'review'='map'){
+  const building=await one('SELECT organization_id FROM basira_buildings WHERE id=?',[buildingId]);
+  if(!building){res.status(404).json({error:'building_not_found'});return false;}
+  if(building.organizationId){
+    if(viewer.role==='admin')return true;
+    const member=await one('SELECT role FROM basira_organization_memberships WHERE organization_id=? AND user_id=?',[building.organizationId,viewer.userId]);
+    if(canOrganization(member?.role??null,false,action))return true;
+    res.status(403).json({error:action==='review'?'organization_reviewer_required':'organization_mapper_required'});return false;
+  }
+  if(canManageMapping(viewer.role))return true;
+  res.status(403).json({error:'mapper_role_required'});return false;
 }
 async function session(req:Request,res:Response,viewer:Actor){
   if(!id.safeParse(req.params.sessionId).success){res.status(400).json({error:'invalid_id'});return null;}
   const item=await one('SELECT * FROM basira_mapping_sessions WHERE id=?',[req.params.sessionId]);
   if(!item){res.status(404).json({error:'not_found'});return null;}
+  if(!await mappingAccess(viewer,item.buildingId,res))return null;
   if(item.startedBy!==viewer.userId&&viewer.role!=='admin'){res.status(403).json({error:'session_owner_required'});return null;}
   return item;
 }
@@ -59,6 +72,7 @@ export function registerLocalizationRoutes(api:Router){
   api.get('/buildings/:id/mapping-sessions',route(async(req,res)=>{
     const viewer=await actor(req,res);if(!viewer)return;
     if(!id.safeParse(req.params.id).success)return res.status(400).json({error:'invalid_id'});
+    if(!await mappingAccess(viewer,req.params.id,res))return;
     const list=await rows('SELECT * FROM basira_mapping_sessions WHERE building_id=? AND (started_by=? OR ?=\'admin\') ORDER BY started_at DESC LIMIT 100',[req.params.id,viewer.userId,viewer.role]);
     res.set('Cache-Control','private, no-store').json({sessions:list});
   }));
@@ -67,6 +81,7 @@ export function registerLocalizationRoutes(api:Router){
     const parsed=sessionInput.safeParse(req.body);if(!parsed.success)return res.status(400).json({error:'invalid_input'});
     const data=parsed.data;
     if(!await one("SELECT id FROM basira_buildings WHERE id=? AND status='ACTIVE'",[data.buildingId]))return res.status(404).json({error:'building_not_found'});
+    if(!await mappingAccess(viewer,data.buildingId,res))return;
     if(!await validAnchor(data.buildingId,data.startAnchor))return res.status(400).json({error:'invalid_anchor'});
     const newId=randomUUID();
     await pool.execute('INSERT INTO basira_mapping_sessions (id,building_id,started_by,start_anchor,confidence,device_capabilities) VALUES (?,?,?,?,?,?)',
@@ -130,16 +145,21 @@ export function registerLocalizationRoutes(api:Router){
     const item=await session(req,res,viewer);if(!item)return;
     if(item.status!=='ACTIVE')return res.status(409).json({error:'session_closed'});
     const body=z.object({cancel:z.boolean().default(false)}).safeParse(req.body);if(!body.success)return res.status(400).json({error:'invalid_input'});
-    if(body.data.cancel){await pool.execute('DELETE FROM basira_mapping_track WHERE session_id=?',[item.id]);await pool.execute('DELETE FROM basira_mapping_anchors WHERE session_id=?',[item.id]);await pool.execute('DELETE FROM basira_mapping_floor_events WHERE session_id=?',[item.id]);await pool.execute('DELETE FROM basira_map_suggestions WHERE session_id=?',[item.id]);}
+    if(body.data.cancel)await pool.execute('DELETE FROM basira_map_suggestions WHERE session_id=?',[item.id]);
     const pending=await one("SELECT COUNT(*) AS count FROM basira_map_suggestions WHERE session_id=? AND status='PENDING'",[item.id]);
     const status=body.data.cancel?'CANCELLED':Number(pending?.count)>0?'REVIEW_REQUIRED':'COMPLETED';
+    // Suggestions retain bounded review evidence; raw precise tracks are ephemeral.
+    await pool.execute('DELETE FROM basira_mapping_track WHERE session_id=?',[item.id]);
+    await pool.execute('DELETE FROM basira_mapping_anchors WHERE session_id=?',[item.id]);
+    await pool.execute('DELETE FROM basira_mapping_floor_events WHERE session_id=?',[item.id]);
     await pool.execute('UPDATE basira_mapping_sessions SET status=?,ended_at=CURRENT_TIMESTAMP(3) WHERE id=?',[status,item.id]);
     res.json({status});
   }));
   api.get('/buildings/:id/map-suggestions',route(async(req,res)=>{
     const viewer=await actor(req,res);if(!viewer)return;
     if(!id.safeParse(req.params.id).success)return res.status(400).json({error:'invalid_id'});
-    const suggestions=await rows('SELECT s.* FROM basira_map_suggestions s JOIN basira_mapping_sessions m ON m.id=s.session_id WHERE s.building_id=? AND (m.started_by=? OR ?=\'admin\') ORDER BY s.created_at DESC LIMIT 500',[req.params.id,viewer.userId,viewer.role]);
+    if(!await mappingAccess(viewer,req.params.id,res,'review'))return;
+    const suggestions=await rows('SELECT s.* FROM basira_map_suggestions s WHERE s.building_id=? ORDER BY s.created_at DESC LIMIT 500',[req.params.id]);
     res.set('Cache-Control','private, no-store').json({suggestions});
   }));
   api.post('/map-suggestions/:id/review',route(async(req,res)=>{
@@ -152,11 +172,20 @@ export function registerLocalizationRoutes(api:Router){
       const [found]=await connection.query<any[]>('SELECT * FROM basira_map_suggestions WHERE id=? FOR UPDATE',[req.params.id]);
       const s=found[0];
       if(!s){await connection.rollback();return res.status(404).json({error:'not_found'});}
+      const [buildingRows]=await connection.query<any[]>('SELECT organization_id,verification_status FROM basira_buildings WHERE id=? FOR UPDATE',[s.building_id]);
+      const scoped=buildingRows[0];
+      if(!scoped){await connection.rollback();return res.status(404).json({error:'building_not_found'});}
+      if(scoped?.organization_id&&viewer.role!=='admin'){
+        const [membership]=await connection.query<any[]>('SELECT role FROM basira_organization_memberships WHERE organization_id=? AND user_id=?',[scoped.organization_id,viewer.userId]);
+        if(!['organization_admin','reviewer'].includes(membership[0]?.role)){await connection.rollback();return res.status(403).json({error:'organization_reviewer_required'});}
+      }else if(!scoped.organization_id&&!canManageMapping(viewer.role)){
+        await connection.rollback();return res.status(403).json({error:'mapper_role_required'});
+      }
       if(s.status!=='PENDING'){await connection.rollback();return res.status(409).json({error:'already_reviewed'});}
       const [sessions]=await connection.query<any[]>('SELECT status FROM basira_mapping_sessions WHERE id=?',[s.session_id]);
       if(sessions[0]?.status==='ACTIVE'){await connection.rollback();return res.status(409).json({error:'session_active'});}
       const changes:Change[]=[];
-      const snapshot=async(entity:Change['entityType'],entityId:string)=>{const table={PLACE:'basira_places',MAP_NODE:'basira_map_nodes',MAP_EDGE:'basira_map_edges'}[entity];const [records]=await connection.query<any[]>(`SELECT * FROM ${table} WHERE id=?`,[entityId]);return records[0]??null;};
+      const snapshot=async(entity:'PLACE'|'MAP_NODE'|'MAP_EDGE',entityId:string)=>{const table={PLACE:'basira_places',MAP_NODE:'basira_map_nodes',MAP_EDGE:'basira_map_edges'}[entity];const [records]=await connection.query<any[]>(`SELECT * FROM ${table} WHERE id=?`,[entityId]);return records[0]??null;};
       let version:number|null=null;
       if(body.data.decision==='ACCEPTED'){
         if(!s.floor_id){await connection.rollback();return res.status(400).json({error:'floor_required'});}
@@ -196,6 +225,8 @@ export function registerLocalizationRoutes(api:Router){
         if(changes.length)version=await advanceMapVersion(connection,s.building_id,changes,'AUTO_MAPPING',viewer.userId);
       }
       await connection.execute('UPDATE basira_map_suggestions SET status=?,reviewed_at=CURRENT_TIMESTAMP(3),reviewed_by=? WHERE id=?',[body.data.decision,viewer.userId,s.id]);
+      if(scoped.organization_id)await connection.execute('INSERT INTO basira_organization_map_audit_log (id,organization_id,building_id,actor_id,action,entity_type,entity_id,metadata) VALUES (?,?,?,?,?,?,?,?)',
+        [randomUUID(),scoped.organization_id,s.building_id,viewer.userId,body.data.decision==='ACCEPTED'?'MAPPING_SUGGESTION_APPROVE':'MAPPING_SUGGESTION_REJECT','MAP_SUGGESTION',s.id,JSON.stringify({version})]);
       await connection.commit();
       res.json({status:body.data.decision,version});
     }catch(error){await connection.rollback();throw error;}finally{connection.release();}
