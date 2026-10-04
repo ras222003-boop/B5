@@ -4,7 +4,6 @@ import { fromNodeHeaders } from 'better-auth/node';
 import { z } from 'zod';
 import { auth, pool } from './auth';
 import { buildingTypes, placeTypes, nodeTypes, savedCategories, verificationStatuses, accessibilityLevels } from '../shared/navigation';
-import { registerLocalizationRoutes } from './localization';
 
 const id = z.string().uuid();
 const name = z.string().trim().min(1).max(255);
@@ -30,9 +29,6 @@ const placeInput = z.object({
 const savedInput = z.object({
   name, category: z.enum(savedCategories).default('OTHER'), notes: text(), latitude, longitude,
   buildingId: id.nullable().optional(), floorId: id.nullable().optional(), placeId: id.nullable().optional(),
-  localX: z.number().finite().min(-100000).max(100000).nullable().optional(),
-  localY: z.number().finite().min(-100000).max(100000).nullable().optional(),
-  localizationConfidence: z.number().min(0).max(1).nullable().optional(),
   isFavorite: z.boolean().optional(),
 });
 const nodeInput = z.object({ floorId: id, placeId: id.nullable().optional(), x: z.number().finite(), y: z.number().finite(), nodeType: z.enum(nodeTypes), accessibilityLevel: z.enum(accessibilityLevels).default('UNKNOWN') });
@@ -46,7 +42,7 @@ const edgeInput = z.object({
 type Data = Record<string, any>;
 const camel = (key: string) => key.replace(/_([a-z])/g, (_, letter: string) => letter.toUpperCase());
 const booleans = new Set(['is_public','is_favorite','has_stairs','has_ramp','wheelchair_accessible','visually_impaired_friendly','temporarily_closed']);
-const numbers = new Set(['latitude','longitude','local_x','local_y','x','y','distance_meters','confidence_score','localization_confidence']);
+const numbers = new Set(['latitude','longitude','local_x','local_y','x','y','distance_meters','confidence_score']);
 function present(value: Data): Data {
   const out: Data = {};
   for (const [key, raw] of Object.entries(value)) {
@@ -127,7 +123,6 @@ export class PlaceSearchService {
 export function registerNavigationRoutes(app: Express) {
   const api = express.Router();
   app.use('/api/navigation', api);
-  registerLocalizationRoutes(api);
   api.get('/access', asyncRoute(async (req, res) => res.set('Cache-Control','no-store').json(await identity(req))));
   api.get('/buildings', asyncRoute(async (req, res) => {
     const q = queryText(req);
@@ -227,10 +222,9 @@ export function registerNavigationRoutes(app: Express) {
     const userId=await owner(req,res); if (!userId) return;
     const data=parse(savedInput,req,res); if (!data) return;
     if (!await validLocation(data)) return res.status(400).json({error:'location_mismatch'});
-    if ((data.localX!=null||data.localY!=null) && (!data.buildingId||!data.floorId||data.localX==null||data.localY==null)) return res.status(400).json({error:'invalid_local_position'});
     if (!data.placeId && (data.latitude==null||data.longitude==null) && !data.buildingId) return res.status(400).json({error:'location_required'});
     const newId=randomUUID();
-    await pool.execute(`INSERT INTO basira_saved_places (id,user_id,name,category,notes,latitude,longitude,building_id,floor_id,place_id,is_favorite,local_x,local_y,localization_confidence) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,[newId,userId,data.name,data.category,value(data.notes),value(data.latitude),value(data.longitude),value(data.buildingId),value(data.floorId),value(data.placeId),bool(data.isFavorite),value(data.localX),value(data.localY),value(data.localizationConfidence)]);
+    await pool.execute(`INSERT INTO basira_saved_places (id,user_id,name,category,notes,latitude,longitude,building_id,floor_id,place_id,is_favorite) VALUES (?,?,?,?,?,?,?,?,?,?,?)`,[newId,userId,data.name,data.category,value(data.notes),value(data.latitude),value(data.longitude),value(data.buildingId),value(data.floorId),value(data.placeId),bool(data.isFavorite)]);
     res.set('Cache-Control','private, no-store').status(201).json({savedPlace:await one('SELECT * FROM basira_saved_places WHERE id=? AND user_id=?',[newId,userId])});
   }));
   api.patch('/saved-places/:id', asyncRoute(async (req,res) => {
@@ -238,13 +232,8 @@ export function registerNavigationRoutes(app: Express) {
     const userId=await owner(req,res); if (!userId) return;
     const data=parse(savedInput.partial(),req,res); if (!data) return;
     const old=await one('SELECT * FROM basira_saved_places WHERE id=? AND user_id=?',[req.params.id,userId]); if (!old) return res.status(404).json({error:'not_found'});
-    if (((data.buildingId!==undefined&&data.buildingId!==old.buildingId)||(data.floorId!==undefined&&data.floorId!==old.floorId)||(data.placeId!==undefined&&data.placeId!==old.placeId))&&data.localX===undefined&&data.localY===undefined) {
-      data.localX=null;data.localY=null;data.localizationConfidence=null;
-    }
     if (!await validLocation({...old,...data})) return res.status(400).json({error:'location_mismatch'});
-    const position={...old,...data};
-    if ((position.localX!=null||position.localY!=null) && (!position.buildingId||!position.floorId||position.localX==null||position.localY==null)) return res.status(400).json({error:'invalid_local_position'});
-    const columns:Record<string,string>={name:'name',category:'category',notes:'notes',latitude:'latitude',longitude:'longitude',buildingId:'building_id',floorId:'floor_id',placeId:'place_id',isFavorite:'is_favorite',localX:'local_x',localY:'local_y',localizationConfidence:'localization_confidence'};
+    const columns:Record<string,string>={name:'name',category:'category',notes:'notes',latitude:'latitude',longitude:'longitude',buildingId:'building_id',floorId:'floor_id',placeId:'place_id',isFavorite:'is_favorite'};
     const entries=Object.entries(data); if (!entries.length) return res.status(400).json({error:'empty_update'});
     await pool.execute(`UPDATE basira_saved_places SET ${entries.map(([k])=>`${columns[k]}=?`).join(',')} WHERE id=? AND user_id=?`,[...entries.map(([k,v])=>k==='isFavorite'?bool(v):value(v)),req.params.id,userId]);
     res.set('Cache-Control','private, no-store').json({savedPlace:await one('SELECT * FROM basira_saved_places WHERE id=? AND user_id=?',[req.params.id,userId])});

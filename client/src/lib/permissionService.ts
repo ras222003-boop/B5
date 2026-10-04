@@ -4,7 +4,7 @@ export type PermissionState = 'not_requested' | 'allowed' | 'denied' | 'device_s
 /** Browser implementation; native wrappers can supply the same contract later. */
 export interface PermissionService {
   status(permission: NavigationPermission): Promise<PermissionState>;
-  currentLocation(): Promise<{ latitude: number; longitude: number; accuracy: number }>;
+  currentLocation(): Promise<{ latitude: number; longitude: number }>;
 }
 
 const browserName: Partial<Record<NavigationPermission, PermissionName>> = {
@@ -27,7 +27,7 @@ export const permissionService: PermissionService = {
     return new Promise((resolve, reject) => {
       if (!navigator.geolocation) { reject(new Error('unavailable')); return; }
       navigator.geolocation.getCurrentPosition(
-        position => resolve({ latitude: position.coords.latitude, longitude: position.coords.longitude, accuracy: position.coords.accuracy }),
+        position => resolve({ latitude: position.coords.latitude, longitude: position.coords.longitude }),
         error => { if (error.code === 1) deniedThisSession.add('location'); reject(new Error(error.code === 1 ? 'denied' : 'unavailable')); },
         { enableHighAccuracy: false, timeout: 12000, maximumAge: 60000 },
       );
