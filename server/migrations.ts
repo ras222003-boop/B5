@@ -27,6 +27,10 @@ export async function ensureSchema() {
     }
     const support = await readFile(resolve(process.cwd(), "server/migrations/0002_support.sql"), "utf8");
     await connection.query(support);
+    const navigation = await readFile(resolve(process.cwd(), "server/migrations/0003_navigation.sql"), "utf8");
+    for (const statement of navigation.split(";").map(s => s.trim()).filter(Boolean)) {
+      await connection.query(statement);
+    }
     const [attemptsColumn] = await connection.query<any[]>(
       "SELECT 1 FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='basira_support_tickets' AND column_name='delivery_attempts' LIMIT 1",
     );

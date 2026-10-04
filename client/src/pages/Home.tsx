@@ -34,6 +34,7 @@ import { Button } from "@/components/ui/button";
 import { useTextToSpeech } from "@/hooks/useSpeech";
 import { useI18n, useMessages } from "@/i18n";
 import { homeMessages } from "@/i18n/locales/home";
+import { navigationMessages } from "@/i18n/locales/navigation";
 
 const heroImage = "https://d2xsxph8kpxj0f.cloudfront.net/310519663660690446/egP6Ccw5DpGVLQ8nQQhPRc/hero-basira-M6wXJFm4GuseyVsrmXf5Tu.webp";
 
@@ -62,6 +63,7 @@ const goalIcons = [Accessibility, Shield, GraduationCap] as const;
 
 export default function Home() {
   const t = useMessages(homeMessages);
+  const navigation = useMessages(navigationMessages);
   const { lang, dir } = useI18n();
   const { speak, stop: stopSpeaking, isSpeaking } = useTextToSpeech();
   const [readingSection, setReadingSection] = useState<string | null>(null);
@@ -163,6 +165,13 @@ export default function Home() {
               </div>
             </motion.div>
           </div>
+        </div>
+      </section>
+
+      <section aria-labelledby="navigation-card-title" className="border-y border-amber-200/20 bg-[#17140d] py-10">
+        <div className="container flex flex-col items-start justify-between gap-5 sm:flex-row sm:items-center">
+          <div><h2 id="navigation-card-title" className="text-2xl font-black text-amber-100">{navigation.homeTitle}</h2><p className="mt-2 text-lg text-stone-300">{navigation.where}</p></div>
+          <Link href="/navigation" className="inline-flex min-h-12 items-center rounded-xl bg-amber-300 px-6 font-bold text-stone-950 hover:bg-amber-200">{navigation.open}</Link>
         </div>
       </section>
 

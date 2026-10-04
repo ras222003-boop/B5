@@ -62,6 +62,23 @@ export function vitePluginApiProxy(): Plugin {
   return {
     name: "manus-api-proxy",
     configureServer(server: ViteDevServer) {
+      let navigationApp: Promise<express.Express> | null = null;
+      server.middlewares.use((req, res, next) => {
+        if (!req.url?.startsWith('/api/navigation')) return next();
+        navigationApp ??= (async () => {
+          const [{ ensureSchema }, { registerNavigationRoutes }] = await Promise.all([import('./migrations'), import('./navigation')]);
+          await ensureSchema();
+          const app = express();
+          app.use(express.json({ limit: '1mb' }));
+          registerNavigationRoutes(app);
+          return app;
+        })().catch(error => { navigationApp = null; throw error; });
+        navigationApp.then(app => app(req as Request, res as Response, next)).catch(error => {
+          console.error('Navigation development API unavailable', error);
+          res.writeHead(503, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'navigation_api_unavailable' }));
+        });
+      });
       // Use the same bounded parser, image pipeline and response contract as
       // production. The former development-only OCR implementation used an old
       // two-language schema and returned no quality report to the exam page.
