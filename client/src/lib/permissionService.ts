@@ -1,4 +1,4 @@
-export type NavigationPermission = 'location' | 'camera' | 'microphone' | 'bluetooth' | 'motion' | 'notifications';
+export type NavigationPermission = 'location' | 'camera' | 'microphone' | 'bluetooth' | 'motion' | 'nfc' | 'notifications';
 export type PermissionState = 'not_requested' | 'allowed' | 'denied' | 'device_settings' | 'unavailable';
 
 /** Browser implementation; native wrappers can supply the same contract later. */
@@ -16,6 +16,11 @@ const deniedThisSession = new Set<NavigationPermission>();
 export const permissionService: PermissionService = {
   async status(permission) {
     if (permission === 'location' && !navigator.geolocation) return 'unavailable';
+    if (permission === 'camera' && !navigator.mediaDevices?.getUserMedia) return 'unavailable';
+    if (permission === 'microphone' && !navigator.mediaDevices?.getUserMedia) return 'unavailable';
+    if (permission === 'bluetooth' && !('bluetooth' in navigator)) return 'unavailable';
+    if (permission === 'motion' && typeof DeviceMotionEvent === 'undefined') return 'unavailable';
+    if (permission === 'nfc' && !('NDEFReader' in window)) return 'unavailable';
     const key = browserName[permission];
     if (!key || !navigator.permissions?.query) return 'not_requested';
     try {

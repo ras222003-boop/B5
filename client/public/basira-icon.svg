@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 192 192" role="img" aria-label="Basira">
+  <rect width="192" height="192" rx="40" fill="#18140d"/>
+  <circle cx="96" cy="96" r="67" fill="none" stroke="#fcd34d" stroke-width="9"/>
+  <path d="M55 110c15-25 30-38 45-38 17 0 30 13 39 38M74 116h44" fill="none" stroke="#fcd34d" stroke-width="10" stroke-linecap="round"/>
+</svg>

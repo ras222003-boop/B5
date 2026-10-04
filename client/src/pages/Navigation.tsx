@@ -130,6 +130,7 @@ export default function Navigation() {
       <Link className={button} href="/navigation/vision">{vision.open}</Link>
       <Link className={button} href="/navigation/guidance">التنقل مع بصيرة</Link>
       <Link className={secondary} href="/navigation/shared-map">خريطة بصيرة المشتركة</Link>
+      <Link className={secondary} href="/navigation/indoor-manager">مدير الخرائط الداخلية</Link>
     </div>
     {live}
     {results.length>0 && <section aria-labelledby="results-heading" className={panel}><div className="mb-3 flex flex-wrap items-center justify-between gap-3"><h2 id="results-heading" className="text-xl font-bold">{t.search}</h2>{currentBuilding && !includeOthers && <button type="button" className={secondary} onClick={()=>{setIncludeOthers(true);navApi.search(query,currentBuilding.id,true).then(data=>setResults(data.results)).catch(()=>setNotice(t.failed));}}>{t.otherBuildings}</button>}</div>

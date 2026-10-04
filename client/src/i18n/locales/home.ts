@@ -26,7 +26,7 @@ export const homeMessages = defineMessages({
       helpCommand: "قل: \"مساعدة\" للإرشاد",
     },
     stats: [
-      { value: "100%", label: "استقلالية تامة" },
+      { value: "دعم", label: "أدوات مساعدة" },
       { value: "OCR", label: "تعرف ضوئي متقدم" },
       { value: "AI", label: "ذكاء اصطناعي" },
       { value: "PDF", label: "تصدير فوري" },
@@ -128,8 +128,8 @@ export const homeMessages = defineMessages({
       ],
     },
     wcag: {
-      title: "متوافق مع معايير WCAG 2.1",
-      description: "تلتزم المنصة بمعايير إمكانية الوصول العالمية (WCAG 2.1 Level AA)، مما يضمن تجربة شاملة لجميع المستخدمين بغض النظر عن قدراتهم.",
+      title: "إمكانية الوصول قيد المراجعة",
+      description: "صُممت الواجهات لدعم قارئات الشاشة ولوحة المفاتيح، وتحتاج إلى تدقيق ميداني شامل قبل إعلان امتثالها لمعيار WCAG.",
     },
     goalsSection: {
       badge: "أهدافنا",
@@ -138,7 +138,7 @@ export const homeMessages = defineMessages({
     goals: [
       {
         title: "تمكين ذوي الإعاقة",
-        description: "تمكين ذوي الإعاقة البصرية من أداء الاختبارات باستقلالية تامة دون تدخل بشري.",
+        description: "تقديم أدوات مساعدة لذوي الإعاقة البصرية أثناء الاختبارات، مع توضيح حدودها والحاجة إلى دعم بشري عند اللزوم.",
       },
       {
         title: "بيئة عادلة وآمنة",
@@ -180,7 +180,7 @@ export const homeMessages = defineMessages({
       helpCommand: "Say: \"help\" for guidance",
     },
     stats: [
-      { value: "100%", label: "Full independence" },
+      { value: "Aid", label: "Assistive tools" },
       { value: "OCR", label: "Advanced optical recognition" },
       { value: "AI", label: "Artificial intelligence" },
       { value: "PDF", label: "Instant export" },
@@ -282,8 +282,8 @@ export const homeMessages = defineMessages({
       ],
     },
     wcag: {
-      title: "Conforms to WCAG 2.1 standards",
-      description: "The platform follows global accessibility standards (WCAG 2.1 Level AA), supporting an inclusive experience for all users regardless of ability.",
+      title: "Accessibility under review",
+      description: "The interface is designed for screen readers and keyboards; a full audit is needed before claiming WCAG conformance.",
     },
     goalsSection: {
       badge: "Our goals",
@@ -334,7 +334,7 @@ export const homeMessages = defineMessages({
       helpCommand: "说“帮助”即可获得引导",
     },
     stats: [
-      { value: "100%", label: "完全独立" },
+      { value: "辅助", label: "辅助工具" },
       { value: "OCR", label: "先进光学识别" },
       { value: "AI", label: "人工智能" },
       { value: "PDF", label: "即时导出" },
@@ -436,8 +436,8 @@ export const homeMessages = defineMessages({
       ],
     },
     wcag: {
-      title: "符合 WCAG 2.1 标准",
-      description: "平台遵循全球无障碍标准（WCAG 2.1 AA 级），确保所有用户无论能力如何都能获得包容的使用体验。",
+      title: "无障碍能力审核中",
+      description: "界面设计支持屏幕阅读器和键盘；在宣称符合 WCAG 前仍需完整审计。",
     },
     goalsSection: {
       badge: "我们的目标",
@@ -446,7 +446,7 @@ export const homeMessages = defineMessages({
     goals: [
       {
         title: "赋能残障人士",
-        description: "帮助视障人士完全独立地完成考试，无需他人介入。",
+        description: "为视障人士提供考试辅助工具，并说明其限制及必要时的人力支持。",
       },
       {
         title: "公平、安全的环境",

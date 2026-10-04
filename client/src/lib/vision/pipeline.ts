@@ -7,6 +7,7 @@ import { isNavigationText, normalizePlaceText, signTypeForText, VisualPlaceRecog
 import { SceneUnderstandingService, VisionAnnouncementService, type VisionCopy } from './scene';
 import { VisionFusionEngine } from './fusion';
 import { hazardRank } from '@/lib/guidance/safety';
+import { SAFE_DEFAULT_FLAGS, type SafetyFlags } from '@shared/safetyFlags';
 
 interface Callbacks {
   scene:(description:SceneDescription)=>void;
@@ -25,6 +26,7 @@ export interface VisionPipelineOptions {
   config:VisionConfig; copy:VisionCopy; mode:VisionMode;
   buildingId:string|null; floorId:string|null;
   localPlaces?:Place[];
+  safetyFlags?:SafetyFlags;
   announcement:VisionAnnouncementService; callbacks:Callbacks;
 }
 
@@ -113,12 +115,17 @@ export class VisionPipeline {
     const relativeDepth=this.relativeDepth&&now-this.relativeDepth.timestamp<2_000?this.relativeDepth:null;
     const metricDepth=this.metricDepth&&now-this.metricDepth.timestamp<2_000?this.metricDepth:null;
     const frame=this.fusion.fuse({objects:this.latestObjects,segmentation,relativeDepth,metricDepth,signs});
+    const flags=this.options.safetyFlags??SAFE_DEFAULT_FLAGS;
+    const allowed=frame.events.filter(event=>
+      (flags.dropOffDetection||!event.type.startsWith('DROP_OFF'))&&
+      (flags.stairDirection||!['STAIRS_UP','STAIRS_DOWN'].includes(event.type))&&
+      (flags.experimentalObstacleClasses||!['UNKNOWN_OBSTACLE'].includes(event.type)));
     const events=this.options.mode==='NAVIGATION'
-      ? [...frame.events].sort((a,b)=>hazardRank(b)-hazardRank(a)).filter(event=>hazardRank(event)>=3)
-      : frame.events;
+      ? [...allowed].sort((a,b)=>hazardRank(b)-hazardRank(a)).filter(event=>hazardRank(event)>=3)
+      : allowed;
     this.latest=this.scene.summarize(events,this.recognizedPlace,Date.now(),frame.walkableArea);
     this.options.callbacks.scene(this.latest);
-    const alert=this.options.announcement.announce(this.options.mode==='NAVIGATION'?events:frame.events,Date.now());
+    const alert=this.options.announcement.announce(events,Date.now());
     if(alert)this.options.callbacks.alert(alert.text,alert.event.riskLevel);
   }
   private async processGeometry(generation:number,timestamp:number){
