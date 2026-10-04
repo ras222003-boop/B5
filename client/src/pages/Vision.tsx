@@ -14,6 +14,10 @@ import { detectVisionCapabilities, type VisionCapabilities } from '@/lib/vision/
 import { VisionPipeline } from '@/lib/vision/pipeline';
 import { BrowserHapticFeedbackProvider, VisionAnnouncementService } from '@/lib/vision/scene';
 import type { PlaceCandidate, RecognizedPlace, RiskLevel, SceneDescription } from '@shared/vision';
+import type { MapNode, Place } from '@shared/navigation';
+import type { LocalizationEstimate } from '@shared/localization';
+import { BasiraLocalizationEngine } from '@/lib/localization/engine';
+import { navApi, navigationRequest, json } from '@/lib/navigationApi';
 
 const button='inline-flex min-h-14 items-center justify-center rounded-xl bg-amber-300 px-6 py-3 text-lg font-bold text-stone-950 hover:bg-amber-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-300';
 const secondary='inline-flex min-h-14 items-center justify-center rounded-xl border border-amber-300/50 px-6 py-3 text-lg font-bold text-amber-100 hover:bg-amber-300/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-300';
@@ -26,6 +30,11 @@ export default function Vision() {
   const cameraRef=useRef<CameraService>(new CameraService(DEFAULT_VISION_CONFIG));
   const pipelineRef=useRef<VisionPipeline|null>(null);
   const generation=useRef(0);
+  const localizationRef=useRef(new BasiraLocalizationEngine());
+  const graphNodesRef=useRef<MapNode[]>([]);
+  const [locationEstimate,setLocationEstimate]=useState<LocalizationEstimate|null>(null);
+  const [savedName,setSavedName]=useState('');
+  const [saveNotice,setSaveNotice]=useState('');
   const [state,setState]=useState<'STOPPED'|'STARTING'|'WORKING'|'ANALYZING'>('STOPPED');
   const [error,setError]=useState('');
   const [OCRWarning,setOCRWarning]=useState('');
@@ -41,6 +50,7 @@ export default function Vision() {
   const [online,setOnline]=useState(typeof navigator==='undefined'?true:navigator.onLine);
   const [spokenSummary,setSpokenSummary]=useState('');
   useEffect(()=>{permissionService.status('camera').then(setCameraPermission).catch(()=>{});const update=()=>setOnline(navigator.onLine);window.addEventListener('online',update);window.addEventListener('offline',update);return()=>{window.removeEventListener('online',update);window.removeEventListener('offline',update);};},[]);
+  useEffect(()=>{if(!locationEstimate)return;const timer=window.setInterval(()=>setLocationEstimate(localizationRef.current.fusion.current(Date.now())),5000);return()=>window.clearInterval(timer);},[Boolean(locationEstimate)]);
 
   const stop=useCallback(async()=>{
     generation.current++;
@@ -48,6 +58,7 @@ export default function Vision() {
     cameraRef.current.stop(videoRef.current??undefined);
     stopSpeaking();
     setState('STOPPED');setScene(null);setCandidates([]);setRecognized(null);
+    localizationRef.current=new BasiraLocalizationEngine();setLocationEstimate(null);graphNodesRef.current=[];
     if(pipeline)await pipeline.stop();
   },[stopSpeaking]);
   useEffect(()=>()=>{
@@ -81,6 +92,8 @@ export default function Vision() {
       }
       if(run!==generation.current){await Promise.allSettled([provider.close(),segmentation?.close(),relativeDepth?.close()]);cameraRef.current.stop(videoRef.current);return;}
       const currentBuildingId=sessionStorage.getItem('basira-current-building');
+      graphNodesRef.current=currentBuildingId?(await navApi.graph(currentBuildingId).then(result=>result.nodes).catch(()=>[])):[];
+      if(run!==generation.current){await Promise.allSettled([provider.close(),segmentation?.close(),relativeDepth?.close()]);cameraRef.current.stop(videoRef.current);return;}
       const announcement=new VisionAnnouncementService(t,text=>speak(text,0.9,lang),new BrowserHapticFeedbackProvider(),DEFAULT_VISION_CONFIG.alertCooldownMs);
       const pipeline=new VisionPipeline({video:videoRef.current,vision:provider,ocr:new TesseractOCRProvider(),depth:new UnavailableDepthProvider(),
         segmentation,relativeDepth,metricDepth,segmentationIntervalMs:detected.segmentationIntervalMs,depthIntervalMs:detected.depthIntervalMs,
@@ -89,7 +102,11 @@ export default function Vision() {
           scene:description=>{if(run===generation.current){setScene(description);setState('ANALYZING');}},
           alert:(text,level)=>{if(run===generation.current){setLastAlert(text);setRisk(level);}},
           candidate:candidate=>{if(run===generation.current)setCandidates(previous=>[candidate,...previous].slice(0,10));},
-          recognized:place=>{if(run===generation.current)setRecognized(place);},
+          recognized:place=>{if(run===generation.current){setRecognized(place);void navigationRequest<{place:Place}>(`/places/${place.placeId}`).then(result=>{
+            if(run!==generation.current)return;
+            const anchor=localizationRef.current.visualAnchor(result.place,graphNodesRef.current,place.confidence,Date.now());
+            if(anchor)setLocationEstimate(localizationRef.current.fusion.current(Date.now()));
+          }).catch(()=>{});}},
           OCRFailure:()=>{if(run===generation.current)setOCRWarning(t.ocrFailure);},
           segmentationFailure:()=>{if(run===generation.current)setModelWarning(t.segmentationFailure);},
           depthFailure:()=>{if(run===generation.current)setDepthWarning(t.depthFailure);},
@@ -113,6 +130,12 @@ export default function Vision() {
     const value=scene?(detail?scene.detailedText:scene.shortText):t.noDetections;
     setSpokenSummary(value);speak(value,0.9,lang);
   };
+  const savePersonal=async()=>{
+    const estimate=localizationRef.current.fusion.current(Date.now());
+    if(!savedName.trim()||estimate.state!=='TRACKING'||estimate.x===null||estimate.y===null||!estimate.floorId)return;
+    try{await navigationRequest('/saved-places',json('POST',{name:savedName.trim(),category:'OTHER',buildingId:estimate.buildingId,floorId:estimate.floorId,localX:estimate.x,localY:estimate.y,localizationConfidence:estimate.confidence}));setSaveNotice('حُفظ المكان في أماكنك الخاصة.');setSavedName('');}
+    catch{setSaveNotice('تعذر حفظ المكان. سجّل الدخول ثم حاول مجددًا.');}
+  };
   const cameraState=state==='STOPPED'?t.stopped:state==='STARTING'?t.starting:state==='WORKING'?t.working:t.analyzing;
   return <Layout><div className="container max-w-4xl space-y-6 py-10 text-stone-100">
     <Link href="/navigation" className="text-amber-300 underline">{nav.title}</Link>
@@ -135,6 +158,8 @@ export default function Vision() {
     <div className="flex flex-wrap gap-3"><button className={secondary} type="button" disabled={state==='STOPPED'||state==='STARTING'} onClick={()=>report(false)}>{t.whatAhead}</button><button className={secondary} type="button" disabled={state==='STOPPED'||state==='STARTING'} onClick={()=>report(true)}>{t.describe}</button></div>
     <p aria-live="polite" role="status" className="min-h-6">{spokenSummary}</p>
     {recognized&&<p role="status" className="rounded-xl border border-emerald-300/40 p-4 text-emerald-100">{t.placeRecognized(recognized.name)}</p>}
+    {locationEstimate?.state==='TRACKING'&&<section className="space-y-3 rounded-xl border border-amber-300/40 p-4"><p>موقعك الحالي: بالقرب من {recognized?.name??'مكان معروف'} · الثقة {Math.round(locationEstimate.confidence*100)}٪. التقدير مرتبط بلوحة معروفة وليس قياسًا ميدانيًا للدقة.</p><div className="flex flex-wrap gap-2"><input className="min-h-12 rounded-xl border border-amber-200/40 bg-stone-950 px-3" value={savedName} onChange={e=>setSavedName(e.target.value)} placeholder="اسم مكانك الخاص" aria-label="اسم مكانك الخاص"/><button className={secondary} disabled={!savedName.trim()} onClick={savePersonal}>احفظ هذا المكان</button></div><p role="status" aria-live="polite">{saveNotice}</p></section>}
+    {locationEstimate?.state==='LOCALIZATION_LOST'&&<p role="alert" className="rounded-xl border border-amber-300/40 p-4">تعذر تحديد موقعك بدقة داخل المبنى. وجّه الكاميرا نحو لوحة مكان معروف لإعادة التثبيت.</p>}
     {candidates.length>0&&<div role="status" aria-live="polite" className="space-y-2">{candidates.slice(0,2).map(candidate=><p key={candidate.id}>{candidate.lookupStatus==='UNAVAILABLE'?t.candidateOffline(candidate.detectedText):t.candidate(candidate.detectedText)}</p>)}</div>}
     <video ref={videoRef} muted playsInline aria-hidden="true" aria-label={t.preview} className="aspect-video w-full max-w-md rounded-xl bg-stone-950 object-cover" />
   </div></Layout>;

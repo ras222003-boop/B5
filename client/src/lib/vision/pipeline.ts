@@ -1,10 +1,12 @@
 import type { DepthProvider, DepthReading, MetricDepthMap, MetricDepthProvider, OCRDetection, OCRProvider, PlaceCandidate, RecognizedPlace, RelativeDepthMap, RelativeDepthProvider, SceneDescription, SceneSegmentationProvider, SegmentationGrid, VisionDetection, VisionMode, VisionProvider } from '@shared/vision';
 import type { VisionConfig } from './config';
+import type { Place } from '@shared/navigation';
 import { captureFrame } from './camera';
 import { BasiraSafetyEngine, classifyDirection, classifyVertical } from './safety';
 import { isNavigationText, normalizePlaceText, signTypeForText, VisualPlaceRecognitionService } from './placeRecognition';
 import { SceneUnderstandingService, VisionAnnouncementService, type VisionCopy } from './scene';
 import { VisionFusionEngine } from './fusion';
+import { hazardRank } from '@/lib/guidance/safety';
 
 interface Callbacks {
   scene:(description:SceneDescription)=>void;
@@ -22,6 +24,7 @@ export interface VisionPipelineOptions {
   segmentationIntervalMs?:number;depthIntervalMs?:number;
   config:VisionConfig; copy:VisionCopy; mode:VisionMode;
   buildingId:string|null; floorId:string|null;
+  localPlaces?:Place[];
   announcement:VisionAnnouncementService; callbacks:Callbacks;
 }
 
@@ -60,13 +63,12 @@ export class VisionPipeline {
     this.safety=new BasiraSafetyEngine(options.config);
     this.fusion=new VisionFusionEngine(this.safety);
     this.scene=new SceneUnderstandingService(options.copy);
-    this.place=new VisualPlaceRecognitionService(options.buildingId,options.floorId);
+    this.place=new VisualPlaceRecognitionService(options.buildingId,options.floorId,options.localPlaces);
   }
   get snapshot(){return this.latest;}
   get active(){return this.running;}
   async start(){
     if(this.running)return;
-    if(this.options.mode!=='EXPLORATION')throw new Error('navigation_mode_unavailable_in_B2');
     this.running=true;
     this.generation++;
     console.info('Basira vision session started',{mode:this.options.mode});
@@ -111,9 +113,12 @@ export class VisionPipeline {
     const relativeDepth=this.relativeDepth&&now-this.relativeDepth.timestamp<2_000?this.relativeDepth:null;
     const metricDepth=this.metricDepth&&now-this.metricDepth.timestamp<2_000?this.metricDepth:null;
     const frame=this.fusion.fuse({objects:this.latestObjects,segmentation,relativeDepth,metricDepth,signs});
-    this.latest=this.scene.summarize(frame.events,this.recognizedPlace,Date.now(),frame.walkableArea);
+    const events=this.options.mode==='NAVIGATION'
+      ? [...frame.events].sort((a,b)=>hazardRank(b)-hazardRank(a)).filter(event=>hazardRank(event)>=3)
+      : frame.events;
+    this.latest=this.scene.summarize(events,this.recognizedPlace,Date.now(),frame.walkableArea);
     this.options.callbacks.scene(this.latest);
-    const alert=this.options.announcement.announce(frame.events,Date.now());
+    const alert=this.options.announcement.announce(this.options.mode==='NAVIGATION'?events:frame.events,Date.now());
     if(alert)this.options.callbacks.alert(alert.text,alert.event.riskLevel);
   }
   private async processGeometry(generation:number,timestamp:number){

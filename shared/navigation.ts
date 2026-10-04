@@ -43,6 +43,7 @@ export interface SavedPlace {
   id: string; name: string; category: typeof savedCategories[number]; notes: string | null;
   latitude: number | null; longitude: number | null; buildingId: string | null;
   floorId: string | null; placeId: string | null; isFavorite: boolean;
+  localX?: number | null; localY?: number | null; localizationConfidence?: number | null;
   lastUsedAt: string | null; createdAt: string; updatedAt: string;
   buildingName?: string | null; floorName?: string | null;
 }
@@ -53,6 +54,11 @@ export type { VisionProvider, OCRProvider, DepthProvider, ObstacleProvider, Hapt
   VisionDetection, ObstacleDetection, SceneDescription, DepthReading, OCRDetection, PlaceCandidate, RiskLevel,
   SegmentationGrid, RelativeDepthMap, MetricDepthMap, WalkableAreaResult } from './vision';
 export interface IndoorLocalizationProvider { locate(buildingId: string): Promise<{ floorId: string; x: number; y: number } | null> }
+export type { LocalizationEstimate, LocalizationSource, LocalizationState, LocalizationConfig, PositionObservation,
+  MotionSample, VisualAnchor, FloorTransitionEvent,
+  MappingSession, MappingTrackPoint, MapSuggestion, FloorEstimate, HeadingEstimate, RelocalizationEvent,
+  BeaconLocalizationProvider, WifiLocalizationProvider, NfcAnchorProvider, BarometerLocalizationProvider,
+  NativeArLocalizationProvider } from './localization';
 export interface NavigationProvider { prepareDestination(placeId: string): Promise<void> }
 export interface AutoMapperProvider { importGraph(buildingId: string, nodes: MapNode[], edges: MapEdge[]): Promise<void> }
 export interface VoiceNavigationProvider { announce(instruction: string): Promise<void> }

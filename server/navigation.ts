@@ -4,6 +4,7 @@ import { fromNodeHeaders } from 'better-auth/node';
 import { z } from 'zod';
 import { auth, pool } from './auth';
 import { buildingTypes, placeTypes, nodeTypes, savedCategories, verificationStatuses, accessibilityLevels } from '../shared/navigation';
+import { registerLocalizationRoutes } from './localization';
 
 const id = z.string().uuid();
 const name = z.string().trim().min(1).max(255);
@@ -29,6 +30,9 @@ const placeInput = z.object({
 const savedInput = z.object({
   name, category: z.enum(savedCategories).default('OTHER'), notes: text(), latitude, longitude,
   buildingId: id.nullable().optional(), floorId: id.nullable().optional(), placeId: id.nullable().optional(),
+  localX: z.number().finite().min(-100000).max(100000).nullable().optional(),
+  localY: z.number().finite().min(-100000).max(100000).nullable().optional(),
+  localizationConfidence: z.number().min(0).max(1).nullable().optional(),
   isFavorite: z.boolean().optional(),
 });
 const nodeInput = z.object({ floorId: id, placeId: id.nullable().optional(), x: z.number().finite(), y: z.number().finite(), nodeType: z.enum(nodeTypes), accessibilityLevel: z.enum(accessibilityLevels).default('UNKNOWN') });
@@ -42,7 +46,7 @@ const edgeInput = z.object({
 type Data = Record<string, any>;
 const camel = (key: string) => key.replace(/_([a-z])/g, (_, letter: string) => letter.toUpperCase());
 const booleans = new Set(['is_public','is_favorite','has_stairs','has_ramp','wheelchair_accessible','visually_impaired_friendly','temporarily_closed']);
-const numbers = new Set(['latitude','longitude','local_x','local_y','x','y','distance_meters','confidence_score']);
+const numbers = new Set(['latitude','longitude','local_x','local_y','x','y','distance_meters','confidence_score','localization_confidence']);
 function present(value: Data): Data {
   const out: Data = {};
   for (const [key, raw] of Object.entries(value)) {
@@ -123,6 +127,7 @@ export class PlaceSearchService {
 export function registerNavigationRoutes(app: Express) {
   const api = express.Router();
   app.use('/api/navigation', api);
+  registerLocalizationRoutes(api);
   api.get('/access', asyncRoute(async (req, res) => res.set('Cache-Control','no-store').json(await identity(req))));
   api.get('/buildings', asyncRoute(async (req, res) => {
     const q = queryText(req);
@@ -218,13 +223,20 @@ export function registerNavigationRoutes(app: Express) {
     const saved=await rows(`SELECT s.*,b.name AS building_name,f.name AS floor_name FROM basira_saved_places s LEFT JOIN basira_buildings b ON b.id=s.building_id LEFT JOIN basira_floors f ON f.id=s.floor_id WHERE s.user_id=? AND (?='' OR s.name LIKE ?)${clause} ORDER BY ${filter==='recent'?'s.last_used_at':'s.updated_at'} DESC LIMIT 200`,[userId,q,like(q)]);
     res.set('Cache-Control','private, no-store').json({savedPlaces:saved});
   }));
+  api.get('/saved-places/:id', asyncRoute(async (req,res) => {
+    if (!uuid(req)) return res.status(400).json({error:'invalid_id'});
+    const userId=await owner(req,res); if (!userId) return;
+    const savedPlace=await one(`SELECT s.*,b.name AS building_name,f.name AS floor_name FROM basira_saved_places s LEFT JOIN basira_buildings b ON b.id=s.building_id LEFT JOIN basira_floors f ON f.id=s.floor_id WHERE s.id=? AND s.user_id=?`,[req.params.id,userId]);
+    res.set('Cache-Control','private, no-store').status(savedPlace?200:404).json(savedPlace?{savedPlace}:{error:'not_found'});
+  }));
   api.post('/saved-places', asyncRoute(async (req,res) => {
     const userId=await owner(req,res); if (!userId) return;
     const data=parse(savedInput,req,res); if (!data) return;
     if (!await validLocation(data)) return res.status(400).json({error:'location_mismatch'});
+    if ((data.localX!=null||data.localY!=null) && (!data.buildingId||!data.floorId||data.localX==null||data.localY==null)) return res.status(400).json({error:'invalid_local_position'});
     if (!data.placeId && (data.latitude==null||data.longitude==null) && !data.buildingId) return res.status(400).json({error:'location_required'});
     const newId=randomUUID();
-    await pool.execute(`INSERT INTO basira_saved_places (id,user_id,name,category,notes,latitude,longitude,building_id,floor_id,place_id,is_favorite) VALUES (?,?,?,?,?,?,?,?,?,?,?)`,[newId,userId,data.name,data.category,value(data.notes),value(data.latitude),value(data.longitude),value(data.buildingId),value(data.floorId),value(data.placeId),bool(data.isFavorite)]);
+    await pool.execute(`INSERT INTO basira_saved_places (id,user_id,name,category,notes,latitude,longitude,building_id,floor_id,place_id,is_favorite,local_x,local_y,localization_confidence) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,[newId,userId,data.name,data.category,value(data.notes),value(data.latitude),value(data.longitude),value(data.buildingId),value(data.floorId),value(data.placeId),bool(data.isFavorite),value(data.localX),value(data.localY),value(data.localizationConfidence)]);
     res.set('Cache-Control','private, no-store').status(201).json({savedPlace:await one('SELECT * FROM basira_saved_places WHERE id=? AND user_id=?',[newId,userId])});
   }));
   api.patch('/saved-places/:id', asyncRoute(async (req,res) => {
@@ -232,8 +244,13 @@ export function registerNavigationRoutes(app: Express) {
     const userId=await owner(req,res); if (!userId) return;
     const data=parse(savedInput.partial(),req,res); if (!data) return;
     const old=await one('SELECT * FROM basira_saved_places WHERE id=? AND user_id=?',[req.params.id,userId]); if (!old) return res.status(404).json({error:'not_found'});
+    if (((data.buildingId!==undefined&&data.buildingId!==old.buildingId)||(data.floorId!==undefined&&data.floorId!==old.floorId)||(data.placeId!==undefined&&data.placeId!==old.placeId))&&data.localX===undefined&&data.localY===undefined) {
+      data.localX=null;data.localY=null;data.localizationConfidence=null;
+    }
     if (!await validLocation({...old,...data})) return res.status(400).json({error:'location_mismatch'});
-    const columns:Record<string,string>={name:'name',category:'category',notes:'notes',latitude:'latitude',longitude:'longitude',buildingId:'building_id',floorId:'floor_id',placeId:'place_id',isFavorite:'is_favorite'};
+    const position={...old,...data};
+    if ((position.localX!=null||position.localY!=null) && (!position.buildingId||!position.floorId||position.localX==null||position.localY==null)) return res.status(400).json({error:'invalid_local_position'});
+    const columns:Record<string,string>={name:'name',category:'category',notes:'notes',latitude:'latitude',longitude:'longitude',buildingId:'building_id',floorId:'floor_id',placeId:'place_id',isFavorite:'is_favorite',localX:'local_x',localY:'local_y',localizationConfidence:'localization_confidence'};
     const entries=Object.entries(data); if (!entries.length) return res.status(400).json({error:'empty_update'});
     await pool.execute(`UPDATE basira_saved_places SET ${entries.map(([k])=>`${columns[k]}=?`).join(',')} WHERE id=? AND user_id=?`,[...entries.map(([k,v])=>k==='isFavorite'?bool(v):value(v)),req.params.id,userId]);
     res.set('Cache-Control','private, no-store').json({savedPlace:await one('SELECT * FROM basira_saved_places WHERE id=? AND user_id=?',[req.params.id,userId])});
@@ -259,7 +276,7 @@ export function registerNavigationRoutes(app: Express) {
   }));
   api.get('/buildings/:id/graph', asyncRoute(async (req,res) => {
     if (!uuid(req)) return res.status(400).json({error:'invalid_id'});
-    const building=await one("SELECT id,name,map_status FROM basira_buildings WHERE id=? AND status='ACTIVE'",[req.params.id]);
+    const building=await one("SELECT * FROM basira_buildings WHERE id=? AND status='ACTIVE'",[req.params.id]);
     if (!building) return res.status(404).json({error:'not_found'});
     const [nodes,edges]=await Promise.all([rows('SELECT n.id,n.building_id,n.floor_id,CASE WHEN p.is_public=1 THEN n.place_id ELSE NULL END AS place_id,n.x,n.y,n.node_type,n.accessibility_level FROM basira_map_nodes n LEFT JOIN basira_places p ON p.id=n.place_id WHERE n.building_id=?',[req.params.id]),rows('SELECT * FROM basira_map_edges WHERE building_id=?',[req.params.id])]);
     res.json({building,nodes,edges});

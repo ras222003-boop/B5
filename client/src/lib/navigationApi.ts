@@ -21,5 +21,6 @@ export const navApi = {
   graph: (id: string) => navigationRequest<BuildingGraph>(`/buildings/${id}/graph`),
   search: (q: string, currentBuildingId?: string | null, includeOthers = false) => navigationRequest<{results: SearchResult[]}>(`/search?q=${encodeURIComponent(q)}&currentBuildingId=${encodeURIComponent(currentBuildingId ?? '')}&includeOtherBuildings=${includeOthers}`),
   saved: (filter: 'all' | 'favorites' | 'recent' = 'all', q = '') => navigationRequest<{savedPlaces: SavedPlace[]}>(`/saved-places?filter=${filter}&q=${encodeURIComponent(q)}`),
+  savedPlace: (id: string) => navigationRequest<{savedPlace: SavedPlace}>(`/saved-places/${encodeURIComponent(id)}`),
   access: () => navigationRequest<{userId: string | null; role: string | null}>('/access'),
 };
