@@ -26,6 +26,7 @@ import Account from "./pages/Account";
 import { speechEngine } from './lib/speechEngine';
 const Navigation=lazy(()=>import('./pages/Navigation'));
 const VoiceSettings=lazy(()=>import('./pages/VoiceSettings'));
+const VoiceValidation=lazy(()=>import('./pages/VoiceValidation'));
 const BuildingPage=lazy(()=>import('./pages/Navigation').then(page=>({default:page.BuildingPage})));
 const MyPlaces=lazy(()=>import('./pages/Navigation').then(page=>({default:page.MyPlaces})));
 const NavigationAdmin=lazy(()=>import('./pages/NavigationAdmin'));
@@ -61,6 +62,7 @@ function Router() {
       <Route path="/navigation/capabilities" component={NavigationCapabilities} />
       <Route path="/settings/privacy-permissions" component={NavigationPermissions} />
       <Route path="/settings/voice" component={VoiceSettings} />
+      <Route path="/settings/voice-validation" component={VoiceValidation} />
       <Route path="/navigation/admin" component={NavigationAdmin} />
       <Route path="/navigation/buildings/:id" component={BuildingPage} />
       <Route path="/how-it-works" component={HowItWorks} />

@@ -3,6 +3,7 @@ import Layout from '@/components/Layout';
 import { useI18n } from '@/i18n';
 import { getSpeechPreferences, saveSpeechPreferences, speechEngine, voicePreview, type SpeechPreferences } from '@/lib/speechEngine';
 import { voicesFor } from '@shared/speech';
+import { Link } from 'wouter';
 
 export default function VoiceSettings() {
   const { lang } = useI18n();
@@ -31,5 +32,6 @@ export default function VoiceSettings() {
     <label className="flex items-center gap-3"><input type="checkbox" checked={value.screenReaderMode} onChange={e => { update({ screenReaderMode: e.target.checked }); if (e.target.checked) speechEngine.stop(); }}/>{labels.screenReader}</label>
     <div className="flex gap-3"><button className="min-h-12 rounded-lg bg-amber-300 px-4 font-bold text-stone-950" onClick={() => void voicePreview()}>{labels.preview}</button><button className="min-h-12 rounded-lg border border-amber-300 px-4" onClick={() => speechEngine.stop()}>{labels.stop}</button></div>
     <p role="status" aria-live="polite">{mode === 'PREMIUM' ? labels.premium : mode === 'MUTED' ? labels.muted : labels.local}</p>
+    <Link href="/settings/voice-validation" className="inline-flex min-h-12 items-center text-amber-200 underline">Human listening validation / اختبار الاستماع البشري</Link>
   </main></Layout>;
 }

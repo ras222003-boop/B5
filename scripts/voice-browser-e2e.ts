@@ -11,10 +11,11 @@ const browser = await chromium.launch({ headless: true, args: ['--autoplay-polic
 const context = await browser.newContext();
 const page = await context.newPage();
 const speechRequests: Array<{ text: string; language: string; arabicStyle: string; voiceId: string; context: string }> = [];
+let premiumMockStatus = 401;
 page.on('pageerror', error => { throw error; });
 await page.route('**/api/speech/synthesize', async route => {
   speechRequests.push(route.request().postDataJSON());
-  await route.fulfill({ status: 200, contentType: 'audio/wav', body: wav });
+  await route.fulfill(premiumMockStatus === 200 ? { status: 200, contentType: 'audio/wav', body: wav } : { status: premiumMockStatus, contentType: 'application/json', body: JSON.stringify({ error: 'sign_in_required', fallback: 'browser' }) });
 });
 await page.route('**/api/ocr', route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ examTitle: 'اختبار', language: 'ar', detectedLanguages: ['ar'], questions: [{ id: 1, number: '1', text: question, type: 'multiple', options: ['الرياض', 'جدة'], optionLabels: ['أ', 'ب'], confidence: 'high', uncertainParts: [] }], quality: { status: 'good', issues: [], confidence: 'high' } }) }));
 async function open(path: string) {
@@ -26,6 +27,11 @@ async function open(path: string) {
 function assert(condition: unknown, message: string): asserts condition { if (!condition) throw new Error(message); }
 try {
   await open('/settings/voice');
+  await page.evaluate(() => { (window as any).__spoken = []; window.speechSynthesis.speak = (utterance: SpeechSynthesisUtterance) => { (window as any).__spoken.push(utterance.text); utterance.onstart?.(new Event('start') as SpeechSynthesisEvent); queueMicrotask(() => utterance.onend?.(new Event('end') as SpeechSynthesisEvent)); }; });
+  await page.getByRole('button', { name: 'استمع إلى الصوت' }).click();
+  await page.waitForTimeout(200);
+  assert((await page.evaluate(() => (window as any).__spoken.length)) > 0, 'anonymous voice preview did not use browser fallback');
+  premiumMockStatus = 200;
   await page.getByRole('radio', { name: 'العربية السعودية' }).check();
   await page.getByLabel('نوع الصوت').selectOption('MALE');
   await page.getByRole('combobox').nth(2).selectOption('ar-SA-HamedNeural');
@@ -52,6 +58,14 @@ try {
   await page.getByRole('button', { name: 'استمع إلى الصوت' }).click();
   await page.waitForTimeout(300);
   assert(speechRequests.some(req => req.language === 'zh-CN'), 'Chinese preview failed');
+  await open('/settings/voice-validation');
+  assert(await page.getByRole('combobox', { name: 'Curated voice' }).locator('option').count() === 14, 'human validation page missing curated voices');
+  assert(await page.getByRole('button', { name: /^Play / }).count() === 6, 'human validation page missing sample categories');
+  await page.getByRole('combobox', { name: 'Curated voice' }).selectOption('ar-SA-HamedNeural');
+  await page.getByRole('button', { name: 'Play Exam' }).click();
+  await page.waitForTimeout(300);
+  assert(speechRequests.some(req => req.voiceId === 'ar-SA-HamedNeural' && req.context === 'QUESTION' && req.text === question), 'human validation changed Saudi exam question');
+  await open('/settings/voice');
   await page.reload();
   assert(await page.getByLabel('اللغة').inputValue() === 'zh-CN', 'voice preference did not persist');
   await page.getByLabel('اللغة').selectOption('ar');
@@ -79,10 +93,12 @@ try {
   assert(priority.events.includes('turn-aborted') && priority.fallbackCount === 0, 'browser safety interruption failed');
   assert(priority.arrival.includes('قدامك'), 'Saudi navigation phrase failed in browser');
   const beforeMuted = speechRequests.length;
+  await page.evaluate(() => { (window as any).__spoken = []; window.speechSynthesis.speak = (utterance: SpeechSynthesisUtterance) => { (window as any).__spoken.push(utterance.text); queueMicrotask(() => utterance.onend?.(new Event('end') as SpeechSynthesisEvent)); }; });
   await page.getByLabel('استخدم قارئ الشاشة بدل صوت بصيرة').check();
   await page.getByRole('button', { name: 'استمع إلى الصوت' }).click();
   await page.waitForTimeout(100);
   assert(speechRequests.length === beforeMuted, 'screen reader mode did not suppress Basira speech');
+  assert((await page.evaluate(() => (window as any).__spoken.length)) === 0, 'screen reader mode did not suppress browser speech');
   await page.getByLabel('استخدم قارئ الشاشة بدل صوت بصيرة').uncheck();
   await context.setOffline(true);
   await page.evaluate(() => { (window as any).__spoken = []; window.speechSynthesis.speak = (utterance: SpeechSynthesisUtterance) => { (window as any).__spoken.push(utterance.text); queueMicrotask(() => utterance.onend?.(new Event('end') as SpeechSynthesisEvent)); }; });
@@ -96,8 +112,11 @@ try {
   await page.getByText(question).click();
   await page.waitForTimeout(300);
   assert(speechRequests.some(req => req.context === 'QUESTION' && req.arabicStyle === 'SAUDI' && req.text.includes(question)), `Saudi exam reading altered the question: ${JSON.stringify(speechRequests.map(req => ({ context: req.context, style: req.arabicStyle, language: req.language })))}`);
+  const collector = await page.evaluate(() => ({ present: Boolean((window as any).__MANUS_DEBUG_COLLECTOR__), data: JSON.stringify((window as any).__MANUS_DEBUG_COLLECTOR__?.store ?? {}) }));
+  assert(collector.present, 'debug collector privacy guard was not loaded');
+  assert(!collector.data.includes(question), 'debug collector retained exam question text');
   await open('/navigation/guidance');
   await page.getByText('خيارات المسار والإرشاد').click();
   assert(await page.getByText('نمط العربية').count() > 0, 'navigation Arabic style control missing');
-  console.log(JSON.stringify({ status: 'PASS', speechRequests: speechRequests.length, checks: ['MSA male/female', 'Saudi male/female', 'English', 'Chinese', 'preview', 'persistence', 'screen reader', 'offline fallback', 'Saudi exam text', 'navigation', 'safety interruption'] }));
+  console.log(JSON.stringify({ status: 'PASS', speechRequests: speechRequests.length, checks: ['anonymous fallback', 'premium preview', 'MSA male/female', 'Saudi male/female', 'English', 'Chinese', '14-voice validation page', 'persistence', 'screen reader mutes both', 'offline fallback', 'Saudi exam text', 'debug collector privacy', 'navigation', 'safety interruption'] }));
 } finally { await browser.close(); }
