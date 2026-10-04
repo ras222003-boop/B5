@@ -52,11 +52,11 @@ real screen reader, blind-participant, or real-building test.
 | 39 | `pnpm build` | **PASS**. Vite and server bundle completed; large-chunk warnings are recorded above. |
 | 40 | `git diff --check` | **PASS**. |
 | 41 | Commits created | `e08cdf7 fix(validation): close browser and auth validation gaps`; `e8b8ab9 test(validation): add reproducible validation gate`. |
-| 42 | Latest SHA | `e8b8ab9` before the final report update; the final response reports the post-update SHA. |
+| 42 | Latest SHA | `fc5a14f` was the latest SHA when this report was written; the final task response verifies the post-report SHA with `git rev-parse HEAD` and `git ls-remote`. |
 | 43 | GitHub branch | [codex/validation-gate](https://github.com/ras222003-boop/B5/tree/codex/validation-gate) |
-| 44 | Pull Request | Created after push if the remote branch and final checks are clean; link is filled in the final task response. |
-| 45 | Mergeability | Not merged in this gate. GitHub mergeability is checked after the PR is created and reported from the API. |
-| 46 | `git status` | Must be clean after commit and push; the final response reports the exact output. |
+| 44 | Pull Request | Not created: GitHub compare was available but the connected browser was signed out, and the user made PR creation optional. Branch link is available above. |
+| 45 | Mergeability | No PR was merged. GitHub's compare page reported **Able to merge / these branches can be automatically merged** for `main...codex/validation-gate`. |
+| 46 | `git status` | Clean after the final commit and push; the final response reports the exact output. |
 | 47 | `main` | Not modified directly. Work began from the recorded `main` SHA on `codex/validation-gate`. |
 | 48 | Force push | Not used. |
 | 49 | Final GO / NO-GO | **NO-GO** for controlled field validation. |
