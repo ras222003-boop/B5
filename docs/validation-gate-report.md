@@ -28,7 +28,7 @@ real screen reader, blind-participant, or real-building test.
 | 15 | Vision/WASM runtime | The Vision page reached `جارٍ تحليل البيئة` with no page error. The optional SegFormer path reported its designed graceful warning; full model accuracy and device WASM performance remain unmeasured. |
 | 16 | OCR Arabic/English/Chinese runtime | The local OCR fixture suite passed for `ar`, `en`, and `zh-CN`; browser route startup did not crash. Real camera sign accuracy was not measured. |
 | 17 | OCR flaky check | `server/ocr.test.ts` passed 25/25 three consecutive times (about 13.27–14.03 seconds per Vitest run). The expected provider-failure log was emitted by the test. |
-| 18 | TTS/STT | Browser capability detection is recorded by the browser harness. TTS availability is platform-dependent; real speech recognition was not claimed unless the browser exposed it. |
+| 18 | TTS/STT | Chromium exposed `speechSynthesis` with 4 voices and `SpeechRecognition`/`webkitSpeechRecognition` in this run. This proves capability detection only; no real microphone speech-recognition session was claimed. |
 | 19 | Automated accessibility | Axe on Navigation, Permissions, Capabilities, Vision, Mapping, Guidance, Shared Map, and Indoor Manager reported no violations after fixes. This is not a screen-reader test. |
 | 20 | Keyboard navigation | `Tab`, `Shift+Tab`, and `Escape` smoke checks passed on all 8 route cases; focus did not fall back to `body`. |
 | 21 | RTL/LTR | Browser runtime reported Arabic `rtl`, English `ltr`, and Simplified Chinese `ltr`; all three rendered non-empty Navigation content. |
@@ -51,8 +51,8 @@ real screen reader, blind-participant, or real-building test.
 | 38 | Test count | **186/186 passed** across 23 files after the Better Auth ID regression test was added. |
 | 39 | `pnpm build` | **PASS**. Vite and server bundle completed; large-chunk warnings are recorded above. |
 | 40 | `git diff --check` | **PASS**. |
-| 41 | Commits created | Pending final commit on this validation branch; it will contain the validation harness, docs, CI, and fixes listed above. |
-| 42 | Latest SHA | Filled after the final commit and verified before push. |
+| 41 | Commits created | `e08cdf7 fix(validation): close browser and auth validation gaps`; `e8b8ab9 test(validation): add reproducible validation gate`. |
+| 42 | Latest SHA | `e8b8ab9` before the final report update; the final response reports the post-update SHA. |
 | 43 | GitHub branch | [codex/validation-gate](https://github.com/ras222003-boop/B5/tree/codex/validation-gate) |
 | 44 | Pull Request | Created after push if the remote branch and final checks are clean; link is filled in the final task response. |
 | 45 | Mergeability | Not merged in this gate. GitHub mergeability is checked after the PR is created and reported from the API. |
