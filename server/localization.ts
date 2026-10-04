@@ -4,6 +4,7 @@ import { fromNodeHeaders } from 'better-auth/node';
 import { z } from 'zod';
 import { auth, pool } from './auth';
 import { suggestionTypes } from '../shared/localization';
+import { advanceMapVersion, type Change } from './sharedMapPromotion';
 
 const id=z.string().uuid();
 const position=z.number().finite().min(-100000).max(100000);
@@ -154,6 +155,9 @@ export function registerLocalizationRoutes(api:Router){
       if(s.status!=='PENDING'){await connection.rollback();return res.status(409).json({error:'already_reviewed'});}
       const [sessions]=await connection.query<any[]>('SELECT status FROM basira_mapping_sessions WHERE id=?',[s.session_id]);
       if(sessions[0]?.status==='ACTIVE'){await connection.rollback();return res.status(409).json({error:'session_active'});}
+      const changes:Change[]=[];
+      const snapshot=async(entity:Change['entityType'],entityId:string)=>{const table={PLACE:'basira_places',MAP_NODE:'basira_map_nodes',MAP_EDGE:'basira_map_edges'}[entity];const [records]=await connection.query<any[]>(`SELECT * FROM ${table} WHERE id=?`,[entityId]);return records[0]??null;};
+      let version:number|null=null;
       if(body.data.decision==='ACCEPTED'){
         if(!s.floor_id){await connection.rollback();return res.status(400).json({error:'floor_required'});}
         const [floors]=await connection.query<any[]>('SELECT id FROM basira_floors WHERE id=? AND building_id=?',[s.floor_id,s.building_id]);
@@ -165,13 +169,13 @@ export function registerLocalizationRoutes(api:Router){
           if(s.type==='PLACE_ANCHOR'&&!placeId&&s.name){
             const [places]=await connection.query<any[]>('SELECT id FROM basira_places WHERE building_id=? AND floor_id=? AND name=? AND local_x IS NOT NULL AND local_y IS NOT NULL AND SQRT(POW(local_x-?,2)+POW(local_y-?,2))<=2.5 LIMIT 1',[s.building_id,s.floor_id,s.name,s.x,s.y]);
             placeId=places[0]?.id??randomUUID();
-            if(!places.length)await connection.execute("INSERT INTO basira_places (id,building_id,floor_id,name,place_type,local_x,local_y,verification_status,confidence_score,is_public,created_by) VALUES (?,?,?,?,?,?,?,'DISCOVERED',?,1,?)",
-              [placeId,s.building_id,s.floor_id,s.name,s.suggested_place_type??'OTHER',s.x,s.y,s.confidence,viewer.userId]);
+            if(!places.length){await connection.execute("INSERT INTO basira_places (id,building_id,floor_id,name,place_type,local_x,local_y,verification_status,confidence_score,is_public,created_by) VALUES (?,?,?,?,?,?,?,'DISCOVERED',?,1,?)",
+              [placeId,s.building_id,s.floor_id,s.name,s.suggested_place_type??'OTHER',s.x,s.y,s.confidence,viewer.userId]);changes.push({action:'CREATE',entityType:'PLACE',entityId:placeId,before:null,after:await snapshot('PLACE',placeId)});}
           }
           const [existing]=await connection.query<any[]>('SELECT id FROM basira_map_nodes WHERE building_id=? AND floor_id=? AND SQRT(POW(x-?,2)+POW(y-?,2))<=1.5 LIMIT 1',[s.building_id,s.floor_id,s.x,s.y]);
-          if(!existing.length)await connection.execute("INSERT INTO basira_map_nodes (id,building_id,floor_id,place_id,x,y,node_type,accessibility_level) VALUES (?,?,?,?,?,?,?,'UNKNOWN')",
-            [randomUUID(),s.building_id,s.floor_id,placeId,s.x,s.y,nodeType[s.type]]);
-          else if(placeId)await connection.execute('UPDATE basira_map_nodes SET place_id=? WHERE id=? AND place_id IS NULL',[placeId,existing[0].id]);
+          if(!existing.length){const newNodeId=randomUUID();await connection.execute("INSERT INTO basira_map_nodes (id,building_id,floor_id,place_id,x,y,node_type,accessibility_level) VALUES (?,?,?,?,?,?,?,'UNKNOWN')",
+            [newNodeId,s.building_id,s.floor_id,placeId,s.x,s.y,nodeType[s.type]]);changes.push({action:'CREATE',entityType:'MAP_NODE',entityId:newNodeId,before:null,after:await snapshot('MAP_NODE',newNodeId)});}
+          else if(placeId){const before=await snapshot('MAP_NODE',existing[0].id);await connection.execute('UPDATE basira_map_nodes SET place_id=? WHERE id=? AND place_id IS NULL',[placeId,existing[0].id]);const after=await snapshot('MAP_NODE',existing[0].id);if(JSON.stringify(before)!==JSON.stringify(after))changes.push({action:'UPDATE',entityType:'MAP_NODE',entityId:existing[0].id,before,after});}
         }else if(s.type==='CORRIDOR'||s.type==='NEW_EDGE'){
           const g=jsonValue(s.geometry);
           if(!geometry.safeParse(g).success||!g){await connection.rollback();return res.status(400).json({error:'geometry_required'});}
@@ -181,18 +185,19 @@ export function registerLocalizationRoutes(api:Router){
           for(const p of [g.from,g.to]){
             const [near]=await connection.query<any[]>('SELECT id FROM basira_map_nodes WHERE building_id=? AND floor_id=? AND SQRT(POW(x-?,2)+POW(y-?,2))<=1.5 LIMIT 1',[s.building_id,s.floor_id,p.x,p.y]);
             const nodeId=near[0]?.id??randomUUID();
-            if(!near.length)await connection.execute("INSERT INTO basira_map_nodes (id,building_id,floor_id,x,y,node_type,accessibility_level) VALUES (?,?,?,?,?,'CORRIDOR','UNKNOWN')",[nodeId,s.building_id,s.floor_id,p.x,p.y]);
+            if(!near.length){await connection.execute("INSERT INTO basira_map_nodes (id,building_id,floor_id,x,y,node_type,accessibility_level) VALUES (?,?,?,?,?,'CORRIDOR','UNKNOWN')",[nodeId,s.building_id,s.floor_id,p.x,p.y]);changes.push({action:'CREATE',entityType:'MAP_NODE',entityId:nodeId,before:null,after:await snapshot('MAP_NODE',nodeId)});}
             ends.push(nodeId);
           }
           if(ends[0]===ends[1]){await connection.rollback();return res.status(400).json({error:'edge_collapsed'});}
           const [edge]=await connection.query<any[]>('SELECT id FROM basira_map_edges WHERE building_id=? AND ((from_node_id=? AND to_node_id=?) OR (from_node_id=? AND to_node_id=?)) LIMIT 1',[s.building_id,ends[0],ends[1],ends[1],ends[0]]);
-          if(!edge.length)await connection.execute("INSERT INTO basira_map_edges (id,building_id,from_node_id,to_node_id,distance_meters,path_type,accessibility_level) VALUES (?,?,?,?,?,'CORRIDOR','UNKNOWN')",[randomUUID(),s.building_id,ends[0],ends[1],length]);
+          if(!edge.length){const newEdgeId=randomUUID();await connection.execute("INSERT INTO basira_map_edges (id,building_id,from_node_id,to_node_id,distance_meters,path_type,accessibility_level) VALUES (?,?,?,?,?,'CORRIDOR','UNKNOWN')",[newEdgeId,s.building_id,ends[0],ends[1],length]);changes.push({action:'CREATE',entityType:'MAP_EDGE',entityId:newEdgeId,before:null,after:await snapshot('MAP_EDGE',newEdgeId)});}
         }
         await connection.execute("UPDATE basira_buildings SET map_status='IN_PROGRESS' WHERE id=? AND map_status='UNMAPPED'",[s.building_id]);
+        if(changes.length)version=await advanceMapVersion(connection,s.building_id,changes,'AUTO_MAPPING',viewer.userId);
       }
       await connection.execute('UPDATE basira_map_suggestions SET status=?,reviewed_at=CURRENT_TIMESTAMP(3),reviewed_by=? WHERE id=?',[body.data.decision,viewer.userId,s.id]);
       await connection.commit();
-      res.json({status:body.data.decision});
+      res.json({status:body.data.decision,version});
     }catch(error){await connection.rollback();throw error;}finally{connection.release();}
   }));
 }

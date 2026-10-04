@@ -3,7 +3,7 @@ import type { PoolConnection } from 'mysql2/promise';
 import type { ContributionProposal, ContributionSource, ContributionType, MapDecision } from '../shared/sharedMap';
 
 type Entity='PLACE'|'MAP_NODE'|'MAP_EDGE';
-type Change={action:MapDecision|'ROLLBACK';entityType:Entity;entityId:string;before:Record<string,unknown>|null;after:Record<string,unknown>|null};
+export type Change={action:MapDecision|'ROLLBACK';entityType:Entity;entityId:string;before:Record<string,unknown>|null;after:Record<string,unknown>|null};
 const tables:Record<Entity,string>={PLACE:'basira_places',MAP_NODE:'basira_map_nodes',MAP_EDGE:'basira_map_edges'};
 const columns:Record<Entity,string[]>={
   PLACE:['id','building_id','floor_id','name','room_number','aliases','department_name','description','place_type','local_x','local_y','latitude','longitude','entrance_direction','accessibility_information','verification_status','confidence_score','is_public','created_by'],
@@ -36,7 +36,7 @@ export async function applyApprovedContribution(connection:PoolConnection,buildi
       }else{
         const updates:Record<string,unknown>={verification_status:'OFFICIAL'};
         if(type==='ACCESSIBILITY_INFO'){if(proposal.accessibilityInformation!==null)updates.accessibility_information=proposal.accessibilityInformation;}
-        else {if(proposal.name!==null)updates.name=proposal.name;if(proposal.roomNumber!==null)updates.room_number=proposal.roomNumber;if(proposal.x!==null&&proposal.y!==null){updates.local_x=proposal.x;updates.local_y=proposal.y;}}
+        else {if(proposal.name!==null)updates.name=proposal.name;if(proposal.roomNumber!==null)updates.room_number=proposal.roomNumber;if(type==='PLACE_MOVED')updates.floor_id=proposal.floorId;if(proposal.x!==null&&proposal.y!==null){updates.local_x=proposal.x;updates.local_y=proposal.y;}}
         await change(connection,changes,'PLACE',proposal.targetPlaceId,decision,async()=>{await connection.execute(`UPDATE basira_places SET ${Object.keys(updates).map(key=>`${key}=?`).join(',')} WHERE id=? AND building_id=?`,[...Object.values(updates),proposal.targetPlaceId,buildingId] as any[]);});
         if(type==='PLACE_MOVED'&&proposal.x!==null&&proposal.y!==null){
           const [linked]=await connection.query<any[]>('SELECT id FROM basira_map_nodes WHERE building_id=? AND place_id=? LIMIT 1',[buildingId,proposal.targetPlaceId]);
