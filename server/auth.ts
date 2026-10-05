@@ -25,6 +25,8 @@ const previewOrigins = [
 const publishedOrigin = "https://basira-ve3h8rof.manus.space";
 const customOrigin = process.env.BASIRA_PUBLIC_URL?.replace(/\/+$/, "");
 if (customOrigin && !/^https:\/\/[^/]+$/.test(customOrigin)) throw new Error("BASIRA_PUBLIC_URL must be an HTTPS origin");
+// Secure is the default; only the explicit local development command uses HTTP cookies.
+const production = process.env.NODE_ENV !== "development";
 const origins = [...previewOrigins, publishedOrigin, ...(customOrigin ? [customOrigin] : [])];
 const apple = providerReady.apple ? {
   apple: async () => {
@@ -49,14 +51,14 @@ export const auth = betterAuth({
   secret,
   baseURL: {
     allowedHosts: [...origins.map(origin => new URL(origin).host), "localhost:*", "127.0.0.1:*"],
-    protocol: "auto",
+    protocol: production ? "https" : "http",
     fallback: customOrigin || publishedOrigin,
   },
-  trustedOrigins: [...origins, "http://localhost:3000", "http://localhost:3001", "https://appleid.apple.com"],
+  trustedOrigins: [...origins, ...(!production ? ["http://localhost:3000", "http://localhost:3001", "http://127.0.0.1:3000", "http://127.0.0.1:3001"] : []), "https://appleid.apple.com"],
   advanced: {
     cookiePrefix: "basira",
-    useSecureCookies: true,
-    defaultCookieAttributes: { httpOnly: true, secure: true, sameSite: "none" },
+    useSecureCookies: production,
+    defaultCookieAttributes: { httpOnly: true, secure: production, sameSite: production ? "none" : "lax" },
     database: { validateSchema: false }, // Startup runs the committed additive migrations first.
   },
   rateLimit: { enabled: true, window: 60, max: 30 },

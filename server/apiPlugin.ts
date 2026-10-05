@@ -5,7 +5,6 @@
 import type { Plugin, ViteDevServer } from "vite";
 import express, { type Request, type Response } from "express";
 import { registerOcrRoute } from "./ocr";
-import { registerSpeechRoutes } from './speech';
 import { escapeHtml } from "./locale";
 
 const FORGE_API_URL = (process.env.BUILT_IN_FORGE_API_URL || "https://forge.manus.ai").replace(/\/+$/, "");
@@ -63,10 +62,23 @@ export function vitePluginApiProxy(): Plugin {
   return {
     name: "manus-api-proxy",
     configureServer(server: ViteDevServer) {
-      const speechApp = express();
-      speechApp.use(express.json({ limit: '32kb' }));
-      registerSpeechRoutes(speechApp);
-      server.middlewares.use((req, res, next) => req.url?.startsWith('/api/speech/') ? speechApp(req as Request, res as Response, next) : next());
+      let accountApp: Promise<express.Express> | null = null;
+      server.middlewares.use((req, res, next) => {
+        if (!req.url?.startsWith('/api/auth/') && !req.url?.startsWith('/api/speech/')) return next();
+        accountApp ??= (async () => {
+          const [{ ensureSchema }, { registerAccountAndSpeechRoutes }] = await Promise.all([
+            import('./migrations'), import('./accountRoutes'),
+          ]);
+          await ensureSchema();
+          const app = express();
+          registerAccountAndSpeechRoutes(app);
+          return app;
+        })().catch(error => { accountApp = null; throw error; });
+        accountApp.then(app => app(req as Request, res as Response, next)).catch(() => {
+          res.writeHead(503, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
+          res.end(JSON.stringify({ error: 'account_api_unavailable' }));
+        });
+      });
       let navigationApp: Promise<express.Express> | null = null;
       server.middlewares.use((req, res, next) => {
         if (!req.url?.startsWith('/api/navigation')) return next();

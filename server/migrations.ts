@@ -74,9 +74,7 @@ export async function ensureSchema() {
       "SELECT 1 FROM information_schema.statistics WHERE table_schema=DATABASE() AND table_name='basira_support_tickets' AND index_name='support_request_key_idx' LIMIT 1",
     );
     if (!keyIndex.length) await connection.query("CREATE UNIQUE INDEX support_request_key_idx ON basira_support_tickets (request_key)");
-    // End abandoned sessions and purge detailed coordinates; reviewed suggestions remain.
-    await connection.query("UPDATE basira_mapping_sessions SET status='CANCELLED',ended_at=CURRENT_TIMESTAMP(3) WHERE status='ACTIVE' AND started_at<DATE_SUB(CURRENT_TIMESTAMP(3),INTERVAL 7 DAY)");
-    for(const table of ['basira_mapping_track','basira_mapping_anchors','basira_mapping_floor_events'])await connection.query(`DELETE detail FROM ${table} detail JOIN basira_mapping_sessions s ON s.id=detail.session_id WHERE s.status<>'ACTIVE'`);
+    // Schema preparation is additive. Retention jobs must run separately from migrations.
   } finally {
     connection.release();
   }

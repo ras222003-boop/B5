@@ -1,0 +1,23 @@
+services:
+  mysql:
+    image: mysql:8.4
+    container_name: basira-mysql
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:3307:3306"
+    environment:
+      MYSQL_DATABASE: basira
+      MYSQL_USER: basira
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?Run scripts/setup-local-basira.ps1 first}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?Run scripts/setup-local-basira.ps1 first}
+    volumes:
+      - basira_mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "MYSQL_PWD=\"$${MYSQL_PASSWORD}\" mysql -h 127.0.0.1 -u basira -D basira --silent --skip-column-names -e 'SELECT 1' >/dev/null"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 20s
+
+volumes:
+  basira_mysql_data:
