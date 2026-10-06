@@ -8,7 +8,7 @@ import {
   Camera, Upload, Loader2, Volume2, VolumeX, Mic, MicOff,
   ChevronLeft, ChevronRight, Eye, FileDown, RotateCcw,
   CheckCircle, XCircle, AlertCircle, ScanLine, Languages,
-  GraduationCap, Mail, Save, Send,
+  GraduationCap,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import Layout from "@/components/Layout";
@@ -18,6 +18,7 @@ import { ExamImagePreparationError, prepareExamUpload } from "@/lib/examImage";
 import { beginVoiceAnswer, classifyOcrFailure, consumeVoiceAnswer, countAnswers, ScanAttemptTracker, updateAnswer, type OcrFailureKind, type VoiceAnswerSession } from "@/lib/examFlow";
 import { useI18n, useMessages } from "@/i18n";
 import { examDemoMessages } from "@/i18n/locales/examDemo";
+import ExamDeliveryPanel from "@/components/exam/ExamDeliveryPanel";
 import type { ExamLanguage, OcrQuestion, OcrResult } from "@shared/ocr";
 
 type Question = OcrQuestion;
@@ -41,7 +42,6 @@ type GradingData = {
 
 type Stage = "scan" | "exam" | "review" | "grading" | "export";
 type Notice = { tone: "error" | "warning"; title?: string; message: string; detail?: string };
-type DeliveryNotice = { tone: "success" | "error" | "warning"; message: string };
 
 class OcrHttpError extends Error {
   constructor(public readonly status: number, public readonly code?: unknown) {
@@ -72,11 +72,6 @@ export default function ExamDemo() {
   const [scanNotice, setScanNotice] = useState<Notice | null>(null);
   const [ocrReport, setOcrReport] = useState<Pick<OcrResult, "detectedLanguages" | "quality"> | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
-  const [teacherEmail, setTeacherEmail] = useState("");
-  const [emailDeliveryConfigured, setEmailDeliveryConfigured] = useState<boolean | null>(null);
-  const [deliveryNotice, setDeliveryNotice] = useState<DeliveryNotice | null>(null);
-  const [isSavingTeacherEmail, setIsSavingTeacherEmail] = useState(false);
-  const [isSendingTeacherEmail, setIsSendingTeacherEmail] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const voiceSessionRef = useRef<VoiceAnswerSession | null>(null);
   const answerRevisionsRef = useRef<Record<number, number>>({});
@@ -264,87 +259,6 @@ export default function ExamDemo() {
     }
   }, [answers, examData, examLang, lang, speak, t]);
 
-  const deliveryError = useCallback((status: number, code?: string) => {
-    if (status === 401) return t.delivery.loginRequired;
-    if (code === "invalid_teacher_email") return t.delivery.invalidEmail;
-    if (code === "email_not_configured") return t.delivery.notConfigured;
-    if (code === "delivery_rate_limited") return t.delivery.rateLimited;
-    return status >= 500 ? t.delivery.sendFailed : t.delivery.saveFailed;
-  }, [t.delivery]);
-
-  const loadTeacherEmail = useCallback(async () => {
-    try {
-      const response = await fetch("/api/exam-delivery/settings", { credentials: "include" });
-      if (!response.ok) return;
-      const data = await response.json() as { teacherEmail?: string; emailDeliveryConfigured?: boolean };
-      setTeacherEmail(data.teacherEmail || "");
-      setEmailDeliveryConfigured(Boolean(data.emailDeliveryConfigured));
-    } catch {
-      setDeliveryNotice({ tone: "warning", message: t.delivery.loadFailed });
-    }
-  }, [t.delivery.loadFailed]);
-
-  const saveTeacherEmail = useCallback(async () => {
-    setIsSavingTeacherEmail(true);
-    setDeliveryNotice(null);
-    try {
-      const response = await fetch("/api/exam-delivery/settings", {
-        method: "PUT",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ teacherEmail }),
-      });
-      const data = await response.json().catch(() => ({})) as { teacherEmail?: string; emailDeliveryConfigured?: boolean; error?: string };
-      if (!response.ok) {
-        setDeliveryNotice({ tone: "error", message: deliveryError(response.status, data.error) });
-        return;
-      }
-      setTeacherEmail(data.teacherEmail || teacherEmail.trim().toLowerCase());
-      setEmailDeliveryConfigured(Boolean(data.emailDeliveryConfigured));
-      setDeliveryNotice({ tone: "success", message: t.delivery.saved });
-      speak(t.delivery.saved, 0.9, lang);
-    } catch {
-      setDeliveryNotice({ tone: "error", message: t.delivery.saveFailed });
-    } finally {
-      setIsSavingTeacherEmail(false);
-    }
-  }, [deliveryError, lang, speak, t.delivery, teacherEmail]);
-
-  const sendTeacherPdf = useCallback(async () => {
-    if (!examData) return;
-    setIsSendingTeacherEmail(true);
-    setDeliveryNotice(null);
-    try {
-      const response = await fetch("/api/exam-delivery/send", {
-        method: "POST",
-        credentials: "include",
-        headers: { "Content-Type": "application/json", "Idempotency-Key": crypto.randomUUID() },
-        body: JSON.stringify({
-          examTitle: examData.examTitle,
-          questions: examData.questions,
-          answers,
-          grading: gradingData,
-          language: examLang,
-          uiLanguage: lang,
-          teacherEmail,
-        }),
-      });
-      const data = await response.json().catch(() => ({})) as { teacherEmail?: string; emailDeliveryConfigured?: boolean; error?: string; deliveryStatus?: string };
-      setEmailDeliveryConfigured(Boolean(data.emailDeliveryConfigured));
-      if (!response.ok || data.deliveryStatus !== "sent") {
-        setDeliveryNotice({ tone: "error", message: deliveryError(response.status, data.error) });
-        return;
-      }
-      setTeacherEmail(data.teacherEmail || teacherEmail.trim().toLowerCase());
-      setDeliveryNotice({ tone: "success", message: t.delivery.sent });
-      speak(t.delivery.sent, 0.9, lang);
-    } catch {
-      setDeliveryNotice({ tone: "error", message: t.delivery.sendFailed });
-    } finally {
-      setIsSendingTeacherEmail(false);
-    }
-  }, [answers, deliveryError, examData, examLang, gradingData, lang, speak, t.delivery, teacherEmail]);
-
   const handleExport = useCallback(async () => {
     if (!examData) return;
     setIsExporting(true);
@@ -366,14 +280,13 @@ export default function ExamDemo() {
       const data: { html: string } = await response.json();
       setPdfHtml(data.html);
       setStage("export");
-      void loadTeacherEmail();
     } catch (error) {
       console.error("Export error:", error);
       setActionError(t.status.exportingError);
     } finally {
       setIsExporting(false);
     }
-  }, [answers, examData, examLang, gradingData, lang, loadTeacherEmail, t]);
+  }, [answers, examData, examLang, gradingData, lang, t]);
 
   const downloadPdf = useCallback(() => {
     if (!pdfHtml) return;
@@ -714,26 +627,7 @@ export default function ExamDemo() {
                 <motion.div initial={{ scale: 0.8 }} animate={{ scale: 1 }} transition={{ duration: 0.5, type: "spring" }} className="w-24 h-24 rounded-3xl bg-green-100 flex items-center justify-center mx-auto mb-8"><CheckCircle className="w-12 h-12 text-green-600" /></motion.div>
                 <h1 className="text-3xl font-bold mb-4">{t.export.title}</h1>
                 <p className="text-muted-foreground text-lg mb-4 max-w-md mx-auto">{gradingData ? t.export.withGrading(gradingData.totalScore) : t.export.withoutGrading}</p>
-                <section className="mx-auto mb-6 max-w-xl rounded-2xl border border-blue-200 bg-blue-50/60 p-5 text-start" aria-labelledby="teacher-email-title">
-                  <div className="mb-4 flex items-start gap-3">
-                    <div className="rounded-xl bg-blue-100 p-2 text-blue-700"><Mail className="h-5 w-5" /></div>
-                    <div><h2 id="teacher-email-title" className="font-bold text-blue-950">{t.delivery.title}</h2><p className="mt-1 text-sm text-blue-800">{t.delivery.description}</p></div>
-                  </div>
-                  <label className="grid gap-2 text-sm font-medium text-blue-950">
-                    {t.delivery.emailLabel}
-                    <input type="email" value={teacherEmail} onChange={event => setTeacherEmail(event.target.value)} placeholder={t.delivery.emailPlaceholder} dir="ltr" autoComplete="email" maxLength={254} className="h-12 rounded-xl border-2 border-blue-200 bg-white px-4 text-foreground outline-none focus:border-blue-500" />
-                  </label>
-                  {emailDeliveryConfigured === false && <p className="mt-3 rounded-lg bg-amber-100 px-3 py-2 text-sm text-amber-900" role="status">{t.delivery.notConfigured}</p>}
-                  {deliveryNotice && <p role={deliveryNotice.tone === "error" ? "alert" : "status"} className={`mt-3 rounded-lg px-3 py-2 text-sm ${deliveryNotice.tone === "success" ? "bg-green-100 text-green-800" : deliveryNotice.tone === "warning" ? "bg-amber-100 text-amber-900" : "bg-red-100 text-red-800"}`}>{deliveryNotice.message}</p>}
-                  <div className="mt-4 flex flex-wrap gap-3">
-                    <Button type="button" variant="outline" onClick={saveTeacherEmail} disabled={isSavingTeacherEmail || isSendingTeacherEmail} className="rounded-xl border-blue-300 text-blue-800 hover:bg-blue-100">
-                      {isSavingTeacherEmail ? <><Loader2 className="h-4 w-4 animate-spin" />{t.delivery.saving}</> : <><Save className="h-4 w-4" />{t.delivery.save}</>}
-                    </Button>
-                    <Button type="button" onClick={sendTeacherPdf} disabled={!teacherEmail.trim() || isSavingTeacherEmail || isSendingTeacherEmail} className="rounded-xl bg-blue-600 text-white hover:bg-blue-700">
-                      {isSendingTeacherEmail ? <><Loader2 className="h-4 w-4 animate-spin" />{t.delivery.sending}</> : <><Send className="h-4 w-4" />{t.delivery.send}</>}
-                    </Button>
-                  </div>
-                </section>
+                {examData && <ExamDeliveryPanel exam={examData} answers={answers} grading={gradingData} language={examLang} uiLanguage={lang} />}
                 <div className="flex items-center gap-4 justify-center flex-wrap">
                   <Button variant="outline" onClick={resetExam} className="rounded-xl"><RotateCcw className="w-4 h-4 ms-2" />{t.export.newExam}</Button>
                   <Button onClick={downloadPdf} disabled={!pdfHtml} className="bg-amber-600 hover:bg-amber-700 text-white rounded-xl px-8 active:scale-[0.97]"><FileDown className="w-4 h-4 ms-2" />{t.export.downloadPrint}</Button>
