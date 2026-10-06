@@ -18,7 +18,7 @@ import { ExamImagePreparationError, prepareExamUpload } from "@/lib/examImage";
 import { beginVoiceAnswer, classifyOcrFailure, consumeVoiceAnswer, countAnswers, ScanAttemptTracker, updateAnswer, type OcrFailureKind, type VoiceAnswerSession } from "@/lib/examFlow";
 import { useI18n, useMessages } from "@/i18n";
 import { examDemoMessages } from "@/i18n/locales/examDemo";
-import ExamDeliveryPanel from "@/components/exam/ExamDeliveryPanel";
+import ExamDeliveryPanel, { RecentExamSubmissions } from "@/components/exam/ExamDeliveryPanel";
 import type { ExamLanguage, OcrQuestion, OcrResult } from "@shared/ocr";
 
 type Question = OcrQuestion;
@@ -427,6 +427,7 @@ export default function ExamDemo() {
                   )}
                   <input ref={fileInputRef} type="file" accept="image/jpeg,image/png,image/webp,image/jpg" onChange={handleFileUpload} className="hidden" aria-hidden="true" />
                 </div>
+                <RecentExamSubmissions uiLanguage={lang} />
               </motion.div>
             )}
 

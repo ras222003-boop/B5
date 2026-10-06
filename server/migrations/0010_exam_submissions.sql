@@ -5,6 +5,7 @@ CREATE TABLE IF NOT EXISTS basira_exam_submissions (
   exam_title VARCHAR(180) NOT NULL,
   pdf_data LONGBLOB NOT NULL,
   status ENUM('READY_TO_SEND','SENDING','SENT','FAILED') NOT NULL DEFAULT 'READY_TO_SEND',
+  sending_started_at TIMESTAMP(3) NULL,
   approved_at TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
   created_at TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
   KEY exam_submission_owner_idx (user_id, created_at),

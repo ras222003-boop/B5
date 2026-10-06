@@ -39,21 +39,30 @@ async function operationResult(id: string, userId: string) {
   const [targets] = await pool.execute<TargetRow[]>('SELECT recipient_name,recipient_email,course_name,organization,delivery_status,sent_at,failure_reason_code FROM basira_exam_delivery_targets WHERE operation_id=? ORDER BY recipient_email', [id]);
   return { deliveryId: operation.id, submissionId: operation.submission_id, status: operation.status, recipients: targets.map(row => ({ name: row.recipient_name, email: row.recipient_email, course: row.course_name, organization: row.organization, deliveryStatus: row.delivery_status, sentAt: row.sent_at, failureReasonCode: row.failure_reason_code })) };
 }
+async function settleStaleOperation(id: string, userId: string) {
+  // A timed-out SMTP exchange can have been accepted by the remote server.
+  // Preserve that ambiguity and require an explicit new operation to retry.
+  const [stale] = await pool.execute<ResultSetHeader>("UPDATE basira_exam_delivery_operations SET status='FAILED' WHERE id=? AND user_id=? AND status='SENDING' AND created_at < DATE_SUB(CURRENT_TIMESTAMP(3), INTERVAL 5 MINUTE)", [id, userId]);
+  if (!stale.affectedRows) return;
+  await pool.execute("UPDATE basira_exam_delivery_targets SET delivery_status='UNCERTAIN',failure_reason_code='delivery_interrupted' WHERE operation_id=? AND delivery_status='SENDING'", [id]);
+  await pool.execute("UPDATE basira_exam_submissions SET status='FAILED',sending_started_at=NULL WHERE id=(SELECT submission_id FROM basira_exam_delivery_operations WHERE id=?) AND user_id=? AND status='SENDING'", [id, userId]);
+}
 async function deliver(recipient: Recipient, pdf: Buffer, senderEmail: string, title: string, operationId: string): Promise<'SENT' | 'FAILED' | 'UNCERTAIN'> {
   if (!smtpReady()) return 'FAILED';
   const secure = process.env.SUPPORT_SMTP_SECURE?.toLowerCase() === 'true';
-  const transport = nodemailer.createTransport({ host: process.env.SUPPORT_SMTP_HOST!, port: Number(process.env.SUPPORT_SMTP_PORT || 587), secure, requireTLS: !secure, auth: { user: process.env.SUPPORT_SMTP_USER!, pass: process.env.SUPPORT_SMTP_PASSWORD! }, connectionTimeout: 12000, socketTimeout: 12000, disableFileAccess: true, disableUrlAccess: true });
+  let transport: ReturnType<typeof nodemailer.createTransport> | null = null;
   try {
+    transport = nodemailer.createTransport({ host: process.env.SUPPORT_SMTP_HOST!, port: Number(process.env.SUPPORT_SMTP_PORT || 587), secure, requireTLS: !secure, auth: { user: process.env.SUPPORT_SMTP_USER!, pass: process.env.SUPPORT_SMTP_PASSWORD! }, connectionTimeout: 12000, socketTimeout: 12000, disableFileAccess: true, disableUrlAccess: true });
     const receipt = await transport.sendMail({
       from: process.env.SUPPORT_EMAIL_FROM!, to: recipient.email, replyTo: senderEmail,
       subject: `تسليم اختبار عبر منصة بصيرة – ${recipient.course}`,
       text: `تسليم اختبار عبر منصة بصيرة\nالمقرر: ${recipient.course}\nالاختبار: ${title}\nالمستلم: ${recipient.name}\nمرجع التسليم: ${operationId}\nوقت التسليم: ${new Date().toISOString()}\nالاختبار النهائي مرفق بصيغة PDF.`,
       attachments: [{ filename: 'basira-final-exam.pdf', content: pdf, contentType: 'application/pdf' }],
     });
-    return receipt.accepted?.some(address => address.toLowerCase() === recipient.email) ? 'SENT' : 'FAILED';
+    return receipt.accepted?.some((address: string) => address.toLowerCase() === recipient.email) ? 'SENT' : 'FAILED';
   } catch (error: any) {
     return typeof error?.responseCode === 'number' && error.responseCode >= 400 ? 'FAILED' : 'UNCERTAIN';
-  } finally { transport.close(); }
+  } finally { transport?.close(); }
 }
 
 export function registerExamSubmissionRoutes(app: Express) {
@@ -76,6 +85,15 @@ export function registerExamSubmissionRoutes(app: Express) {
     res.set('Cache-Control', 'no-store');
     try { const session = await sessionFor(req, res); if (!session) return; const id = safeId(req.params.id); if (!id) return res.status(404).end(); const submission = await getSubmission(id, session.user.id); if (!submission) return res.status(404).end(); return res.type('application/pdf').set('Content-Disposition', 'attachment; filename="basira-final-exam.pdf"').send(submission.pdf_data); }
     catch { return res.status(503).json({ error: 'submission_unavailable' }); }
+  });
+
+  app.get('/api/exam-delivery/submissions', async (req, res) => {
+    res.set('Cache-Control', 'no-store');
+    try {
+      const session = await sessionFor(req, res); if (!session) return;
+      const [rows] = await pool.execute<RowDataPacket[]>("SELECT s.id,s.course_name,s.exam_title,s.status,s.approved_at,(SELECT o.id FROM basira_exam_delivery_operations o WHERE o.submission_id=s.id ORDER BY o.created_at DESC LIMIT 1) AS latest_delivery_id FROM basira_exam_submissions s WHERE s.user_id=? ORDER BY s.created_at DESC LIMIT 10", [session.user.id]);
+      return res.json({ submissions: rows.map(row => ({ submissionId: row.id, course: row.course_name, examTitle: row.exam_title, status: row.status, approvedAt: row.approved_at, latestDeliveryId: row.latest_delivery_id })) });
+    } catch { return res.status(503).json({ error: 'submission_unavailable' }); }
   });
 
   app.get('/api/exam-delivery/submissions/:id', async (req, res) => {
@@ -102,36 +120,50 @@ export function registerExamSubmissionRoutes(app: Express) {
 
   app.get('/api/exam-delivery/operations/:id', async (req, res) => {
     res.set('Cache-Control', 'no-store');
-    try { const session = await sessionFor(req, res); if (!session) return; const id = safeId(req.params.id); if (!id) return res.status(404).end(); const result = await operationResult(id, session.user.id); return result ? res.json(result) : res.status(404).end(); }
+    try { const session = await sessionFor(req, res); if (!session) return; const id = safeId(req.params.id); if (!id) return res.status(404).end(); await settleStaleOperation(id, session.user.id); const result = await operationResult(id, session.user.id); return result ? res.json(result) : res.status(404).end(); }
     catch { return res.status(503).json({ error: 'delivery_unavailable' }); }
   });
 
   app.post('/api/exam-delivery/operations', async (req, res) => {
     res.set('Cache-Control', 'no-store');
     if (!req.is('application/json')) return res.status(415).json({ error: 'json_required' });
+    let claimed: { submissionId: string; userId: string; operationId: string | null } | null = null;
     try {
       const session = await sessionFor(req, res); if (!session) return;
       const submissionId = safeId(req.body?.submissionId), suppliedKey = req.header('Idempotency-Key');
       if (!submissionId || !suppliedKey || !/^[a-zA-Z0-9-]{8,100}$/.test(suppliedKey) || req.body?.confirmed !== true) return res.status(400).json({ error: 'confirmation_required' });
       const key = createHash('sha256').update(`${session.user.id}:${suppliedKey}`).digest('hex');
       const [existing] = await pool.execute<OperationRow[]>('SELECT id,status,submission_id FROM basira_exam_delivery_operations WHERE request_key=? AND user_id=? LIMIT 1', [key, session.user.id]);
-      if (existing[0]) { const result = await operationResult(existing[0].id, session.user.id); return res.json({ ...result, duplicate: true }); }
+      if (existing[0]) {
+        if (existing[0].submission_id !== submissionId) return res.status(409).json({ error: 'idempotency_key_conflict' });
+        await settleStaleOperation(existing[0].id, session.user.id);
+        const result = await operationResult(existing[0].id, session.user.id); return res.json({ ...result, duplicate: true });
+      }
       const submission = await getSubmission(submissionId, session.user.id);
       if (!submission) return res.status(404).json({ error: 'submission_not_found' });
-      if (submission.status === 'SENDING') return res.status(409).json({ error: 'delivery_in_progress' });
+      if (submission.status === 'SENDING') {
+        const [active] = await pool.execute<OperationRow[]>("SELECT id,status,submission_id FROM basira_exam_delivery_operations WHERE submission_id=? AND user_id=? AND status='SENDING' ORDER BY created_at DESC LIMIT 1", [submissionId, session.user.id]);
+        if (active[0]) await settleStaleOperation(active[0].id, session.user.id);
+        else await pool.execute("UPDATE basira_exam_submissions SET status='FAILED',sending_started_at=NULL WHERE id=? AND user_id=? AND status='SENDING' AND sending_started_at < DATE_SUB(CURRENT_TIMESTAMP(3), INTERVAL 5 MINUTE)", [submissionId, session.user.id]);
+        const current = await getSubmission(submissionId, session.user.id);
+        if (current?.status === 'SENDING') return res.status(409).json({ error: 'delivery_in_progress' });
+        submission.status = current?.status ?? submission.status;
+      }
       if (submission.status === 'SENT' && req.body?.resend !== true) return res.status(409).json({ error: 'explicit_resend_required' });
       const recipients = parseRecipients(req.body?.recipients, submission.course_name);
       if (!recipients || recipients.some(item => item.course !== submission.course_name)) return res.status(400).json({ error: 'invalid_recipients' });
       if (limited(req, session.user.id)) return res.status(429).json({ error: 'delivery_rate_limited' });
-      const [claim] = await pool.execute<ResultSetHeader>("UPDATE basira_exam_submissions SET status='SENDING' WHERE id=? AND user_id=? AND status IN ('READY_TO_SEND','FAILED','SENT')", [submissionId, session.user.id]);
+      const [claim] = await pool.execute<ResultSetHeader>("UPDATE basira_exam_submissions SET status='SENDING',sending_started_at=CURRENT_TIMESTAMP(3) WHERE id=? AND user_id=? AND status IN ('READY_TO_SEND','FAILED','SENT')", [submissionId, session.user.id]);
       if (!claim.affectedRows) {
         const [raced] = await pool.execute<OperationRow[]>('SELECT id,status,submission_id FROM basira_exam_delivery_operations WHERE request_key=? AND user_id=? LIMIT 1', [key, session.user.id]);
         if (raced[0]) return res.json({ ...await operationResult(raced[0].id, session.user.id), duplicate: true });
         return res.status(409).json({ error: 'delivery_in_progress' });
       }
+      claimed = { submissionId, userId: session.user.id, operationId: null };
       const id = randomUUID();
       try { await pool.execute('INSERT INTO basira_exam_delivery_operations (id,submission_id,user_id,request_key,status) VALUES (?,?,?,?,?)', [id, submissionId, session.user.id, key, 'SENDING']); }
-      catch { const [raced] = await pool.execute<OperationRow[]>('SELECT id,status,submission_id FROM basira_exam_delivery_operations WHERE request_key=? AND user_id=? LIMIT 1', [key, session.user.id]); if (raced[0]) return res.json({ ...await operationResult(raced[0].id, session.user.id), duplicate: true }); throw new Error('operation_insert_failed'); }
+      catch { throw new Error('operation_insert_failed'); }
+      claimed.operationId = id;
       for (const recipient of recipients) await pool.execute('INSERT INTO basira_exam_delivery_targets (id,operation_id,recipient_name,recipient_email,course_name,organization,delivery_status) VALUES (?,?,?,?,?,?,?)', [randomUUID(), id, recipient.name, recipient.email, recipient.course, recipient.organization, 'SENDING']);
       for (const recipient of recipients) {
         const result = await deliver(recipient, submission.pdf_data, session.user.email, submission.exam_title, id);
@@ -140,8 +172,20 @@ export function registerExamSubmissionRoutes(app: Express) {
       const [statuses] = await pool.execute<RowDataPacket[]>('SELECT delivery_status FROM basira_exam_delivery_targets WHERE operation_id=?', [id]);
       const status = statuses.length === recipients.length && statuses.every(row => row.delivery_status === 'SENT') ? 'SENT' : 'FAILED';
       await pool.execute('UPDATE basira_exam_delivery_operations SET status=? WHERE id=?', [status, id]);
-      await pool.execute('UPDATE basira_exam_submissions SET status=? WHERE id=? AND user_id=?', [status, submissionId, session.user.id]);
+      await pool.execute('UPDATE basira_exam_submissions SET status=?,sending_started_at=NULL WHERE id=? AND user_id=?', [status, submissionId, session.user.id]);
+      claimed = null;
       return res.status(status === 'SENT' ? 201 : 503).json(await operationResult(id, session.user.id));
-    } catch { return res.status(503).json({ error: 'delivery_unavailable' }); }
+    } catch {
+      if (claimed) {
+        try {
+          if (claimed.operationId) {
+            await pool.execute("UPDATE basira_exam_delivery_targets SET delivery_status='UNCERTAIN',failure_reason_code='delivery_interrupted' WHERE operation_id=? AND delivery_status='SENDING'", [claimed.operationId]);
+            await pool.execute("UPDATE basira_exam_delivery_operations SET status='FAILED' WHERE id=? AND status='SENDING'", [claimed.operationId]);
+          }
+          await pool.execute("UPDATE basira_exam_submissions SET status='FAILED',sending_started_at=NULL WHERE id=? AND user_id=? AND status='SENDING'", [claimed.submissionId, claimed.userId]);
+        } catch { /* The stale-operation check reconciles a later retry. */ }
+      }
+      return res.status(503).json({ error: 'delivery_unavailable' });
+    }
   });
 }
