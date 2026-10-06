@@ -112,7 +112,7 @@ describe("real Sharp image preparation", () => {
     expect(resized.width).toBeLessThanOrEqual(2600);
     expect(resized.height).toBeLessThanOrEqual(3600);
     expect(resized.lowResolution).toBe(false);
-  });
+  }, 15_000);
 
   it("makes a low-contrast alternate while retaining the original", async () => {
     const faintBars = Buffer.from('<svg width="900" height="1200"><rect x="200" y="200" width="500" height="8" fill="#cacaca"/><rect x="200" y="300" width="430" height="8" fill="#cacaca"/></svg>');

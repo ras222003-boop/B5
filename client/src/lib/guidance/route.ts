@@ -40,7 +40,9 @@ export class AccessibilityCostModel {
 export class RoutePlanner {
   private readonly byId:Map<string,MapNode>;
   private readonly model:AccessibilityCostModel;
+  private familiarEdgeIds:ReadonlySet<string>=new Set();
   constructor(readonly building:Building,readonly nodes:MapNode[],readonly edges:MapEdge[]){this.byId=new Map(nodes.map(n=>[n.id,n]));this.model=new AccessibilityCostModel(building);}
+  preferFamiliarEdges(edgeIds:ReadonlySet<string>){this.familiarEdgeIds=edgeIds;}
   plan(originId:string,destination:NavigationDestination,type:RouteType='RECOMMENDED',constraints:RouteConstraint[]=[],now=Date.now()):NavigationRoute|null {
     const origin=this.byId.get(originId),target=this.byId.get(destination.nodeId);
     if(!origin||!target||origin.buildingId!==destination.buildingId||target.buildingId!==destination.buildingId)return null;
@@ -59,7 +61,9 @@ export class RoutePlanner {
         const a=this.byId.get(current),b=this.byId.get(next);
         if(!a||!b||a.buildingId!==b.buildingId)continue;
         if(a.floorId!==b.floorId&&!['ELEVATOR','STAIRS','RAMP'].includes(edge.pathType))continue;
-        const cost=this.model.cost(edge,type);
+        const base=this.model.cost(edge,type);
+        // Familiarity can soften a low-risk edge's cost, never make a closed or hazardous edge usable.
+        const cost=type==='RECOMMENDED'&&this.familiarEdgeIds.has(edge.id)&&edge.riskLevel==='LOW'&&Number.isFinite(base)?base*.78:base;
         if(best+cost<(distance.get(next)??Infinity)){distance.set(next,best+cost);previous.set(next,{node:current,edge});}
       }
     }

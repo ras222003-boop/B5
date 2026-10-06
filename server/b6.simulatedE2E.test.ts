@@ -55,7 +55,7 @@ describe('B1→B6 simulated automated E2E',()=>{
     for(const at of [2000,3000,4000])engine.observeScene(scene(at),at);
     expect(engine.session.lastRerouteReason).toBe('PERSISTENT_OBSTACLE');expect(engine.session.route?.orderedEdges[0].id).toBe(id(102));
     engine.updateLocation(localization.anchor({buildingId:b,floorId:f0,x:10,y:10,headingDegrees:0,confidence:.9,uncertaintyRadius:1,source:'MANUAL',timestamp:5000}),5000);
-    expect(engine.updateLocation(localization.transition('ENTER_ELEVATOR',6000),6000)).toBe('LOST');expect(engine.session.state).toBe('RELOCALIZING');
+    expect(engine.updateLocation(localization.transition('ENTER_ELEVATOR',6000),6000)).toBe('LOST');expect(engine.session.state).toBe('LOST');
     expect(engine.updateLocation(localization.anchor({buildingId:b,floorId:f1,x:10,y:10,headingDegrees:90,confidence:.9,uncertaintyRadius:1,source:'QR',timestamp:7000}),7000)).toBe('RECOVERED');
     engine.updateLocation(localization.anchor({buildingId:b,floorId:f1,x:12,y:10,headingDegrees:90,confidence:.9,uncertaintyRadius:1,source:'MANUAL',timestamp:8000}),8000);
     expect(engine.considerArrival(p121,true,'RIGHT')).toBe(true);expect(engine.session.state).toBe('ARRIVED');

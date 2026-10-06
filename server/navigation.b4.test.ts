@@ -8,7 +8,7 @@ vi.mock('./localization',()=>({registerLocalizationRoutes:vi.fn()}));
 import { registerNavigationRoutes } from './navigation';
 
 const uuid='33333333-3333-4333-8333-333333333333';
-function route(path:string,method:'get'|'patch'|'delete'='get'){
+function route(path:string,method:'get'|'post'|'patch'|'delete'='get'){
   const use=vi.fn();registerNavigationRoutes({use} as unknown as Express);
   const router=use.mock.calls[0][1] as Router;
   const layer=(router as unknown as {stack:{route?:{path:string;methods:Record<string,boolean>;stack:{handle:(req:Request,res:Response)=>void}[]}}[]}).stack.find(item=>item.route?.path===path&&item.route.methods[method]);
@@ -58,5 +58,12 @@ describe('B4 private destination endpoint',()=>{
     await vi.waitFor(()=>expect(json).toHaveBeenCalled());
     expect(json.mock.calls[0][0].building).toMatchObject({mapStatus:'MAPPED',verificationStatus:'OFFICIAL'});
     expect(json.mock.calls[0][0].zones).toEqual([]);
+  });
+  it('accepts a GPS fix in a no-store POST body instead of the URL',async()=>{
+    mocks.execute.mockResolvedValueOnce([[]]);const {res,json,set}=response();
+    route('/buildings/current','post')({headers:{},body:{latitude:24.7136,longitude:46.6753},query:{}} as unknown as Request,res);
+    await vi.waitFor(()=>expect(json).toHaveBeenCalledWith({building:null}));
+    expect(set).toHaveBeenCalledWith('Cache-Control','no-store');
+    expect(mocks.execute.mock.calls[0][1]).toEqual([24.7136,24.7136,46.6753]);
   });
 });

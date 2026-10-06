@@ -111,7 +111,8 @@ describe('B4 route planning and guidance',()=>{
   it('stops turn guidance on localization loss and resumes after a strong anchor',()=>{
     const engine=new BasiraNavigationEngine(planner(),floors);engine.prepare(destination,location());engine.start();
     expect(engine.updateLocation(location(0,0,'f0',{state:'LOCALIZATION_LOST',confidence:.1}),1000)).toBe('LOST');
-    expect(engine.session.state).toBe('RELOCALIZING');
+    expect(engine.session.state).toBe('LOST');
+    expect(engine.session.instruction).toBeNull();
     expect(engine.updateLocation(location(),20_000)).toBe('RECOVERED');expect(engine.session.state).toBe('NAVIGATING');
   });
   it('does not declare arrival on proximity or OCR alone',()=>{
@@ -201,7 +202,7 @@ describe('B4 route planning and guidance',()=>{
     expect(engine.session.lastRerouteReason).toBe('PERSISTENT_OBSTACLE');
     engine.updateLocation(b3.anchor({buildingId:'b',floorId:'f0',x:10,y:10,headingDegrees:0,confidence:.9,uncertaintyRadius:1,source:'MANUAL',timestamp:5000}),5000);
     expect(engine.updateLocation(b3.transition('ENTER_ELEVATOR',6000),6000)).toBe('LOST');
-    expect(engine.session.state).toBe('RELOCALIZING');
+    expect(engine.session.state).toBe('LOST');
     expect(engine.updateLocation(b3.anchor({buildingId:'b',floorId:'f1',x:10,y:10,headingDegrees:90,confidence:.9,uncertaintyRadius:1,source:'QR',timestamp:7000}),7000)).toBe('RECOVERED');
     engine.updateLocation(b3.anchor({buildingId:'b',floorId:'f1',x:12,y:10,headingDegrees:90,confidence:.9,uncertaintyRadius:1,source:'MANUAL',timestamp:8000}),8000);
     expect(engine.considerArrival('p122',true,'RIGHT')).toBe(true);

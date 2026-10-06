@@ -1,0 +1,20 @@
+CREATE TABLE IF NOT EXISTS basira_saved_routes (
+  id varchar(36) NOT NULL PRIMARY KEY,
+  user_id varchar(36) NOT NULL,
+  building_id varchar(36) NOT NULL,
+  name varchar(255) NOT NULL,
+  origin_node_id varchar(36) NOT NULL,
+  destination_node_id varchar(36) NOT NULL,
+  route_data json NOT NULL,
+  map_version int unsigned NOT NULL DEFAULT 1,
+  successful_arrival_count int unsigned NOT NULL DEFAULT 1,
+  typical_duration_seconds int unsigned NULL,
+  last_successful_at timestamp(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  last_verified_at timestamp(3) NULL,
+  created_at timestamp(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  updated_at timestamp(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+  FOREIGN KEY (user_id) REFERENCES `user`(id) ON DELETE CASCADE,
+  FOREIGN KEY (building_id) REFERENCES basira_buildings(id) ON DELETE CASCADE,
+  INDEX saved_route_owner_idx (user_id, updated_at),
+  INDEX saved_route_destination_idx (user_id, building_id, destination_node_id)
+);
