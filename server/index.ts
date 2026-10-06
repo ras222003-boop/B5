@@ -6,6 +6,7 @@ import { toNodeHandler } from "better-auth/node";
 import { auth, pool, providerReady } from "./auth";
 import { ensureSchema } from "./migrations";
 import { registerSupportRoutes, startTicketMailWorker } from "./support";
+import { registerExamDeliveryRoutes } from "./examDelivery";
 import { registerOcrRoute } from "./ocr";
 import { registerNavigationRoutes } from "./navigation";
 import { toExamLanguage, assistantSystem, guideSystem, aiFallback, pdfLabels, escapeHtml } from "./locale";
@@ -13,15 +14,19 @@ import { toExamLanguage, assistantSystem, guideSystem, aiFallback, pdfLabels, es
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const FORGE_API_URL = (process.env.BUILT_IN_FORGE_API_URL || "https://forge.manus.ai").replace(/\/+$/, "");
-const FORGE_API_KEY = process.env.BUILT_IN_FORGE_API_KEY || "";
+const MANUS_API_URL = (
+  process.env.MANUS_API_URL ||
+  process.env.BUILT_IN_FORGE_API_URL ||
+  "https://forge.manus.ai"
+).replace(/\/+$/, "");
+const MANUS_API_KEY = process.env.MANUS_API_KEY || process.env.BUILT_IN_FORGE_API_KEY || "";
 const DEFAULT_LLM_MODEL = process.env.MANUS_LLM_MODEL || "gemini-3-flash-preview";
 
 /**
  * Call the LLM via Forge API
  */
 async function invokeLLM(messages: Array<{ role: string; content: any }>, options?: { response_format?: any; model?: string }) {
-  const url = `${FORGE_API_URL}/v1/chat/completions`;
+  const url = `${MANUS_API_URL}/v1/chat/completions`;
   const body: any = {
     messages,
     model: options?.model || DEFAULT_LLM_MODEL,
@@ -34,7 +39,7 @@ async function invokeLLM(messages: Array<{ role: string; content: any }>, option
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      Authorization: `Bearer ${FORGE_API_KEY}`,
+      Authorization: `Bearer ${MANUS_API_KEY}`,
     },
     body: JSON.stringify(body),
     signal: options?.model ? AbortSignal.timeout(60_000) : undefined,
@@ -78,6 +83,7 @@ async function startServer() {
   app.use('/api/navigation/organizations',express.json({limit:'1mb'}));
   app.use(express.json({ limit: "20mb" }));
   registerSupportRoutes(app);
+  registerExamDeliveryRoutes(app);
   registerNavigationRoutes(app);
   startTicketMailWorker();
 

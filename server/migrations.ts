@@ -43,6 +43,10 @@ export async function ensureSchema() {
     for (const statement of organizations.split(";").map(s => s.trim()).filter(Boolean)) {
       await connection.query(statement);
     }
+    const examDelivery = await readFile(resolve(process.cwd(), "server/migrations/0007_exam_delivery.sql"), "utf8");
+    for (const statement of examDelivery.split(";").map(s => s.trim()).filter(Boolean)) {
+      await connection.query(statement);
+    }
     for (const [column, definition] of Object.entries({
       organization_id: 'varchar(36) NULL',
       official_map_source: 'varchar(30) NULL',
