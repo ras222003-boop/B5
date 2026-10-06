@@ -2,7 +2,7 @@ import type { MapEdge, MapNode, Place } from './navigation';
 import type { LocalizationEstimate } from './localization';
 import type { HorizontalDirection } from './vision';
 
-export type NavigationState = 'PREPARING'|'READY'|'NAVIGATING'|'PAUSED'|'RELOCALIZING'|'REROUTING'|'ARRIVED'|'CANCELLED'|'FAILED';
+export type NavigationState = 'PREPARING'|'READY'|'NAVIGATING'|'PAUSED'|'RELOCALIZING'|'LOST'|'REROUTING'|'ARRIVED'|'CANCELLED'|'FAILED';
 export type RouteType = 'RECOMMENDED'|'SHORTEST'|'ACCESSIBLE';
 export type RouteSafetyState = 'ROUTE_CLEAR'|'ROUTE_BLOCKED'|'ROUTE_UNCERTAIN';
 export type RerouteReason = 'CLOSED_EDGE'|'PERSISTENT_OBSTACLE'|'OFF_ROUTE'|'USER_REQUEST';

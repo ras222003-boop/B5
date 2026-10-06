@@ -27,7 +27,7 @@ export default function Navigation() {
   const [results, setResults] = useState<SearchResult[]>([]);
   const [buildings, setBuildings] = useState<Building[]>([]);
   const [currentBuilding, setCurrentBuilding] = useState<Building | null>(null);
-  const [coordinates, setCoordinates] = useState<{latitude:number;longitude:number}|null>(null);
+  const [coordinates, setCoordinates] = useState<{latitude:number;longitude:number;accuracy:number}|null>(null);
   const [showSave, setShowSave] = useState(false);
   const [includeOthers, setIncludeOthers] = useState(false);
   const [saveName, setSaveName] = useState('');
@@ -54,7 +54,8 @@ export default function Navigation() {
     try {
       const point = await permissionService.currentLocation();
       setCoordinates(point); // Ephemeral: no continuous tracking or automatic location history.
-      const data = await navigationRequest<{building:Building|null}>(`/buildings/current?latitude=${point.latitude}&longitude=${point.longitude}`);
+      if(point.accuracy>25){setNotice('دقة GPS منخفضة لتحديد المبنى. حاول من مكان أوضح أو اختر المبنى يدويًا؛ لا تعتمد عليها لتحديد المدخل.');return;}
+      const data = await navigationRequest<{building:Building|null}>('/buildings/current',json('POST',{latitude:point.latitude,longitude:point.longitude}));
       setCurrentBuilding(data.building);
       if (data.building) { sessionStorage.setItem('basira-current-building', data.building.id); setNotice(`${t.locationFound}: ${data.building.name}`); }
       else { sessionStorage.removeItem('basira-current-building'); setNotice(t.noLocation); }
@@ -92,10 +93,11 @@ export default function Navigation() {
   const save = async (event: FormEvent) => {
     event.preventDefault();
     if (!saveName.trim()) { setNotice(t.required); return; }
+    if (!coordinates) { setNotice('حدد موقعك أولًا قبل حفظ نقطة جديدة.'); return; }
     setBusy(true);
     try {
       await navigationRequest('/saved-places', json('POST', {
-        name:saveName.trim(),category,notes:notes.trim()||null,latitude:coordinates?.latitude??null,
+        name:saveName.trim(),category,notes:notes.trim()||null,latitude:coordinates?.latitude??null,accuracyMeters:coordinates?.accuracy??null,
         longitude:coordinates?.longitude??null,buildingId:currentBuilding?.id??null,floorId:floorId||null,
       }));
       setShowSave(false); setSaveName(''); setNotes(''); setNotice(t.savedSuccess);
@@ -119,6 +121,7 @@ export default function Navigation() {
     </form>
     <label className="block max-w-xl">{t.locationFound}<select className={input} value={currentBuilding?.id??''} onChange={e=>chooseBuilding(e.target.value)}><option value="">{t.chooseBuilding}</option>{buildings.map(b=><option key={b.id} value={b.id}>{b.name}</option>)}</select></label>
     {currentBuilding && <p className="rounded-xl bg-amber-300/10 p-3 text-amber-100">{t.locationFound}: <Link href={`/navigation/buildings/${currentBuilding.id}`} className="underline">{currentBuilding.name}</Link></p>}
+    {coordinates&&<p role="status" className="rounded-xl border border-amber-200/30 p-3">دقة GPS المبلغ عنها: نحو {Math.round(coordinates.accuracy)} متر · {coordinates.accuracy<=10?'مرتفعة':coordinates.accuracy<=25?'متوسطة':'منخفضة؛ لا تستخدمها لتحديد مدخل أو غرفة'}</p>}
     <div className="flex flex-wrap gap-3">
       <button type="button" className={secondary} onClick={locate} disabled={busy}><LocateFixed aria-hidden="true" size={20}/>{t.current}</button>
       <Link className={secondary} href="/navigation/places"><BookmarkPlus aria-hidden="true" size={20}/>{t.saved}</Link>
@@ -144,7 +147,7 @@ export default function Navigation() {
       <label>{t.building}<select className={input} value={currentBuilding?.id??''} onChange={e=>chooseBuilding(e.target.value)}><option value="">{t.chooseBuilding}</option>{buildings.map(b=><option key={b.id} value={b.id}>{b.name}</option>)}</select></label>
       <label>{t.floor}<select className={input} value={floorId} onChange={e=>setFloorId(e.target.value)}><option value="">{t.chooseFloor}</option>{floors.map(f=><option key={f.id} value={f.id}>{f.name}</option>)}</select></label>
       <label className="sm:col-span-2">{t.notes}<textarea className={input} value={notes} onChange={e=>setNotes(e.target.value)} maxLength={2000}/></label>
-      <p className="sm:col-span-2 text-sm text-stone-300">{t.currentCoordinates}: {coordinates?`${coordinates.latitude.toFixed(5)}, ${coordinates.longitude.toFixed(5)}`:t.noLocation}</p>
+      <p className="sm:col-span-2 text-sm text-stone-300">{t.currentCoordinates}: {coordinates?`${coordinates.latitude.toFixed(5)}, ${coordinates.longitude.toFixed(5)} (±${Math.round(coordinates.accuracy)} م)`:t.noLocation}</p>
       <div className="flex gap-2 sm:col-span-2"><button className={button} disabled={busy}>{t.save}</button><button type="button" className={secondary} onClick={()=>setShowSave(false)}>{t.cancel}</button></div>
     </form></section>}
     <section id="known-buildings" aria-labelledby="buildings-title" className={panel}><h2 id="buildings-title" className="mb-4 text-xl font-bold">{t.known}</h2>{buildings.length?<ul className="grid gap-3 sm:grid-cols-2">{buildings.map(b=><li key={b.id}><Link href={`/navigation/buildings/${b.id}`} className={`${secondary} w-full justify-start`}>{b.name} · {t.buildingTypes[b.buildingType]} · {t.mapStatuses[b.mapStatus]}</Link></li>)}</ul>:<p>{t.noBuildings}</p>}</section>
@@ -204,6 +207,6 @@ export function MyPlaces() {
     <form onSubmit={e=>{e.preventDefault();load();}} role="search" className="flex gap-2"><label className="sr-only" htmlFor="saved-search">{t.search}</label><input id="saved-search" className={input} value={q} onChange={e=>setQ(e.target.value)} placeholder={t.searchPlaceholder}/><button className={button}>{t.search}</button></form>
     <div role="group" aria-label={t.myPlaces} className="flex flex-wrap gap-2">{(['all','favorites','recent'] as const).map(key=><button key={key} type="button" className={filter===key?button:secondary} aria-pressed={filter===key} onClick={()=>setFilter(key)}>{key==='all'?t.all:key==='favorites'?t.favorites:t.recent}</button>)}</div>{live}
     {editing && <form className={panel} onSubmit={save}><h2 className="mb-3 text-xl font-bold">{t.edit}</h2><label className="block">{t.placeName} *<input className={input} required value={name} onChange={e=>setName(e.target.value)}/></label><label className="mt-3 block">{t.category}<select className={input} value={category} onChange={e=>setCategory(e.target.value as typeof category)}>{savedCategories.map(key=><option key={key} value={key}>{t.categories[key]}</option>)}</select></label><label className="mt-3 block">{t.notes}<textarea className={input} value={notes} onChange={e=>setNotes(e.target.value)}/></label><div className="mt-3 flex gap-2"><button className={button}>{t.save}</button><button type="button" className={secondary} onClick={()=>setEditing(null)}>{t.cancel}</button></div></form>}
-    {items.length?<ul className="grid gap-4 md:grid-cols-2">{items.map(item=><li className={panel} key={item.id}><h2 className="text-xl font-bold">{item.name} {item.isFavorite&&<span className="text-sm text-amber-300">· {t.favorite}</span>}</h2><p>{t.categories[item.category]} · {item.buildingName??''} · {item.floorName??''}</p><p className="text-sm text-stone-400">{t.lastUsed}: {item.lastUsedAt?formatDate(item.lastUsedAt):t.neverUsed}</p><div className="mt-3 flex flex-wrap gap-2"><button className={secondary} onClick={()=>action(item,'select')}>{t.select}</button><button className={button} onClick={()=>action(item,'guide')}>{t.guide}</button><button className={secondary} onClick={()=>edit(item)}>{t.edit}</button><button className={secondary} onClick={()=>action(item,'favorite')}>{item.isFavorite?t.removeFavorite:t.addFavorite}</button><button className={secondary} onClick={()=>action(item,'delete')}>{t.remove}</button></div></li>)}</ul>:<p>{t.noSaved}</p>}
+    {items.length?<ul className="grid gap-4 md:grid-cols-2">{items.map(item=><li className={panel} key={item.id}><h2 className="text-xl font-bold">{item.name} {item.isFavorite&&<span className="text-sm text-amber-300">· {t.favorite}</span>}</h2><p>{t.categories[item.category]} · {item.buildingName??''} · {item.floorName??''}</p>{item.accuracyMeters!=null&&<p className="text-sm text-stone-300">دقة GPS وقت الحفظ: نحو {Math.round(item.accuracyMeters)} متر</p>}<p className="text-sm text-stone-400">{t.lastUsed}: {item.lastUsedAt?formatDate(item.lastUsedAt):t.neverUsed}</p><div className="mt-3 flex flex-wrap gap-2"><button className={secondary} onClick={()=>action(item,'select')}>{t.select}</button><button className={button} onClick={()=>action(item,'guide')}>{t.guide}</button><button className={secondary} onClick={()=>edit(item)}>{t.edit}</button><button className={secondary} onClick={()=>action(item,'favorite')}>{item.isFavorite?t.removeFavorite:t.addFavorite}</button><button className={secondary} onClick={()=>action(item,'delete')}>{t.remove}</button></div></li>)}</ul>:<p>{t.noSaved}</p>}
   </div></Layout>;
 }

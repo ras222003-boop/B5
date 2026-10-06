@@ -52,9 +52,10 @@ export class BasiraNavigationEngine {
     this.session.location=location;
     if(terminal.has(this.session.state))return 'UNCHANGED';
     if(location.state!=='TRACKING'||location.confidence<.55||location.floorId===null||location.x===null||location.y===null){
-      if(this.session.state!=='RELOCALIZING'){this.session.state='RELOCALIZING';return 'LOST';}return 'UNCHANGED';
+      const next=location.state==='LOCALIZATION_LOST'?'LOST':'RELOCALIZING';
+      if(this.session.state!==next){this.session.state=next;this.session.instruction=null;return 'LOST';}return 'UNCHANGED';
     }
-    if(this.session.state==='RELOCALIZING'){
+    if(this.session.state==='RELOCALIZING'||this.session.state==='LOST'){
       if(location.confidence<.55)return 'UNCHANGED';
       if(this.session.route&&this.session.destination)return this.reroute('OFF_ROUTE',now)?'RECOVERED':'UNCHANGED';
       if(this.session.destination&&this.prepare(this.session.destination,location)){this.start();return 'RECOVERED';}

@@ -9,6 +9,7 @@ import { registerSharedMapRoutes } from './sharedMap';
 import { registerOrganizationRoutes } from './organizations';
 import { SAFE_DEFAULT_FLAGS, type SafetyFlags } from '../shared/safetyFlags';
 import { allowedNavigationMutation } from './navigationSecurity';
+import { registerSavedRouteRoutes } from './savedRoutes';
 
 const id = z.string().uuid();
 const name = z.string().trim().min(1).max(255);
@@ -37,6 +38,7 @@ const savedInput = z.object({
   localX: z.number().finite().min(-100000).max(100000).nullable().optional(),
   localY: z.number().finite().min(-100000).max(100000).nullable().optional(),
   localizationConfidence: z.number().min(0).max(1).nullable().optional(),
+  accuracyMeters: z.number().finite().min(0).max(100000).nullable().optional(),
   isFavorite: z.boolean().optional(),
 });
 const nodeInput = z.object({ floorId: id, placeId: id.nullable().optional(), x: z.number().finite(), y: z.number().finite(), nodeType: z.enum(nodeTypes), accessibilityLevel: z.enum(accessibilityLevels).default('UNKNOWN') });
@@ -56,7 +58,7 @@ const zoneInput = z.object({
 type Data = Record<string, any>;
 const camel = (key: string) => key.replace(/_([a-z])/g, (_, letter: string) => letter.toUpperCase());
 const booleans = new Set(['is_public','is_favorite','has_stairs','has_ramp','wheelchair_accessible','visually_impaired_friendly','temporarily_closed']);
-const numbers = new Set(['latitude','longitude','local_x','local_y','x','y','min_x','max_x','min_y','max_y','distance_meters','confidence_score','localization_confidence']);
+const numbers = new Set(['latitude','longitude','local_x','local_y','x','y','min_x','max_x','min_y','max_y','distance_meters','confidence_score','localization_confidence','accuracy_meters']);
 function present(value: Data): Data {
   const out: Data = {};
   for (const [key, raw] of Object.entries(value)) {
@@ -127,6 +129,9 @@ function parse<T extends z.ZodTypeAny>(schema: T, req: Request, res: Response): 
 }
 function queryText(req: Request) { return typeof req.query.q === 'string' ? req.query.q.trim().slice(0, 100) : ''; }
 function like(term: string) { return `%${term.replace(/[\\%_]/g, '\\$&')}%`; }
+async function nearbyBuilding(lat:number,lon:number){
+  return one(`SELECT *, (6371000 * 2 * ASIN(SQRT(POWER(SIN(RADIANS(latitude - ?)/2),2)+COS(RADIANS(?))*COS(RADIANS(latitude))*POWER(SIN(RADIANS(longitude - ?)/2),2)))) AS distance_meters FROM basira_buildings WHERE status='ACTIVE' AND latitude IS NOT NULL AND longitude IS NOT NULL HAVING distance_meters <= 150 ORDER BY distance_meters LIMIT 1`,[lat,lat,lon]);
+}
 
 /** Search ranking stays independent of the HTTP route for later navigation clients. */
 export class PlaceSearchService {
@@ -156,6 +161,7 @@ export function registerNavigationRoutes(app: Express) {
   registerLocalizationRoutes(api);
   registerSharedMapRoutes(api);
   registerOrganizationRoutes(api);
+  registerSavedRouteRoutes(api);
   api.get('/safety-flags',(_req,res)=>{
     const flags=Object.fromEntries(Object.keys(SAFE_DEFAULT_FLAGS).map(key=>[key,process.env[`BASIRA_${key.replace(/[A-Z]/g,letter=>`_${letter}`).toUpperCase()}`]==='true'])) as unknown as SafetyFlags;
     res.set('Cache-Control','no-store').json(flags);
@@ -169,8 +175,12 @@ export function registerNavigationRoutes(app: Express) {
   api.get('/buildings/current', asyncRoute(async (req, res) => {
     const lat = Number(req.query.latitude), lon = Number(req.query.longitude);
     if (!Number.isFinite(lat) || Math.abs(lat)>90 || !Number.isFinite(lon) || Math.abs(lon)>180) return res.status(400).json({ error:'invalid_coordinates' });
-    const candidate = await one(`SELECT *, (6371000 * 2 * ASIN(SQRT(POWER(SIN(RADIANS(latitude - ?)/2),2)+COS(RADIANS(?))*COS(RADIANS(latitude))*POWER(SIN(RADIANS(longitude - ?)/2),2)))) AS distance_meters FROM basira_buildings WHERE status='ACTIVE' AND latitude IS NOT NULL AND longitude IS NOT NULL HAVING distance_meters <= 150 ORDER BY distance_meters LIMIT 1`, [lat,lat,lon]);
-    res.set('Cache-Control','no-store').json({ building: candidate });
+    res.set('Cache-Control','no-store').json({ building: await nearbyBuilding(lat,lon) });
+  }));
+  api.post('/buildings/current', asyncRoute(async (req,res) => {
+    const parsed=z.object({latitude:z.number().min(-90).max(90),longitude:z.number().min(-180).max(180)}).strict().safeParse(req.body);
+    if(!parsed.success)return res.status(400).json({error:'invalid_coordinates'});
+    res.set('Cache-Control','no-store').json({building:await nearbyBuilding(parsed.data.latitude,parsed.data.longitude)});
   }));
   api.get('/buildings/:id', asyncRoute(async (req, res) => {
     if (!uuid(req)) return res.status(400).json({ error:'invalid_id' });
@@ -272,7 +282,7 @@ export function registerNavigationRoutes(app: Express) {
     if ((data.localX!=null||data.localY!=null) && (!data.buildingId||!data.floorId||data.localX==null||data.localY==null)) return res.status(400).json({error:'invalid_local_position'});
     if (!data.placeId && (data.latitude==null||data.longitude==null) && !data.buildingId) return res.status(400).json({error:'location_required'});
     const newId=randomUUID();
-    await pool.execute(`INSERT INTO basira_saved_places (id,user_id,name,category,notes,latitude,longitude,building_id,floor_id,place_id,is_favorite,local_x,local_y,localization_confidence) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,[newId,userId,data.name,data.category,value(data.notes),value(data.latitude),value(data.longitude),value(data.buildingId),value(data.floorId),value(data.placeId),bool(data.isFavorite),value(data.localX),value(data.localY),value(data.localizationConfidence)]);
+    await pool.execute(`INSERT INTO basira_saved_places (id,user_id,name,category,notes,latitude,longitude,building_id,floor_id,place_id,is_favorite,local_x,local_y,localization_confidence,accuracy_meters) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,[newId,userId,data.name,data.category,value(data.notes),value(data.latitude),value(data.longitude),value(data.buildingId),value(data.floorId),value(data.placeId),bool(data.isFavorite),value(data.localX),value(data.localY),value(data.localizationConfidence),value(data.accuracyMeters)]);
     res.set('Cache-Control','private, no-store').status(201).json({savedPlace:await one('SELECT * FROM basira_saved_places WHERE id=? AND user_id=?',[newId,userId])});
   }));
   api.patch('/saved-places/:id', asyncRoute(async (req,res) => {
@@ -286,7 +296,7 @@ export function registerNavigationRoutes(app: Express) {
     if (!await validLocation({...old,...data})) return res.status(400).json({error:'location_mismatch'});
     const position={...old,...data};
     if ((position.localX!=null||position.localY!=null) && (!position.buildingId||!position.floorId||position.localX==null||position.localY==null)) return res.status(400).json({error:'invalid_local_position'});
-    const columns:Record<string,string>={name:'name',category:'category',notes:'notes',latitude:'latitude',longitude:'longitude',buildingId:'building_id',floorId:'floor_id',placeId:'place_id',isFavorite:'is_favorite',localX:'local_x',localY:'local_y',localizationConfidence:'localization_confidence'};
+    const columns:Record<string,string>={name:'name',category:'category',notes:'notes',latitude:'latitude',longitude:'longitude',buildingId:'building_id',floorId:'floor_id',placeId:'place_id',isFavorite:'is_favorite',localX:'local_x',localY:'local_y',localizationConfidence:'localization_confidence',accuracyMeters:'accuracy_meters'};
     const entries=Object.entries(data); if (!entries.length) return res.status(400).json({error:'empty_update'});
     await pool.execute(`UPDATE basira_saved_places SET ${entries.map(([k])=>`${columns[k]}=?`).join(',')} WHERE id=? AND user_id=?`,[...entries.map(([k,v])=>k==='isFavorite'?bool(v):value(v)),req.params.id,userId]);
     res.set('Cache-Control','private, no-store').json({savedPlace:await one('SELECT * FROM basira_saved_places WHERE id=? AND user_id=?',[req.params.id,userId])});

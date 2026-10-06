@@ -1,4 +1,4 @@
-import type { Building, Floor, MapEdge, MapNode, NavigationZone, Place, SavedPlace } from '@shared/navigation';
+import type { Building, Floor, MapEdge, MapNode, NavigationZone, Place, SavedPlace, SavedRoute } from '@shared/navigation';
 
 export async function navigationRequest<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`/api/navigation${path}`, {
@@ -23,5 +23,9 @@ export const navApi = {
   search: (q: string, currentBuildingId?: string | null, includeOthers = false) => navigationRequest<{results: SearchResult[]}>(`/search?q=${encodeURIComponent(q)}&currentBuildingId=${encodeURIComponent(currentBuildingId ?? '')}&includeOtherBuildings=${includeOthers}`),
   saved: (filter: 'all' | 'favorites' | 'recent' = 'all', q = '') => navigationRequest<{savedPlaces: SavedPlace[]}>(`/saved-places?filter=${filter}&q=${encodeURIComponent(q)}`),
   savedPlace: (id: string) => navigationRequest<{savedPlace: SavedPlace}>(`/saved-places/${encodeURIComponent(id)}`),
+  savedRoutes: () => navigationRequest<{savedRoutes: SavedRoute[]}>('/saved-routes'),
+  saveRoute: (body:ReturnType<typeof import('./guidance/journey').routeSaveBody>) => navigationRequest<{savedRoute:SavedRoute}>('/saved-routes',json('POST',body)),
+  routeSuccess: (id:string,durationSeconds:number|null) => navigationRequest<{savedRoute:SavedRoute}>(`/saved-routes/${encodeURIComponent(id)}/success`,json('POST',{durationSeconds})),
+  deleteRoute: (id:string) => navigationRequest<void>(`/saved-routes/${encodeURIComponent(id)}`,{method:'DELETE'}),
   access: () => navigationRequest<{userId: string | null; role: string | null}>('/access'),
 };

@@ -51,7 +51,7 @@ export class VoiceNavigationService {
   setScreenReaderMode(enabled:boolean){this.muted=enabled;if(enabled)this.queue.clear();}
   announce(text:string,priority:AnnouncementPriority,key=text,force=false){return this.queue.enqueue({text,priority,key,at:Date.now(),force});}
   prefetch(key:string,text:string){speechEngine.prefetch(key,speechInput(text,this.language,'NAVIGATION',1.05));}
-  invalidateRoute(){speechEngine.clearPrefetch();}
+  invalidateRoute(){this.queue.clear();speechEngine.clearPrefetch();}
   private speakNow(item:Announcement,done:()=>void){
     if(this.muted){done();return;}
     const context=item.priority==='CRITICAL_SAFETY'||item.priority==='HIGH_SAFETY'?'SAFETY':'NAVIGATION';
@@ -61,9 +61,11 @@ export class VoiceNavigationService {
   close(){this.queue.clear();speechEngine.clearPrefetch();}
 }
 export class HapticNavigationService {
-  pulse(kind:'CONTINUE'|'RIGHT'|'LEFT'|'HAZARD'|'STOP'|'ARRIVAL'){
-    if(typeof navigator==='undefined'||!('vibrate'in navigator))return false;
-    const pattern:Record<typeof kind,number[]>={CONTINUE:[70],RIGHT:[70,70,170],LEFT:[170,70,70],HAZARD:[240,80,240,80,240],STOP:[350],ARRIVAL:[90,80,90,80,260]};
+  private enabled=true;
+  setEnabled(enabled:boolean){this.enabled=enabled;if(!enabled&&typeof navigator!=='undefined'&&'vibrate'in navigator)navigator.vibrate(0);}
+  pulse(kind:'CONTINUE'|'RIGHT'|'LEFT'|'HAZARD'|'STOP'|'ARRIVAL'|'RELOCALIZE'){
+    if(!this.enabled||typeof navigator==='undefined'||!('vibrate'in navigator))return false;
+    const pattern:Record<typeof kind,number[]>={CONTINUE:[70],RIGHT:[70,70,170],LEFT:[170,70,70],HAZARD:[240,80,240,80,240],STOP:[350],ARRIVAL:[90,80,90,80,260],RELOCALIZE:[120,100,120,100,120]};
     try{return navigator.vibrate(pattern[kind]);}catch{return false;}
   }
 }

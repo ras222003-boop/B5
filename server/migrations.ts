@@ -51,6 +51,10 @@ export async function ensureSchema() {
     for (const statement of navigationZones.split(";").map(s => s.trim()).filter(Boolean)) {
       await connection.query(statement);
     }
+    const savedRoutes = await readFile(resolve(process.cwd(), "server/migrations/0009_saved_routes.sql"), "utf8");
+    for (const statement of savedRoutes.split(";").map(s => s.trim()).filter(Boolean)) {
+      await connection.query(statement);
+    }
     for (const [column, definition] of Object.entries({
       organization_id: 'varchar(36) NULL',
       official_map_source: 'varchar(30) NULL',
@@ -66,7 +70,7 @@ export async function ensureSchema() {
       const [existing]=await connection.query<any[]>('SELECT 1 FROM information_schema.table_constraints WHERE table_schema=DATABASE() AND table_name=? AND constraint_name=? LIMIT 1',['basira_buildings',name]);
       if(!existing.length)await connection.query(`ALTER TABLE basira_buildings ADD CONSTRAINT ${name} FOREIGN KEY (${column}) REFERENCES ${target}(id) ON DELETE SET NULL`);
     }
-    for (const [column,definition] of Object.entries({local_x:'decimal(12,3) NULL',local_y:'decimal(12,3) NULL',localization_confidence:'decimal(4,3) NULL'})) {
+    for (const [column,definition] of Object.entries({local_x:'decimal(12,3) NULL',local_y:'decimal(12,3) NULL',localization_confidence:'decimal(4,3) NULL',accuracy_meters:'decimal(9,2) NULL'})) {
       const [existing] = await connection.query<any[]>("SELECT 1 FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='basira_saved_places' AND column_name=? LIMIT 1",[column]);
       if (!existing.length) await connection.query(`ALTER TABLE basira_saved_places ADD COLUMN ${column} ${definition}`);
     }

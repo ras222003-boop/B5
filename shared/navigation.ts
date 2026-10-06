@@ -52,8 +52,18 @@ export interface SavedPlace {
   latitude: number | null; longitude: number | null; buildingId: string | null;
   floorId: string | null; placeId: string | null; isFavorite: boolean;
   localX?: number | null; localY?: number | null; localizationConfidence?: number | null;
+  accuracyMeters?: number | null;
   lastUsedAt: string | null; createdAt: string; updatedAt: string;
   buildingName?: string | null; floorName?: string | null;
+}
+
+/** A private graph template, never a raw GPS or motion track. Recomputed against the current graph before use. */
+export interface SavedRoute {
+  id: string; name: string; buildingId: string; originNodeId: string; destinationNodeId: string;
+  routeData: {nodeIds:string[]; edgeIds:string[]; floorTransitions:{fromFloorId:string;toFloorId:string;edgeId:string}[]; anchorNodeIds:string[]; turnNodeIds:string[]};
+  mapVersion: number; successfulArrivalCount: number; typicalDurationSeconds: number|null;
+  lastSuccessfulAt: string; lastVerifiedAt: string|null; createdAt: string; updatedAt: string;
+  familiarity: 'NEWLY_LEARNED'|'FAMILIAR'|'HIGH_CONFIDENCE';
 }
 
 /** B2 contracts are re-exported for existing B1 import paths. */
