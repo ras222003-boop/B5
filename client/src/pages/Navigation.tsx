@@ -8,6 +8,8 @@ import { visionMessages } from '@/i18n/locales/vision';
 import { navApi, navigationRequest, json, type SearchResult, type BuildingGraph } from '@/lib/navigationApi';
 import { permissionService } from '@/lib/permissionService';
 import { savedCategories, type Building, type Floor, type Place, type SavedPlace } from '@shared/navigation';
+import GeographicMap from '@/components/navigation/GeographicMap';
+import type { GeoPoint } from '@/lib/guidance/geographicRoute';
 
 const button = 'inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-amber-300 px-5 py-2 font-bold text-stone-950 hover:bg-amber-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-300';
 const secondary = 'inline-flex min-h-12 items-center justify-center rounded-xl border border-amber-300/50 px-5 py-2 font-bold text-amber-100 hover:bg-amber-300/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-300';
@@ -36,6 +38,8 @@ export default function Navigation() {
   const [floorId, setFloorId] = useState('');
   const [floors, setFloors] = useState<Floor[]>([]);
   const [destination, setDestination] = useState('');
+  const [mapTarget, setMapTarget] = useState<(GeoPoint & {name:string})|null>(null);
+  const [pickedPoint, setPickedPoint] = useState<GeoPoint|null>(null);
   const [busy, setBusy] = useState(false);
   const { notice, setNotice, live } = useNotice();
 
@@ -76,12 +80,24 @@ export default function Navigation() {
       try { await navigationRequest(`/saved-places/${item.id}/select`, {method:'POST'}); } catch { setNotice(t.failed); return; }
     }
     setDestination(item.name);
+    const building = buildings.find(value=>value.id===item.buildingId);
+    const latitude = item.latitude ?? building?.latitude, longitude = item.longitude ?? building?.longitude;
+    if (latitude != null && longitude != null) setMapTarget({latitude,longitude,name:item.name});
     sessionStorage.setItem('basira-navigation-destination', JSON.stringify({ kind:result.kind, id:item.id }));
     setNotice(`${t.selected}: ${item.name}`);
   };
   const prepareDestination = (result: SearchResult) => {
     sessionStorage.setItem('basira-navigation-destination', JSON.stringify({kind:result.kind,id:result.item.id}));
     setDestination(result.item.name); setNotice(t.destinationReady); navigate('/navigation/guidance');
+  };
+  const pickMapPoint = (point:GeoPoint) => {
+    setPickedPoint(point);setMapTarget({...point,name:'نقطة مختارة على الخريطة'});
+    setNotice('اختيرت نقطة على الخريطة. يمكنك حفظها أو بدء التوجيه إليها.');
+  };
+  const guideToMapPoint = () => {
+    if(!mapTarget)return;
+    sessionStorage.setItem('basira-navigation-destination',JSON.stringify({kind:'coordinate',...mapTarget,accuracy:coordinates?.accuracy??null,timestamp:Date.now()}));
+    navigate('/navigation/guidance');
   };
   const startSave = async () => {
     setShowSave(true);
@@ -93,12 +109,12 @@ export default function Navigation() {
   const save = async (event: FormEvent) => {
     event.preventDefault();
     if (!saveName.trim()) { setNotice(t.required); return; }
-    if (!coordinates) { setNotice('حدد موقعك أولًا قبل حفظ نقطة جديدة.'); return; }
+    if (!coordinates && !pickedPoint) { setNotice('حدد موقعك أو اختر نقطة على الخريطة أولًا.'); return; }
     setBusy(true);
     try {
       await navigationRequest('/saved-places', json('POST', {
-        name:saveName.trim(),category,notes:notes.trim()||null,latitude:coordinates?.latitude??null,accuracyMeters:coordinates?.accuracy??null,
-        longitude:coordinates?.longitude??null,buildingId:currentBuilding?.id??null,floorId:floorId||null,
+        name:saveName.trim(),category,notes:notes.trim()||null,latitude:pickedPoint?.latitude??coordinates?.latitude,accuracyMeters:pickedPoint?null:coordinates?.accuracy,
+        longitude:pickedPoint?.longitude??coordinates?.longitude,buildingId:pickedPoint?null:currentBuilding?.id??null,floorId:pickedPoint?null:floorId||null,
       }));
       setShowSave(false); setSaveName(''); setNotes(''); setNotice(t.savedSuccess);
     } catch (error) { setNotice(error instanceof Error && error.message==='sign_in_required'?t.signIn:t.failed); }
@@ -112,8 +128,10 @@ export default function Navigation() {
     else sessionStorage.removeItem('basira-current-building');
   };
 
-  return <Layout><div className="container space-y-7 py-10 text-stone-100">
+  return <Layout><div className="container space-y-7 py-6 text-stone-100">
     <header><p className="text-sm font-bold text-amber-300">{t.title}</p><h1 className="text-3xl font-black">{t.where}</h1></header>
+    <GeographicMap target={mapTarget} onPick={pickMapPoint} onFix={fix=>setCoordinates(fix)} />
+    {pickedPoint&&<div className="flex flex-wrap items-center gap-3 rounded-xl border border-amber-300/40 p-3"><span>نقطة مختارة: {pickedPoint.latitude.toFixed(5)}، {pickedPoint.longitude.toFixed(5)}</span><button type="button" className={button} onClick={guideToMapPoint}>وجّهني إلى هنا</button><button type="button" className={secondary} onClick={()=>setShowSave(true)}>احفظ هذه النقطة</button></div>}
     <form onSubmit={runSearch} role="search" className="flex flex-col gap-3 sm:flex-row">
       <label className="sr-only" htmlFor="navigation-search">{t.where}</label>
       <input id="navigation-search" className={input} value={query} onChange={event=>setQuery(event.target.value)} placeholder={t.searchPlaceholder}/>

@@ -7,6 +7,7 @@ import { registerAccountAndSpeechRoutes } from "./accountRoutes";
 import { ensureSchema } from "./migrations";
 import { registerSupportRoutes, startTicketMailWorker } from "./support";
 import { registerExamDeliveryRoutes } from "./examDelivery";
+import { registerExamSubmissionRoutes } from "./examSubmissions";
 import { registerOcrRoute } from "./ocr";
 import { registerNavigationRoutes } from "./navigation";
 import { toExamLanguage, assistantSystem, guideSystem, aiFallback, pdfLabels, escapeHtml } from "./locale";
@@ -80,6 +81,7 @@ async function startServer() {
   app.use(express.json({ limit: "20mb" }));
   registerSupportRoutes(app);
   registerExamDeliveryRoutes(app);
+  registerExamSubmissionRoutes(app);
   registerNavigationRoutes(app);
   startTicketMailWorker();
 

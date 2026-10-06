@@ -1,15 +1,12 @@
-import { createHash, randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import type { Express, Request, Response } from "express";
 import { fromNodeHeaders } from "better-auth/node";
 import { jsPDF } from "jspdf";
 import type { RowDataPacket } from "mysql2";
-import nodemailer from "nodemailer";
 import { auth, pool } from "./auth";
 import { toExamLanguage, type ExamLanguage } from "../shared/ocr";
 
-type DeliveryStatus = "pending" | "sent" | "failed" | "uncertain" | "not_configured";
 type Question = {
   id: number;
   number?: string | number;
@@ -39,7 +36,6 @@ type DeliveryPayload = {
   uiLanguage: ExamLanguage;
 };
 type SettingsRow = RowDataPacket & { teacher_email: string };
-type DeliveryRow = RowDataPacket & { delivery_status: DeliveryStatus };
 
 const SMTP_READY = Boolean(
   process.env.SUPPORT_SMTP_HOST &&
@@ -109,11 +105,11 @@ function text(value: unknown, max: number): string {
   return typeof value === "string" ? value.trim().slice(0, max + 1) : "";
 }
 
-function validEmail(value: string): boolean {
+export function validEmail(value: string): boolean {
   return value.length <= 254 && /^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/.test(value);
 }
 
-function limited(req: Request, userId: string): boolean {
+export function limited(req: Request, userId: string): boolean {
   const key = `${userId}:${req.ip}:exam-delivery`;
   const now = Date.now();
   const bucket = windows.get(key);
@@ -195,7 +191,7 @@ function sanitizeGrading(value: unknown): Grading | undefined {
   };
 }
 
-function sanitizePayload(body: unknown): DeliveryPayload | null {
+export function sanitizePayload(body: unknown): DeliveryPayload | null {
   const raw = body as Record<string, unknown> | null;
   const questions = sanitizeQuestions(raw?.questions);
   if (!questions) return null;
@@ -232,7 +228,7 @@ function paragraph(doc: jsPDF, value: string, y: number, rtl: boolean, size = 10
   return y + lines.length * (size + 5) + 8;
 }
 
-async function createReportPdf(payload: DeliveryPayload): Promise<Buffer> {
+export async function createReportPdf(payload: DeliveryPayload): Promise<Buffer> {
   const reportCopy = copy[payload.uiLanguage];
   const rtl = payload.language === "ar";
   const font = await loadFontBase64();
@@ -269,7 +265,7 @@ async function createReportPdf(payload: DeliveryPayload): Promise<Buffer> {
   return Buffer.from(doc.output("arraybuffer"));
 }
 
-async function sessionFor(req: Request, res: Response) {
+export async function sessionFor(req: Request, res: Response) {
   const session = await auth.api.getSession({ headers: fromNodeHeaders(req.headers) });
   if (session) return session;
   res.status(401).json({ error: "authentication_required" });
@@ -289,47 +285,6 @@ async function saveTeacherEmail(userId: string, teacherEmail: string): Promise<v
     "INSERT INTO basira_exam_delivery_settings (user_id,teacher_email) VALUES (?,?) ON DUPLICATE KEY UPDATE teacher_email=VALUES(teacher_email),updated_at=CURRENT_TIMESTAMP(3)",
     [userId, teacherEmail],
   );
-}
-
-async function deliverReport(recipient: string, senderEmail: string, payload: DeliveryPayload): Promise<DeliveryStatus> {
-  if (!SMTP_READY) return "not_configured";
-  const transport = nodemailer.createTransport({
-    host: process.env.SUPPORT_SMTP_HOST!,
-    port: Number(process.env.SUPPORT_SMTP_PORT || 587),
-    secure: process.env.SUPPORT_SMTP_SECURE?.toLowerCase() === "true",
-    requireTLS: process.env.SUPPORT_SMTP_SECURE?.toLowerCase() !== "true",
-    auth: { user: process.env.SUPPORT_SMTP_USER!, pass: process.env.SUPPORT_SMTP_PASSWORD! },
-    connectionTimeout: 12000,
-    socketTimeout: 12000,
-    disableFileAccess: true,
-    disableUrlAccess: true,
-  });
-  try {
-    const labels = copy[payload.uiLanguage];
-    const pdf = await createReportPdf(payload);
-    const receipt = await transport.sendMail({
-      from: process.env.SUPPORT_EMAIL_FROM!,
-      to: recipient,
-      replyTo: senderEmail,
-      subject: labels.emailSubject(payload.examTitle).replace(/[\r\n]/g, " "),
-      text: labels.emailText(payload.examTitle),
-      attachments: [{ filename: "basira-exam-report.pdf", content: pdf, contentType: "application/pdf" }],
-    });
-    return receipt.accepted?.some(address => address.toLowerCase() === recipient.toLowerCase()) ? "sent" : "failed";
-  } catch (error: any) {
-    const rejected = typeof error?.responseCode === "number" && error.responseCode >= 400;
-    return rejected ? "failed" : "uncertain";
-  } finally {
-    transport.close();
-  }
-}
-
-function requestKey(req: Request, userId: string, payload: DeliveryPayload): string {
-  const supplied = req.header("Idempotency-Key");
-  const stable = supplied && /^[a-zA-Z0-9-]{8,100}$/.test(supplied)
-    ? supplied
-    : `${payload.examTitle}:${payload.questions.length}:${Date.now()}`;
-  return createHash("sha256").update(`${userId}:${stable}`).digest("hex");
 }
 
 export function registerExamDeliveryRoutes(app: Express) {
@@ -360,42 +315,5 @@ export function registerExamDeliveryRoutes(app: Express) {
     }
   });
 
-  app.post("/api/exam-delivery/send", async (req, res) => {
-    res.set("Cache-Control", "no-store");
-    if (!req.is("application/json")) return res.status(415).json({ error: "json_required" });
-    try {
-      const session = await sessionFor(req, res);
-      if (!session) return;
-      const payload = sanitizePayload(req.body);
-      if (!payload) return res.status(400).json({ error: "invalid_exam_payload" });
-      const suppliedEmail = text(req.body?.teacherEmail, 254).toLowerCase();
-      const teacherEmail = suppliedEmail || await readTeacherEmail(session.user.id);
-      if (!validEmail(teacherEmail)) return res.status(400).json({ error: "invalid_teacher_email" });
-      await saveTeacherEmail(session.user.id, teacherEmail);
-
-      const key = requestKey(req, session.user.id, payload);
-      const [existing] = await pool.execute<DeliveryRow[]>(
-        "SELECT delivery_status FROM basira_exam_delivery_log WHERE request_key=? LIMIT 1",
-        [key],
-      );
-      if (existing[0]) return res.status(200).json({ deliveryStatus: existing[0].delivery_status, duplicate: true, emailDeliveryConfigured: SMTP_READY });
-      if (limited(req, session.user.id)) return res.status(429).json({ error: "delivery_rate_limited" });
-
-      const id = randomUUID();
-      await pool.execute(
-        "INSERT INTO basira_exam_delivery_log (id,user_id,teacher_email,exam_title,request_key,delivery_status) VALUES (?,?,?,?,?,?)",
-        [id, session.user.id, teacherEmail, payload.examTitle, key, "pending"],
-      );
-      const deliveryStatus = await deliverReport(teacherEmail, session.user.email, payload);
-      await pool.execute(
-        "UPDATE basira_exam_delivery_log SET delivery_status=? WHERE id=?",
-        [deliveryStatus, id],
-      );
-      if (deliveryStatus === "sent") return res.status(201).json({ deliveryStatus, teacherEmail, emailDeliveryConfigured: true });
-      const error = deliveryStatus === "not_configured" ? "email_not_configured" : "delivery_unconfirmed";
-      return res.status(503).json({ error, deliveryStatus, teacherEmail, emailDeliveryConfigured: SMTP_READY });
-    } catch {
-      return res.status(503).json({ error: "delivery_unavailable" });
-    }
-  });
+  app.post("/api/exam-delivery/send", (_req, res) => res.status(410).json({ error: "use_approved_submission_flow" }));
 }

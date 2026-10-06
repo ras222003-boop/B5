@@ -1,0 +1,70 @@
+/** Mock GPS and routing validate browser drawing; they do not validate a real walk or live GPS. */
+import assert from 'node:assert/strict';
+import { chromium } from '@playwright/test';
+import sharp from 'sharp';
+
+const base = process.env.BASIRA_TEST_URL ?? 'http://127.0.0.1:3000';
+const A = { latitude:24.7136, longitude:46.6734 }, B = { latitude:24.7137, longitude:46.6735 }, C = { latitude:24.7138, longitude:46.6736 }, D = { latitude:24.7139, longitude:46.6737 }, E = { latitude:24.7168, longitude:46.6780 };
+const buildingId = '11111111-1111-4111-8111-111111111111', floorId = '22222222-2222-4222-8222-222222222222';
+const savedId = '88888888-8888-4888-8888-888888888888';
+const graph = { building:{id:buildingId,name:'كلية الاختبار',latitude:E.latitude,longitude:E.longitude,mapStatus:'MAPPED'}, nodes:[{id:'33333333-3333-4333-8333-333333333333',buildingId,floorId,x:0,y:0,nodeType:'ENTRANCE',placeId:null},{id:'44444444-4444-4444-8444-444444444444',buildingId,floorId,x:10,y:0,nodeType:'ROOM',placeId:null}], edges:[{id:'55555555-5555-4555-8555-555555555555',buildingId,fromNodeId:'33333333-3333-4333-8333-333333333333',toNodeId:'44444444-4444-4444-8444-444444444444',distanceMeters:10,pathType:'CORRIDOR',temporarilyClosed:false}],zones:[] };
+const saved = {id:savedId,name:'من المدخل إلى القاعة',buildingId,originNodeId:graph.nodes[0].id,destinationNodeId:graph.nodes[1].id,routeData:{nodeIds:graph.nodes.map(n=>n.id),edgeIds:[graph.edges[0].id],floorTransitions:[],anchorNodeIds:[],turnNodeIds:[]},mapVersion:1,successfulArrivalCount:2,typicalDurationSeconds:90,lastSuccessfulAt:new Date().toISOString(),lastVerifiedAt:null,createdAt:new Date().toISOString(),updatedAt:new Date().toISOString(),familiarity:'FAMILIAR'};
+const browser = await chromium.launch({headless:true});
+const context = await browser.newContext({locale:'ar-SA',viewport:{width:390,height:844},serviceWorkers:'block'});
+const page = await context.newPage(); page.setDefaultTimeout(30000);
+page.on('pageerror', error => console.error('PAGE ERROR', error.message));
+page.on('console', message => { if (message.type() === 'error') console.error('BROWSER ERROR', message.text()); });
+page.on('response', response => { if (response.status() >= 400) console.error('HTTP ERROR', response.status(), response.url()); });
+await page.addInitScript(() => localStorage.setItem('basira-b4-safety-disclaimer-v1','1'));
+await page.addInitScript({content:`(() => {
+  const listeners = new Map(); let serial = 0;
+  let current = {latitude:24.7136,longitude:46.6734};
+  const fix = () => ({coords:{...current,accuracy:6,heading:null,altitude:null,altitudeAccuracy:null,speed:null},timestamp:Date.now()});
+  Object.defineProperty(navigator,'geolocation',{configurable:true,value:{watchPosition:(callback) => { const id=++serial; listeners.set(id,callback); setTimeout(()=>callback(fix()),0); return id; },clearWatch:(id)=>listeners.delete(id),getCurrentPosition:(callback)=>callback(fix())}});
+  window.pushMockGps = (latitude,longitude) => { current={latitude,longitude}; for(const callback of listeners.values())callback(fix()); };
+})()`});
+await page.route(/routing\.openstreetmap\.de/, route => route.fulfill({status:200,headers:{'access-control-allow-origin':'*'},contentType:'application/json',body:JSON.stringify({code:'Ok',routes:[{distance:900,geometry:{coordinates:[A,B,C,D,E].map(point=>[point.longitude,point.latitude])}}]})}));
+await page.route('**/api/navigation/**', route => {
+  const path = new URL(route.request().url()).pathname, reply = (body:unknown,status=200) => route.fulfill({status,contentType:'application/json',body:JSON.stringify(body)});
+  if (path.endsWith('/buildings')) return reply({buildings:[graph.building]});
+  if (path.endsWith('/search')) return reply({results:[{kind:'saved',priority:1,item:{id:savedId,name:'بوابة الجامعة',latitude:E.latitude,longitude:E.longitude,buildingId:null,floorId:null,category:'STUDY'}}]});
+  if (path.endsWith('/saved-routes')) return reply({savedRoutes:[saved]});
+  if (path.endsWith(`/saved-places/${savedId}/select`)) return reply({savedPlace:{id:savedId}});
+  if (path.endsWith(`/buildings/${buildingId}/graph`)) return reply(graph);
+  if (path.endsWith(`/buildings/${buildingId}/floors`)) return reply({floors:[{id:floorId,buildingId,name:'الأرضي',floorNumber:0}]});
+  if (path.endsWith(`/buildings/${buildingId}/places`)) return reply({places:[]});
+  if (path.endsWith(`/buildings/${buildingId}/version`)) return reply({version:1});
+  if (path.endsWith('/access')) return reply({userId:'test',role:null});
+  return reply({},404);
+});
+try {
+  await page.goto(`${base}/navigation`);
+  const skip = page.locator('[data-testid="welcome-skip"]'); if (await skip.count()) await skip.click();
+  const map = page.getByTestId('geographic-map');
+  await map.waitFor(); await page.waitForFunction(() => document.querySelector('[data-testid="geographic-map"]')?.getAttribute('data-map-ready') === 'true');
+  assert((await map.boundingBox())!.height >= 300);
+  await page.waitForFunction(() => document.querySelector('[data-testid="geographic-map"]')?.getAttribute('data-tiles-ready') === 'true');
+  const canvas = map.locator('canvas.maplibregl-canvas');
+  const stats = await sharp(await canvas.screenshot()).stats();
+  assert(stats.channels.some(channel => channel.stdev > 8), 'Geographic tiles must draw a nonblank map');
+  await page.getByRole('button',{name:'تحديد موقعي'}).click();
+  await page.waitForFunction(() => document.querySelector('[data-testid="geographic-map"]')?.getAttribute('data-gps-quality') === 'HIGH');
+  await page.locator('#navigation-search').fill('بوابة الجامعة');
+  await page.getByRole('button',{name:'بحث'}).click();
+  await page.getByRole('button',{name:'اختيار المكان'}).click();
+  await page.getByRole('button',{name:'ابدأ توجيه المشي'}).click();
+  await page.waitForFunction(() => Number(document.querySelector('[data-testid="geographic-map"]')?.getAttribute('data-route-points')) >= 5);
+  for (const location of [B,C,D]) { await page.waitForTimeout(1200); await page.evaluate(point => (window as typeof window & {pushMockGps:(latitude:number,longitude:number)=>void}).pushMockGps(point.latitude,point.longitude),location); await page.waitForFunction(expected => document.querySelector('[data-testid="geographic-map"]')?.getAttribute('data-position') === expected, `${location.latitude},${location.longitude}`); }
+  assert.equal(await map.getAttribute('data-gps-quality'),'HIGH');
+  await page.getByRole('button',{name:'ملء الشاشة'}).click(); await page.waitForFunction(() => (document.querySelector('[data-testid="geographic-map"]')?.getBoundingClientRect().height ?? 0) > 450); await page.getByRole('button',{name:'العودة إلى الإرشاد'}).click();
+  await page.evaluate(location => sessionStorage.setItem('basira-navigation-destination',JSON.stringify({kind:'coordinate',name:'بوابة الجامعة',...location,timestamp:Date.now()})),E);
+  await page.goto(`${base}/navigation/guidance`);
+  await page.getByRole('heading',{name:'خارطة بصيرة الجغرافية'}).waitFor();
+  await page.getByTestId('geographic-map').waitFor();
+  await page.getByRole('button',{name:'استخدم المسار'}).click();
+  await page.getByRole('button',{name:'داخلي'}).click();
+  await page.getByRole('img',{name:/خريطة الأرضي/}).waitFor();
+  await page.getByRole('button',{name:'خارجي'}).click();
+  await page.getByTestId('geographic-map').waitFor();
+  console.log('MAP RENDER PASS: real vector tiles, nonblank canvas, mobile height; MOCK GPS PASS: A→B→C→D and destination E, route polyline; BROWSER PASS: navigation and guidance outdoor/indoor map modes.');
+} finally { await browser.close(); }
