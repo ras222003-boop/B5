@@ -12,6 +12,7 @@ import { PedestrianMotionProvider, decodeQrFrame, parseQrAnchor } from '@/lib/lo
 import { BasiraNavigationEngine } from '@/lib/guidance/engine';
 import { authorizedSavedPlace } from '@/lib/guidance/destination';
 import { RoutePlanner, resolveDestination, trustedOrigin } from '@/lib/guidance/route';
+import { zoneAnnouncement, zoneAt } from '@/lib/guidance/zones';
 import { VoiceCommandListener, VoiceNavigationService, HapticNavigationService, NavigationIntentService } from '@/lib/guidance/voice';
 import { guidancePhrases } from '@/lib/guidance/systemPhrases';
 import { NavigationInstructionGenerator, type DirectionStyle, type GuidanceLanguage } from '@/lib/guidance/instructions';
@@ -56,6 +57,7 @@ export default function Guidance(){
   const mapVersionRef=useRef(1),deferredMapRef=useRef<{graph:BuildingGraph;version:number}|null>(null);
   const mapSync=useRef(new SharedMapSyncService());
   const hazardActive=useRef(false);
+  const lastZoneRef=useRef<string|null>(null);
   const spoken=guidancePhrases(language,arabicStyle);
   const languageRef=useRef(language),styleRef=useRef(style),selectedRef=useRef<SearchResult|null>(null);
   const handlerRef=useRef<(command:NavigationIntent)=>Promise<void>>(async()=>{});
@@ -69,6 +71,8 @@ export default function Guidance(){
   const updateLocation=(value:LocalizationEstimate)=>{
     setEstimate(value);const engine=navigation.current;if(!engine)return;
     const result=engine.updateLocation(value,Date.now());sync(engine);
+    const zone=zoneAt(graphRef.current?.zones,value),zoneId=zone?.id??null;
+    if(zoneId!==lastZoneRef.current){lastZoneRef.current=zoneId;if(zone&&engine.session.state==='NAVIGATING')announce(zoneAnnouncement(zone,languageRef.current),'INFORMATION',`zone:${zone.id}`);}
     if(result==='LOST'){voice.current.close();announce(spoken.lost,'RELOCALIZATION','location-lost');haptic.current.pulse('STOP');}
     if(result==='RECOVERED'){announce(spoken.recovered,'RELOCALIZATION','location-recovered');emitInstruction(true);}
     if(result==='OFF_ROUTE'){announce(spoken.offRoute,'RELOCALIZATION','off-route');emitInstruction(true);}
@@ -90,7 +94,7 @@ export default function Guidance(){
     const placeList=placeResult.status==='fulfilled'?placeResult.value.places:JSON.parse(sessionStorage.getItem(`basira-b4-places-${buildingId}`)??'[]') as Place[];
     if(floorResult.status==='fulfilled')sessionStorage.setItem(`basira-b4-floors-${buildingId}`,JSON.stringify(floorList));
     if(placeResult.status==='fulfilled')sessionStorage.setItem(`basira-b4-places-${buildingId}`,JSON.stringify(placeList));
-    setGraph(data);graphRef.current=data;setFloors(floorList);floorsRef.current=floorList;setPlaces(placeList);placesRef.current=placeList;
+    setGraph(data);graphRef.current=data;lastZoneRef.current=null;setFloors(floorList);floorsRef.current=floorList;setPlaces(placeList);placesRef.current=placeList;
     mapVersionRef.current=cachedGraph?Number(sessionStorage.getItem(`basira-b5-version-${buildingId}`)??1):knownVersion;
     sessionStorage.setItem(`basira-b5-version-${buildingId}`,String(mapVersionRef.current));
     return data;
@@ -113,6 +117,7 @@ export default function Guidance(){
     if(disclaimer){announce('اقرأ تنبيه الاستخدام الأول ثم قل فهمت أو اضغط متابعة.');return;}
     if(!destination||!graphRef.current){announce('اختر وجهة وخريطة أولًا.');return;}
     const location=localization.current.fusion.current(Date.now());setEstimate(location);
+    lastZoneRef.current=null;
     const engine=new BasiraNavigationEngine(new RoutePlanner(graphRef.current.building,graphRef.current.nodes,[...graphRef.current.edges]),floorsRef.current,languageRef.current,styleRef.current,arabicStyle);
     navigation.current=engine;const place=selectedRef.current?.kind==='place'?selectedRef.current.item as Place:null;
     if(!engine.prepare(destination,location,routeType,place)){sync(engine);announce(engine.session.failureReason==='incomplete_map'?'الخريطة الداخلية لهذا الجزء غير مكتملة.':engine.session.failureReason==='no_route'?'لا أستطيع إيجاد مسار موثوق إلى هذه الوجهة حاليًا.':'أحتاج أولًا إلى تحديد موقعك بشكل أفضل.','RELOCALIZATION');return;}
@@ -157,7 +162,7 @@ export default function Guidance(){
       case 'CONFIRM_LOCATION':{const words=command.query.toLocaleLowerCase();const matches=graphRef.current?.nodes.filter(n=>nodeLabel(n,placesRef.current,floorsRef.current).toLocaleLowerCase().includes(words))??[];if(matches.length===1)anchorNode(matches[0]);else announce(matches.length?'الموقع غير محدد بما يكفي. اذكر اسمًا أدق.':'لم أجد هذا الموقع في الخريطة.');break;}
       case 'CONFIRM_ARRIVAL':{if(engine?.considerArrival(null,false,null,true)){sync(engine);emitInstruction(true);void stopCamera();motion.current?.stop();motion.current=null;}else announce('لا أستطيع تأكيد الوصول بعد؛ أحتاج موقعًا موثوقًا وقربًا من الوجهة.');break;}
       case 'NAVIGATE_TO':{setQuery(command.query);try{const found=(await navApi.search(command.query,graphRef.current?.building.id??sessionStorage.getItem('basira-current-building'),true)).results[0];if(found){await choose(found);announce(`وجدت ${found.item.name}. ثبت موقعك ثم قل ابدأ التوجيه أو اضغط البدء.`);}else announce('لم أجد الوجهة المطلوبة.');}catch{const local=placesRef.current.find(p=>[p.name,p.roomNumber??'',...p.aliases].some(v=>v.toLocaleLowerCase().includes(command.query.toLocaleLowerCase())));if(local)await choose({kind:'place',item:local,priority:0});else announce('البحث غير متاح الآن.');}break;}
-      case 'WHERE_AM_I':{const loc=localization.current.fusion.current(Date.now());if(loc.state!=='TRACKING'||loc.confidence<.55)announce(spoken.whereUncertain);else{const nearby=graphRef.current?.nodes.filter(n=>n.floorId===loc.floorId&&n.placeId).sort((a,b)=>Math.hypot(a.x-loc.x!,a.y-loc.y!)-Math.hypot(b.x-loc.x!,b.y-loc.y!))[0];const name=placesRef.current.find(p=>p.id===nearby?.placeId)?.name??(language==='en'?'a known place':language==='zh-CN'?'已知地点':'موضع معروف');const floor=floorsRef.current.find(f=>f.id===loc.floorId)?.name??(language==='en'?'the current floor':language==='zh-CN'?'当前楼层':'الطابق الحالي');announce(spoken.whereKnown(floor,name));}break;}
+      case 'WHERE_AM_I':{const loc=localization.current.fusion.current(Date.now());if(loc.state!=='TRACKING'||loc.confidence<.55)announce(spoken.whereUncertain);else{const nearby=graphRef.current?.nodes.filter(n=>n.floorId===loc.floorId&&n.placeId).sort((a,b)=>Math.hypot(a.x-loc.x!,a.y-loc.y!)-Math.hypot(b.x-loc.x!,b.y-loc.y!))[0];const name=placesRef.current.find(p=>p.id===nearby?.placeId)?.name??(language==='en'?'a known place':language==='zh-CN'?'已知地点':'موضع معروف');const floor=floorsRef.current.find(f=>f.id===loc.floorId)?.name??(language==='en'?'the current floor':language==='zh-CN'?'当前楼层':'الطابق الحالي');const zone=zoneAt(graphRef.current?.zones,loc);const zoneText=zone?(language==='en'?` You are in ${zone.name}.`:language==='zh-CN'?` 您位于${zone.name}。`:` أنت في منطقة ${zone.name}.`):'';announce(`${spoken.whereKnown(floor,name)}${zoneText}`);}break;}
       case 'WHAT_IS_AHEAD':announce(latestScene.current?.shortText??spoken.visionUnavailable);break;
       case 'NEAREST_PLACE':{const loc=localization.current.fusion.current(Date.now());if(!graphRef.current||loc.state!=='TRACKING'){announce('أحتاج موقعًا موثوقًا وخريطة للعثور على الأقرب.');break;}const planner=engine?.planner??new RoutePlanner(graphRef.current.building,graphRef.current.nodes,graphRef.current.edges);const origin=trustedOrigin(planner.nodes,loc);const found=origin?planner.nearestPlace(origin.id,placesRef.current,kindOf(command.query),engine?.constraints.active()??[]):null;announce(found?`أقرب ${command.query} قابل للوصول: ${found.place.name}، على المسار المحسوب تقريبًا ${Math.round(found.route.totalDistance)} مترًا.`:'لم أجد مكانًا من هذا النوع يمكن الوصول إليه بالخريطة الحالية.');break;}
       case 'REPEAT_INSTRUCTION':emitInstruction(true);break;

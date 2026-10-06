@@ -1,0 +1,20 @@
+CREATE TABLE IF NOT EXISTS basira_navigation_zones (
+  id varchar(36) NOT NULL PRIMARY KEY,
+  building_id varchar(36) NOT NULL,
+  floor_id varchar(36) NOT NULL,
+  name varchar(255) NOT NULL,
+  zone_type enum('CORRIDOR','LANDMARK','WAITING','HAZARD','SERVICE','OTHER') NOT NULL DEFAULT 'OTHER',
+  min_x decimal(12,3) NOT NULL,
+  max_x decimal(12,3) NOT NULL,
+  min_y decimal(12,3) NOT NULL,
+  max_y decimal(12,3) NOT NULL,
+  guidance_hint varchar(500),
+  accessibility_note text,
+  created_by varchar(36),
+  created_at timestamp(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  updated_at timestamp(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+  FOREIGN KEY (building_id) REFERENCES basira_buildings(id) ON DELETE CASCADE,
+  FOREIGN KEY (floor_id) REFERENCES basira_floors(id) ON DELETE CASCADE,
+  FOREIGN KEY (created_by) REFERENCES `user`(id) ON DELETE SET NULL,
+  INDEX navigation_zone_floor_idx (building_id, floor_id)
+);

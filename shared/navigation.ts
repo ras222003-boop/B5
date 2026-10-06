@@ -2,6 +2,7 @@
 export const buildingTypes = ['University','School','Hospital','Airport','Mall','Government','Office','PublicBuilding','Other'] as const;
 export const placeTypes = ['ROOM','CLASSROOM','OFFICE','LAB','RECEPTION','ELEVATOR','STAIRS','RESTROOM','ENTRANCE','EXIT','EMERGENCY_EXIT','CORRIDOR','INTERSECTION','WAITING_AREA','PHARMACY','CLINIC','SERVICE_POINT','PARKING','OTHER'] as const;
 export const nodeTypes = ['POINT','ROOM','CORRIDOR','INTERSECTION','DOOR','STAIRS','ELEVATOR','ENTRANCE','EXIT'] as const;
+export const zoneTypes = ['CORRIDOR','LANDMARK','WAITING','HAZARD','SERVICE','OTHER'] as const;
 export const savedCategories = ['STUDY','WORK','CAR','HOME','HEALTH','FAVORITE','OTHER'] as const;
 export const verificationStatuses = ['DISCOVERED','COMMUNITY_VERIFIED','OFFICIAL'] as const;
 export const accessibilityLevels = ['UNKNOWN','STANDARD','ACCESSIBLE'] as const;
@@ -39,6 +40,12 @@ export interface MapEdge {
   accessibilityLevel: typeof accessibilityLevels[number]; hasStairs: boolean; hasRamp: boolean;
   wheelchairAccessible: boolean; visuallyImpairedFriendly: boolean; temporarilyClosed: boolean;
   riskLevel: 'LOW' | 'MEDIUM' | 'HIGH';
+}
+export interface NavigationZone {
+  id: string; buildingId: string; floorId: string; name: string; zoneType: typeof zoneTypes[number];
+  minX: number; maxX: number; minY: number; maxY: number;
+  guidanceHint: string | null; accessibilityNote: string | null; createdBy: string | null;
+  createdAt: string; updatedAt: string;
 }
 export interface SavedPlace {
   id: string; name: string; category: typeof savedCategories[number]; notes: string | null;

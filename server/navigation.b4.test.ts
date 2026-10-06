@@ -52,10 +52,11 @@ describe('B4 private destination endpoint',()=>{
     expect(mocks.execute.mock.calls.filter(([sql])=>String(sql).includes('basira_saved_places')).every(([,params])=>params.includes('user-b'))).toBe(true);
   });
   it('includes building verification metadata with the B1 graph',async()=>{
-    mocks.execute.mockResolvedValueOnce([[{id:uuid,name:'كلية التربية',map_status:'MAPPED',verification_status:'OFFICIAL'}]]).mockResolvedValueOnce([[]]).mockResolvedValueOnce([[]]);
+    mocks.execute.mockResolvedValueOnce([[{id:uuid,name:'كلية التربية',map_status:'MAPPED',verification_status:'OFFICIAL'}]]).mockResolvedValueOnce([[]]).mockResolvedValueOnce([[]]).mockResolvedValueOnce([[]]);
     const {res,json}=response();
     route('/buildings/:id/graph')({headers:{},params:{id:uuid}} as unknown as Request,res);
     await vi.waitFor(()=>expect(json).toHaveBeenCalled());
     expect(json.mock.calls[0][0].building).toMatchObject({mapStatus:'MAPPED',verificationStatus:'OFFICIAL'});
+    expect(json.mock.calls[0][0].zones).toEqual([]);
   });
 });

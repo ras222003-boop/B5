@@ -3,7 +3,7 @@ import express, { type Express, type Request, type Response } from 'express';
 import { fromNodeHeaders } from 'better-auth/node';
 import { z } from 'zod';
 import { auth, pool } from './auth';
-import { buildingTypes, placeTypes, nodeTypes, savedCategories, verificationStatuses, accessibilityLevels } from '../shared/navigation';
+import { buildingTypes, placeTypes, nodeTypes, zoneTypes, savedCategories, verificationStatuses, accessibilityLevels } from '../shared/navigation';
 import { registerLocalizationRoutes } from './localization';
 import { registerSharedMapRoutes } from './sharedMap';
 import { registerOrganizationRoutes } from './organizations';
@@ -46,11 +46,17 @@ const edgeInput = z.object({
   hasStairs: z.boolean().default(false), hasRamp: z.boolean().default(false), wheelchairAccessible: z.boolean().default(false),
   visuallyImpairedFriendly: z.boolean().default(false), temporarilyClosed: z.boolean().default(false), riskLevel: z.enum(['LOW','MEDIUM','HIGH']).default('LOW'),
 });
+const zoneCoordinate = z.number().finite().min(-100000).max(100000);
+const zoneInput = z.object({
+  floorId: id, name, zoneType: z.enum(zoneTypes).default('OTHER'),
+  minX: zoneCoordinate, maxX: zoneCoordinate, minY: zoneCoordinate, maxY: zoneCoordinate,
+  guidanceHint: text(500), accessibilityNote: text(),
+}).refine(value => value.minX < value.maxX && value.minY < value.maxY, { message: 'invalid_zone_bounds' });
 
 type Data = Record<string, any>;
 const camel = (key: string) => key.replace(/_([a-z])/g, (_, letter: string) => letter.toUpperCase());
 const booleans = new Set(['is_public','is_favorite','has_stairs','has_ramp','wheelchair_accessible','visually_impaired_friendly','temporarily_closed']);
-const numbers = new Set(['latitude','longitude','local_x','local_y','x','y','distance_meters','confidence_score','localization_confidence']);
+const numbers = new Set(['latitude','longitude','local_x','local_y','x','y','min_x','max_x','min_y','max_y','distance_meters','confidence_score','localization_confidence']);
 function present(value: Data): Data {
   const out: Data = {};
   for (const [key, raw] of Object.entries(value)) {
@@ -308,8 +314,8 @@ export function registerNavigationRoutes(app: Express) {
     if (!uuid(req)) return res.status(400).json({error:'invalid_id'});
     const building=await one("SELECT * FROM basira_buildings WHERE id=? AND status='ACTIVE'",[req.params.id]);
     if (!building) return res.status(404).json({error:'not_found'});
-    const [nodes,edges]=await Promise.all([rows('SELECT n.id,n.building_id,n.floor_id,CASE WHEN p.is_public=1 THEN n.place_id ELSE NULL END AS place_id,n.x,n.y,n.node_type,n.accessibility_level FROM basira_map_nodes n LEFT JOIN basira_places p ON p.id=n.place_id WHERE n.building_id=?',[req.params.id]),rows('SELECT * FROM basira_map_edges WHERE building_id=?',[req.params.id])]);
-    res.json({building,nodes,edges});
+    const [nodes,edges,zones]=await Promise.all([rows('SELECT n.id,n.building_id,n.floor_id,CASE WHEN p.is_public=1 THEN n.place_id ELSE NULL END AS place_id,n.x,n.y,n.node_type,n.accessibility_level FROM basira_map_nodes n LEFT JOIN basira_places p ON p.id=n.place_id WHERE n.building_id=?',[req.params.id]),rows('SELECT * FROM basira_map_edges WHERE building_id=?',[req.params.id]),rows('SELECT * FROM basira_navigation_zones WHERE building_id=? ORDER BY floor_id,name',[req.params.id])]);
+    res.json({building,nodes,edges,zones});
   }));
   api.get('/buildings/:id/nodes', asyncRoute(async (req,res) => {
     if (!uuid(req)) return res.status(400).json({error:'invalid_id'});
@@ -340,5 +346,25 @@ export function registerNavigationRoutes(app: Express) {
     await pool.execute(`INSERT INTO basira_map_edges (id,building_id,from_node_id,to_node_id,distance_meters,direction,path_type,accessibility_level,has_stairs,has_ramp,wheelchair_accessible,visually_impaired_friendly,temporarily_closed,risk_level) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,[newId,req.params.id,data.fromNodeId,data.toNodeId,data.distanceMeters,value(data.direction),data.pathType,data.accessibilityLevel,bool(data.hasStairs),bool(data.hasRamp),bool(data.wheelchairAccessible),bool(data.visuallyImpairedFriendly),bool(data.temporarilyClosed),data.riskLevel]);
     await pool.execute("UPDATE basira_buildings SET map_status='IN_PROGRESS' WHERE id=? AND map_status='UNMAPPED'",[req.params.id]);
     res.status(201).json({edge:await one('SELECT * FROM basira_map_edges WHERE id=?',[newId])});
+  }));
+  api.get('/buildings/:id/zones', asyncRoute(async (req,res) => {
+    if (!uuid(req)) return res.status(400).json({error:'invalid_id'});
+    res.json({zones:await rows('SELECT * FROM basira_navigation_zones WHERE building_id=? ORDER BY floor_id,name',[req.params.id])});
+  }));
+  api.post('/buildings/:id/zones', asyncRoute(async (req,res) => {
+    if (!uuid(req)) return res.status(400).json({error:'invalid_id'});
+    const actor=await editor(req,res,req.params.id); if (!actor) return;
+    const data=parse(zoneInput,req,res); if (!data) return;
+    if (!await exists('basira_floors',data.floorId,req.params.id)) return res.status(400).json({error:'floor_building_mismatch'});
+    const newId=randomUUID();
+    await pool.execute('INSERT INTO basira_navigation_zones (id,building_id,floor_id,name,zone_type,min_x,max_x,min_y,max_y,guidance_hint,accessibility_note,created_by) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)',[newId,req.params.id,data.floorId,data.name,data.zoneType,data.minX,data.maxX,data.minY,data.maxY,value(data.guidanceHint),value(data.accessibilityNote),actor.userId]);
+    await pool.execute("UPDATE basira_buildings SET map_status='IN_PROGRESS' WHERE id=? AND map_status='UNMAPPED'",[req.params.id]);
+    res.status(201).json({zone:await one('SELECT * FROM basira_navigation_zones WHERE id=?',[newId])});
+  }));
+  api.delete('/buildings/:id/zones/:zoneId', asyncRoute(async (req,res) => {
+    if (!uuid(req) || !uuid(req,'zoneId')) return res.status(400).json({error:'invalid_id'});
+    const actor=await editor(req,res,req.params.id); if (!actor) return;
+    const [result]=await pool.execute('DELETE FROM basira_navigation_zones WHERE id=? AND building_id=?',[req.params.zoneId,req.params.id]);
+    res.status((result as {affectedRows:number}).affectedRows?204:404).end();
   }));
 }
