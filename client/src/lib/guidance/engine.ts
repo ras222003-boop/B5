@@ -5,6 +5,7 @@ import { RoutePlanner, metreDistance, trustedOrigin } from './route';
 import { NavigationInstructionGenerator, arrived, type DirectionStyle, type GuidanceLanguage } from './instructions';
 import { NavigationSafetyFusion, TemporaryRouteConstraints, type SafetyDecision } from './safety';
 import type { SceneDescription } from '@shared/vision';
+import type { ArabicStyle } from '@shared/speech';
 
 const terminal=new Set(['ARRIVED','CANCELLED','FAILED']);
 const segmentDistance=(point:{x:number;y:number},a:{x:number;y:number},b:{x:number;y:number})=>{const dx=b.x-a.x,dy=b.y-a.y,t=Math.max(0,Math.min(1,((point.x-a.x)*dx+(point.y-a.y)*dy)/(dx*dx+dy*dy||1)));return metreDistance(point,{x:a.x+t*dx,y:a.y+t*dy});};
@@ -25,12 +26,13 @@ export class BasiraNavigationEngine {
   private lastScene:SceneDescription|null=null;
   private destinationPlace:Place|null=null;
   readonly session:NavigationSession={id:crypto.randomUUID(),state:'PREPARING',route:null,destination:null,location:null,progress:null,instruction:null,safety:'ROUTE_UNCERTAIN',startedAt:Date.now(),endedAt:null,lastRerouteReason:null,failureReason:null};
-  constructor(readonly planner:RoutePlanner,readonly floors:Floor[],lang:GuidanceLanguage='ar',style:DirectionStyle='LEFT_RIGHT'){
-    this.instructions=new NavigationInstructionGenerator(floors,lang,style);
+  constructor(readonly planner:RoutePlanner,readonly floors:Floor[],lang:GuidanceLanguage='ar',style:DirectionStyle='LEFT_RIGHT',arabicStyle:ArabicStyle='MSA'){
+    this.instructions=new NavigationInstructionGenerator(floors,lang,style,arabicStyle);
     this.safety.setLanguage(lang);
+    this.safety.setArabicStyle(arabicStyle);
     this.rerouting=new ReroutingEngine(planner,this.constraints);
   }
-  configure(lang:GuidanceLanguage,style:DirectionStyle){this.instructions=new NavigationInstructionGenerator(this.floors,lang,style);this.safety.setLanguage(lang);if(this.session.route&&this.session.progress)this.session.instruction=this.instructions.forEdge(this.session.route,this.session.progress.edgeIndex,this.session.location?.confidence??0);}
+  configure(lang:GuidanceLanguage,style:DirectionStyle,arabicStyle:ArabicStyle='MSA'){this.instructions=new NavigationInstructionGenerator(this.floors,lang,style,arabicStyle);this.safety.setLanguage(lang);this.safety.setArabicStyle(arabicStyle);if(this.session.route&&this.session.progress)this.session.instruction=this.instructions.forEdge(this.session.route,this.session.progress.edgeIndex,this.session.location?.confidence??0);}
   prepare(destination:NavigationDestination,location:LocalizationEstimate,type:RouteType='RECOMMENDED',destinationPlace:Place|null=null):boolean {
     this.session.destination=destination;this.destinationPlace=destinationPlace;this.session.location=location;
     const origin=trustedOrigin(this.planner.nodes,location);

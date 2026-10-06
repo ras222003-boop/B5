@@ -85,6 +85,14 @@ describe('B4 route planning and guidance',()=>{
     expect(new NavigationInstructionGenerator(floors,'en').forEdge(multi,transition,.9).text).toContain('elevator');
     expect(new NavigationInstructionGenerator(floors,'zh-CN').forEdge(multi,transition,.9).text).toContain('电梯');
   });
+  it('uses concise Saudi navigation phrases while keeping safety explicit',()=>{
+    const route=planner().plan('a',destination)!;
+    const sa=new NavigationInstructionGenerator(floors,'ar','LEFT_RIGHT','SAUDI');
+    expect(sa.forEdge(route,0,.9).text).toContain('قدام');
+    expect(sa.arrival('غرفة 121','FRONT')).toContain('قدامك');
+    const safety=new NavigationSafetyFusion('ar','SAUDI');
+    expect(safety.evaluate(route,0,location(),scene([chair])).message).toContain('عائق');
+  });
   it('detects off-route over repeated readings and replans from the new node',()=>{
     const engine=new BasiraNavigationEngine(planner(),floors);engine.prepare(destination,location());engine.start();
     const offset=location(0,8);

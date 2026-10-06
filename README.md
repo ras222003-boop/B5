@@ -1,4 +1,16 @@
-# Web App Template (Static Frontend)
+# بصيرة · Basira
+
+حسابات بصيرة وMySQL والصوت العصبي: ابدأ من [دليل التشغيل المحلي](docs/local-accounts.md). الواجهة الحالية تستخدم خادم API وجلسات Better Auth؛ الأقسام القديمة أدناه تصف قالب البداية فقط.
+
+## تشغيل سريع
+
+1. شغّل Docker Desktop.
+2. نفّذ `powershell -NoProfile -ExecutionPolicy Bypass -File scripts/setup-local-basira.ps1`.
+3. نفّذ `pnpm install` ثم `pnpm dev` وافتح `http://localhost:3000/account`.
+
+---
+
+## ملاحظات القالب الأصلي
 
 Pure React 19 + Tailwind 4 template with shadcn/ui baked in. **Use this README as the checklist for shipping static experiences.**
 

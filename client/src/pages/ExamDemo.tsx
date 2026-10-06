@@ -413,7 +413,7 @@ export default function ExamDemo() {
     const answer = answers[question.id]
       ? `${content.answerPrefix[key]}: ${answers[question.id]}`
       : content.notAnswered[key];
-    speak(`${content.questionPrefix[key](questionNumber(question))}: ${question.text}. ${answer}`, 0.9, examLang);
+    speak(`${content.questionPrefix[key](questionNumber(question))}: ${question.text}. ${answer}`, 0.9, examLang, 'EXAM');
   }, [answers, examLang, questionNumber, speak, t.content]);
 
   return (
@@ -585,7 +585,7 @@ export default function ExamDemo() {
                         const selected = answers[currentQuestion.id] === option;
                         const readable = Boolean(option.trim());
                         return (
-                          <button key={`${label}-${index}`} disabled={!readable} onClick={(event) => { event.stopPropagation(); saveAnswer(currentQuestion.id, option); speak(`${label}: ${option}`, 0.9, examLang); }} className={`w-full text-start p-4 rounded-xl border-2 transition-all duration-200 flex items-center gap-3 ${readable ? "active:scale-[0.98]" : "cursor-not-allowed opacity-60"} ${selected && readable ? "border-amber-500 bg-amber-50 text-amber-900" : "border-border hover:border-amber-200 hover:bg-amber-50/30"}`} aria-label={t.exam.optionAria(label, readable ? option : t.exam.unreadableOption)}>
+                          <button key={`${label}-${index}`} disabled={!readable} onClick={(event) => { event.stopPropagation(); saveAnswer(currentQuestion.id, option); speak(`${label}: ${option}`, 0.9, examLang, 'ANSWER_OPTION'); }} className={`w-full text-start p-4 rounded-xl border-2 transition-all duration-200 flex items-center gap-3 ${readable ? "active:scale-[0.98]" : "cursor-not-allowed opacity-60"} ${selected && readable ? "border-amber-500 bg-amber-50 text-amber-900" : "border-border hover:border-amber-200 hover:bg-amber-50/30"}`} aria-label={t.exam.optionAria(label, readable ? option : t.exam.unreadableOption)}>
                             <span className={`w-9 h-9 rounded-lg flex items-center justify-center font-bold text-sm shrink-0 ${selected ? "bg-amber-600 text-white" : "bg-muted text-muted-foreground"}`}>{label}</span>
                             <span className="flex-1 whitespace-pre-line" dir="auto">{readable ? option : t.exam.unreadableOption}</span>
                             {selected && readable && <CheckCircle className="w-5 h-5 text-amber-600 shrink-0" />}
@@ -683,7 +683,7 @@ export default function ExamDemo() {
                     const statusIcons = { correct: <CheckCircle className="w-5 h-5 text-green-600" />, incorrect: <XCircle className="w-5 h-5 text-red-600" />, partial: <AlertCircle className="w-5 h-5 text-yellow-600" />, unanswered: <AlertCircle className="w-5 h-5 text-gray-400" /> };
                     const uiStatus = t.grading.statuses[result.isCorrect];
                     const examStatus = t.content.statuses[languageKey(examLang)][result.isCorrect];
-                    const speakGrade = () => speak(`${t.content.questionPrefix[languageKey(examLang)](questionNumber(question))}: ${question.text}. ${t.content.resultPrefix[languageKey(examLang)]}: ${examStatus}. ${result.feedback}. ${t.content.correctAnswerPrefix[languageKey(examLang)]}: ${result.correctAnswer}`, 0.85, examLang);
+                    const speakGrade = () => speak(`${t.content.questionPrefix[languageKey(examLang)](questionNumber(question))}: ${question.text}. ${t.content.resultPrefix[languageKey(examLang)]}: ${examStatus}. ${result.feedback}. ${t.content.correctAnswerPrefix[languageKey(examLang)]}: ${result.correctAnswer}`, 0.85, examLang, 'EXAM');
                     return (
                       <div key={question.id} dir={examDir} lang={examLang} className={`p-5 rounded-2xl border-2 cursor-pointer hover:shadow-md transition-shadow ${statusColors[result.isCorrect]}`} onClick={speakGrade} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); speakGrade(); } }} role="button" tabIndex={0} aria-label={t.grading.cardAria(questionNumber(question))}>
                         <div className="flex items-start gap-3">

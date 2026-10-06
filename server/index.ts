@@ -2,8 +2,8 @@ import express from "express";
 import { createServer } from "http";
 import path from "path";
 import { fileURLToPath } from "url";
-import { toNodeHandler } from "better-auth/node";
-import { auth, pool, providerReady } from "./auth";
+import { pool } from "./auth";
+import { registerAccountAndSpeechRoutes } from "./accountRoutes";
 import { ensureSchema } from "./migrations";
 import { registerSupportRoutes, startTicketMailWorker } from "./support";
 import { registerExamDeliveryRoutes } from "./examDelivery";
@@ -73,11 +73,7 @@ async function startServer() {
     res.set('Cache-Control','no-store').status(ready?200:503).json({status:ready?'READY':'DOWN',capabilities});
   });
 
-  app.get("/api/auth/providers", (_req, res) => {
-    res.set("Cache-Control", "no-store").json({ providers: providerReady, emailPassword: true });
-  });
-  // Better Auth must receive the original request stream before body parsing.
-  app.all("/api/auth/*", toNodeHandler(auth));
+  registerAccountAndSpeechRoutes(app);
 
   // Parse JSON bodies up to 20MB for image data
   app.use('/api/navigation/organizations',express.json({limit:'1mb'}));
@@ -576,4 +572,7 @@ async function startServer() {
   });
 }
 
-startServer().catch(console.error);
+startServer().catch(() => {
+  console.error('Basira server startup failed; check database readiness and server configuration.');
+  process.exitCode = 1;
+});
