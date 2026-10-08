@@ -130,13 +130,17 @@ export default function Navigation() {
 
   return <Layout><div className="container space-y-7 py-6 text-stone-100">
     <header><p className="text-sm font-bold text-amber-300">{t.title}</p><h1 className="text-3xl font-black">{t.where}</h1></header>
-    <GeographicMap target={mapTarget} onPick={pickMapPoint} onFix={fix=>setCoordinates(fix)} />
-    {pickedPoint&&<div className="flex flex-wrap items-center gap-3 rounded-xl border border-amber-300/40 p-3"><span>نقطة مختارة: {pickedPoint.latitude.toFixed(5)}، {pickedPoint.longitude.toFixed(5)}</span><button type="button" className={button} onClick={guideToMapPoint}>وجّهني إلى هنا</button><button type="button" className={secondary} onClick={()=>setShowSave(true)}>احفظ هذه النقطة</button></div>}
+    <div className="rounded-2xl border border-amber-300/50 bg-amber-300/10 p-4">
+      <p className="mb-3 text-sm leading-6 text-amber-100">{t.guidanceEntryHint}</p>
+      <Link className={`${button} w-full sm:w-auto`} href="/navigation/guidance">{t.homeTitle}</Link>
+    </div>
     <form onSubmit={runSearch} role="search" className="flex flex-col gap-3 sm:flex-row">
       <label className="sr-only" htmlFor="navigation-search">{t.where}</label>
       <input id="navigation-search" className={input} value={query} onChange={event=>setQuery(event.target.value)} placeholder={t.searchPlaceholder}/>
       <button className={button} disabled={busy} type="submit"><Search aria-hidden="true" size={20}/>{t.search}</button>
     </form>
+    <GeographicMap target={mapTarget} onPick={pickMapPoint} onFix={fix=>setCoordinates(fix)} />
+    {pickedPoint&&<div className="flex flex-wrap items-center gap-3 rounded-xl border border-amber-300/40 p-3"><span>نقطة مختارة: {pickedPoint.latitude.toFixed(5)}، {pickedPoint.longitude.toFixed(5)}</span><button type="button" className={button} onClick={guideToMapPoint}>وجّهني إلى هنا</button><button type="button" className={secondary} onClick={()=>setShowSave(true)}>احفظ هذه النقطة</button></div>}
     <label className="block max-w-xl">{t.locationFound}<select className={input} value={currentBuilding?.id??''} onChange={e=>chooseBuilding(e.target.value)}><option value="">{t.chooseBuilding}</option>{buildings.map(b=><option key={b.id} value={b.id}>{b.name}</option>)}</select></label>
     {currentBuilding && <p className="rounded-xl bg-amber-300/10 p-3 text-amber-100">{t.locationFound}: <Link href={`/navigation/buildings/${currentBuilding.id}`} className="underline">{currentBuilding.name}</Link></p>}
     {coordinates&&<p role="status" className="rounded-xl border border-amber-200/30 p-3">دقة GPS المبلغ عنها: نحو {Math.round(coordinates.accuracy)} متر · {coordinates.accuracy<=10?'مرتفعة':coordinates.accuracy<=25?'متوسطة':'منخفضة؛ لا تستخدمها لتحديد مدخل أو غرفة'}</p>}
@@ -149,7 +153,6 @@ export default function Navigation() {
       <Link className={secondary} href="/navigation/places?filter=recent">{t.recent}</Link>
       <Link className={secondary} href="/navigation/permissions">{t.permissions}</Link>
       <Link className={button} href="/navigation/vision">{vision.open}</Link>
-      <Link className={button} href="/navigation/guidance">التنقل مع بصيرة</Link>
       <Link className={secondary} href="/navigation/shared-map">خريطة بصيرة المشتركة</Link>
       <Link className={secondary} href="/navigation/indoor-manager">مدير الخرائط الداخلية</Link>
     </div>

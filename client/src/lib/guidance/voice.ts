@@ -13,6 +13,8 @@ export class NavigationIntentService {
     if(/(وصلت إلى الوجهة|أكد الوصول|confirm arrival|已到达目的地)/i.test(text))return {type:'CONFIRM_ARRIVAL'};
     const at=text.match(/(?:أنا عند|انا عند|موقعي عند|i am at|i'm at|我在)\s+(.+)/i);if(at)return {type:'CONFIRM_LOCATION',query:at[1].trim()};
     if(/(ماذا أمامي|ايش أمامي|وش قدامي|what.?s ahead|what is ahead|前面有什么)/i.test(text))return {type:'WHAT_IS_AHEAD'};
+    if(/(ماذا حولي|ايش حولي|وش حولي|what is around me|what.?s around me|我周围有什么)/i.test(text))return {type:'WHAT_IS_AROUND'};
+    const object=text.match(/(?:ابحث عن|دور على|find object|look for|find|寻找)\s*(الباب|باب|المصعد|مصعد|كرسي|الكرسي|مكتب الاستقبال|door|elevator|chair|reception|门|电梯|椅子)/i);if(object)return {type:'FIND_OBJECT',query:object[1]};
     if(/(أعد التعليمات|كرر التعليمات|عيدي التعليمات|repeat|再说一遍)/i.test(text))return {type:'REPEAT_INSTRUCTION'};
     if(/(أوقف التنقل|أوقف الملاحة|توقف مؤقتا|pause navigation|pause guidance|暂停导航)/i.test(text))return {type:'PAUSE_NAVIGATION'};
     if(/(تابع التنقل|استأنف|كمل الطريق|resume navigation|continue guidance|继续导航)/i.test(text))return {type:'RESUME_NAVIGATION'};
@@ -24,8 +26,8 @@ export class NavigationIntentService {
     return {type:'UNKNOWN'};
   }
 }
-export type AnnouncementPriority='CRITICAL_SAFETY'|'HIGH_SAFETY'|'RELOCALIZATION'|'TURN'|'ARRIVAL'|'INFORMATION';
-const rank:Record<AnnouncementPriority,number>={CRITICAL_SAFETY:6,HIGH_SAFETY:5,RELOCALIZATION:4,TURN:3,ARRIVAL:2,INFORMATION:1};
+export type AnnouncementPriority='CRITICAL_SAFETY'|'HIGH_SAFETY'|'STAIR'|'RELOCALIZATION'|'TURN'|'ARRIVAL'|'INFORMATION';
+const rank:Record<AnnouncementPriority,number>={CRITICAL_SAFETY:7,HIGH_SAFETY:6,STAIR:5,RELOCALIZATION:4,TURN:3,ARRIVAL:2,INFORMATION:1};
 export interface Announcement {text:string;priority:AnnouncementPriority;key:string;at:number;force?:boolean}
 export class AnnouncementPriorityQueue {
   private pending:Announcement[]=[];private current:Announcement|null=null;private last=new Map<string,number>();
@@ -54,8 +56,8 @@ export class VoiceNavigationService {
   invalidateRoute(){this.queue.clear();speechEngine.clearPrefetch();}
   private speakNow(item:Announcement,done:()=>void){
     if(this.muted){done();return;}
-    const context=item.priority==='CRITICAL_SAFETY'||item.priority==='HIGH_SAFETY'?'SAFETY':'NAVIGATION';
-    void speechEngine.enqueue(speechInput(item.text,this.language,context,context==='SAFETY'?1:1.05),item.priority,0,item.key).then(done);
+    const context=item.priority==='CRITICAL_SAFETY'||item.priority==='HIGH_SAFETY'||item.priority==='STAIR'?'SAFETY':'NAVIGATION';
+    void speechEngine.enqueue(speechInput(item.text,this.language,context,context==='SAFETY'?1:1.05),item.priority==='STAIR'?'HIGH_SAFETY':item.priority,0,item.key).then(done);
   }
   stop(){speechEngine.stop();}
   close(){this.queue.clear();speechEngine.clearPrefetch();}
@@ -63,11 +65,34 @@ export class VoiceNavigationService {
 export class HapticNavigationService {
   private enabled=true;
   setEnabled(enabled:boolean){this.enabled=enabled;if(!enabled&&typeof navigator!=='undefined'&&'vibrate'in navigator)navigator.vibrate(0);}
-  pulse(kind:'CONTINUE'|'RIGHT'|'LEFT'|'HAZARD'|'STOP'|'ARRIVAL'|'RELOCALIZE'){
+  pulse(kind:'CONTINUE'|'RIGHT'|'LEFT'|'HAZARD'|'STOP'|'ARRIVAL'|'RELOCALIZE'|'STAIR'|'STEP_ESTIMATE'){
     if(!this.enabled||typeof navigator==='undefined'||!('vibrate'in navigator))return false;
-    const pattern:Record<typeof kind,number[]>={CONTINUE:[70],RIGHT:[70,70,170],LEFT:[170,70,70],HAZARD:[240,80,240,80,240],STOP:[350],ARRIVAL:[90,80,90,80,260],RELOCALIZE:[120,100,120,100,120]};
+    const pattern:Record<typeof kind,number[]>={CONTINUE:[70],RIGHT:[70,70,170],LEFT:[170,70,70],HAZARD:[240,80,240,80,240],STOP:[350],ARRIVAL:[90,80,90,80,260],RELOCALIZE:[120,100,120,100,120],STAIR:[100,90,100,90,250],STEP_ESTIMATE:[35]};
     try{return navigator.vibrate(pattern[kind]);}catch{return false;}
   }
+}
+
+/** Very short optional cues leave environmental audio available; no sound is looped. */
+export class NavigationEarconService {
+  private context:AudioContext|null=null;
+  play(kind:'STEP_ESTIMATE'|'LEFT'|'RIGHT'|'STOP'|'ARRIVAL'){
+    if(typeof window==='undefined')return false;
+    const Context=window.AudioContext;if(!Context)return false;
+    try{
+      this.context??=new Context();
+      const now=this.context.currentTime;
+      const oscillator=this.context.createOscillator(),gain=this.context.createGain();
+      oscillator.type='sine';
+      oscillator.frequency.value=kind==='STOP'?520:kind==='LEFT'?650:kind==='RIGHT'?850:kind==='ARRIVAL'?950:720;
+      gain.gain.setValueAtTime(0.0001,now);
+      gain.gain.exponentialRampToValueAtTime(kind==='STOP'?0.07:0.035,now+0.005);
+      gain.gain.exponentialRampToValueAtTime(0.0001,now+0.075);
+      oscillator.connect(gain);gain.connect(this.context.destination);
+      oscillator.start(now);oscillator.stop(now+0.08);
+      return true;
+    }catch{return false;}
+  }
+  close(){void this.context?.close();this.context=null;}
 }
 
 interface RecognitionLike {lang:string;continuous:boolean;interimResults:boolean;onresult:((event:{results:ArrayLike<{isFinal:boolean;0:{transcript:string}}>;resultIndex:number})=>void)|null;onerror:((event:{error:string})=>void)|null;onend:(()=>void)|null;start:()=>void;stop:()=>void}

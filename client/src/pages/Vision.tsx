@@ -148,11 +148,13 @@ export default function Vision() {
     try{const result=await sharedMapApi.submit({buildingId:estimate.buildingId,type:'PLACE',source:'OCR',proposal,evidence:observedEvidence(estimate.floorId,estimate.x,estimate.y,estimate.confidence,candidate.confidence),idempotencyKey:crypto.randomUUID(),consent:true});setShareNotice('queued'in result?'حُفظت المساهمة المصرح بها حتى عودة الاتصال.':'أُرسلت قراءة اللوحة والموقع فقط للمراجعة، دون صورة أو سجل حركة.');setShareCandidate(false);}catch{setShareNotice('تعذر إرسال المساهمة. تحقق من الدخول وبيانات الموقع.');}
   };
   const cameraState=state==='STOPPED'?t.stopped:state==='STARTING'?t.starting:state==='WORKING'?t.working:t.analyzing;
-  return <Layout><div className="container max-w-4xl space-y-6 py-10 text-stone-100">
+  return <Layout><div className="container max-w-4xl space-y-4 py-6 text-stone-100">
     <Link href="/navigation" className="text-amber-300 underline">{nav.title}</Link>
     <header><h1 className="text-3xl font-black">{t.title}</h1><p className="mt-3 text-lg text-stone-300">{t.description}</p></header>
     <p className="rounded-xl border border-amber-300/40 bg-amber-300/10 p-4 text-amber-100">{t.advisory}</p>
     <div className="flex flex-wrap gap-3">{state==='STOPPED'?<button type="button" className={button} onClick={start}>{t.start}</button>:<button type="button" className={button} onClick={()=>void stop()}>{t.stop}</button>}</div>
+    <div className="flex flex-wrap gap-3"><button className={secondary} type="button" disabled={state==='STOPPED'||state==='STARTING'} onClick={()=>report(false)}>{t.whatAhead}</button><button className={secondary} type="button" disabled={state==='STOPPED'||state==='STARTING'} onClick={()=>report(true)}>{t.describe}</button></div>
+    <p aria-live="polite" role="status" className="min-h-6">{spokenSummary}</p>
     <section aria-label={t.status} className="rounded-2xl border border-amber-200/20 bg-stone-900 p-5">
       <p role="status" aria-live="polite">{t.status}: <strong>{cameraState}</strong></p>
       <p className="mt-2">{nav.permissionCamera}: {({not_requested:nav.notRequested,allowed:nav.allowed,denied:nav.denied,device_settings:nav.deviceSettings,unavailable:nav.unavailable} as const)[cameraPermission]}</p>
@@ -166,8 +168,6 @@ export default function Vision() {
     {!online&&<p role="status" className="rounded-xl border border-amber-300/40 p-4 text-amber-100">{t.offline}</p>}
     <p className="text-sm text-stone-300">{capabilities?.nativeDepth?t.nativeDepthAvailable:t.depthUnavailable}</p>
     {scene?.walkableArea&&<p role="status" className="text-amber-100">{scene.walkableArea.pathAhead==='BLOCKED'?t.pathBlocked:scene.walkableArea.pathAhead==='CLEAR'?t.pathClearObserved:t.pathUnknown}</p>}
-    <div className="flex flex-wrap gap-3"><button className={secondary} type="button" disabled={state==='STOPPED'||state==='STARTING'} onClick={()=>report(false)}>{t.whatAhead}</button><button className={secondary} type="button" disabled={state==='STOPPED'||state==='STARTING'} onClick={()=>report(true)}>{t.describe}</button></div>
-    <p aria-live="polite" role="status" className="min-h-6">{spokenSummary}</p>
     {recognized&&<p role="status" className="rounded-xl border border-emerald-300/40 p-4 text-emerald-100">{t.placeRecognized(recognized.name)}</p>}
     {locationEstimate?.state==='TRACKING'&&<section className="space-y-3 rounded-xl border border-amber-300/40 p-4"><p>موقعك الحالي: بالقرب من {recognized?.name??'مكان معروف'} · الثقة {Math.round(locationEstimate.confidence*100)}٪. التقدير مرتبط بلوحة معروفة وليس قياسًا ميدانيًا للدقة.</p><div className="flex flex-wrap gap-2"><input className="min-h-12 rounded-xl border border-amber-200/40 bg-stone-950 px-3" value={savedName} onChange={e=>setSavedName(e.target.value)} placeholder="اسم مكانك الخاص" aria-label="اسم مكانك الخاص"/><button className={secondary} disabled={!savedName.trim()} onClick={savePersonal}>احفظ هذا المكان</button></div><p role="status" aria-live="polite">{saveNotice}</p></section>}
     {locationEstimate?.state==='LOCALIZATION_LOST'&&<p role="alert" className="rounded-xl border border-amber-300/40 p-4">تعذر تحديد موقعك بدقة داخل المبنى. وجّه الكاميرا نحو لوحة مكان معروف لإعادة التثبيت.</p>}

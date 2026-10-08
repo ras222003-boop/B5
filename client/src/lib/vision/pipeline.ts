@@ -1,4 +1,4 @@
-import type { DepthProvider, DepthReading, MetricDepthMap, MetricDepthProvider, OCRDetection, OCRProvider, PlaceCandidate, RecognizedPlace, RelativeDepthMap, RelativeDepthProvider, SceneDescription, SceneSegmentationProvider, SegmentationGrid, VisionDetection, VisionMode, VisionProvider } from '@shared/vision';
+import type { DepthProvider, DepthReading, MetricDepthMap, MetricDepthProvider, OCRDetection, OCRProvider, PlaceCandidate, RecognizedPlace, RelativeDepthMap, RelativeDepthProvider, SceneDescription, SceneSegmentationProvider, SegmentationGrid, VisionDetection, VisionMode, VisionProvider, WalkableAreaResult } from '@shared/vision';
 import type { VisionConfig } from './config';
 import type { Place } from '@shared/navigation';
 import { captureFrame } from './camera';
@@ -7,6 +7,7 @@ import { isNavigationText, normalizePlaceText, signTypeForText, VisualPlaceRecog
 import { SceneUnderstandingService, VisionAnnouncementService, type VisionCopy } from './scene';
 import { VisionFusionEngine } from './fusion';
 import { hazardRank } from '@/lib/guidance/safety';
+import { sampleFrameLight, type FrameLightStatus } from './frameQuality';
 import { SAFE_DEFAULT_FLAGS, type SafetyFlags } from '@shared/safetyFlags';
 
 interface Callbacks {
@@ -18,6 +19,7 @@ interface Callbacks {
   segmentationFailure:()=>void;
   depthFailure:()=>void;
   fatal:(error:unknown)=>void;
+  quality?:(light:FrameLightStatus)=>void;
 }
 export interface VisionPipelineOptions {
   video:HTMLVideoElement; vision:VisionProvider; ocr:OCRProvider; depth:DepthProvider;
@@ -30,6 +32,16 @@ export interface VisionPipelineOptions {
   announcement:VisionAnnouncementService; callbacks:Callbacks;
 }
 
+/** Faster sign reading is reserved for the final approach to a known destination. */
+export function ocrRefreshInterval(mode: VisionMode, findingDestination: boolean, normalMs: number): number {
+  return mode === 'NAVIGATION' && findingDestination ? Math.max(1500, Math.min(2500, normalMs)) : normalMs;
+}
+
+/** Unknown frame quality is not evidence that the camera can verify free space. */
+export function walkableAreaForLight(light: FrameLightStatus, area: WalkableAreaResult | null): WalkableAreaResult | null {
+  return light === 'NOT_LOW_LIGHT' ? area : null;
+}
+
 /** Camera -> detector -> scene/safety; sparse OCR runs separately so it cannot block safety frames. */
 export class VisionPipeline {
   private running=false;
@@ -37,6 +49,7 @@ export class VisionPipeline {
   private generation=0;
   private ocrBusy=false;
   private ocrEnabled=true;
+  private findingDestination=false;
   private lastOCR=Number.NEGATIVE_INFINITY;
   private lowBattery=false;
   private batteryCleanup:(()=>void)|null=null;
@@ -54,6 +67,8 @@ export class VisionPipeline {
   private lastGeometry=Number.NEGATIVE_INFINITY;
   private lastDepth=Number.NEGATIVE_INFINITY;
   private latestObjects:VisionDetection[]=[];
+  private lastLightCheck=Number.NEGATIVE_INFINITY;
+  private cameraLight:FrameLightStatus='UNKNOWN';
   private readonly safety:BasiraSafetyEngine;
   private readonly fusion:VisionFusionEngine;
   private readonly scene:SceneUnderstandingService;
@@ -69,6 +84,7 @@ export class VisionPipeline {
   }
   get snapshot(){return this.latest;}
   get active(){return this.running;}
+  setFindingDestination(active:boolean){this.findingDestination=active;}
   async start(){
     if(this.running)return;
     this.running=true;
@@ -85,6 +101,12 @@ export class VisionPipeline {
     const started=performance.now();
     try {
       if(this.options.video.readyState<HTMLMediaElement.HAVE_CURRENT_DATA){this.schedule(250);return;}
+      if(started-this.lastLightCheck>=3000){
+        this.lastLightCheck=started;
+        const previous=this.cameraLight;
+        this.cameraLight=sampleFrameLight(this.options.video);
+        if(previous!==this.cameraLight)this.options.callbacks.quality?.(this.cameraLight);
+      }
       const detections=await this.options.vision.detect(this.options.video,started);
       if(!this.running||generation!==this.generation)return;
       const enriched=await Promise.all(detections.map(async detection=>({ ...detection,approximateDistance:await this.readDepth(detection,started) })));
@@ -94,7 +116,7 @@ export class VisionPipeline {
       this.frames++;
       this.inferenceMs+=performance.now()-started;
       this.detections+=detections.length;
-      if(this.ocrEnabled&&!this.ocrBusy&&started-this.lastOCR>=this.options.config.OCRRefreshRate){
+      if(this.ocrEnabled&&!this.ocrBusy&&started-this.lastOCR>=ocrRefreshInterval(this.options.mode,this.findingDestination,this.options.config.OCRRefreshRate)){
         this.lastOCR=started;
         void this.processOCR(generation,started);
       }
@@ -123,7 +145,8 @@ export class VisionPipeline {
     const events=this.options.mode==='NAVIGATION'
       ? [...allowed].sort((a,b)=>hazardRank(b)-hazardRank(a)).filter(event=>hazardRank(event)>=3)
       : allowed;
-    this.latest=this.scene.summarize(events,this.recognizedPlace,Date.now(),frame.walkableArea);
+    this.latest=this.scene.summarize(events,this.recognizedPlace,Date.now(),walkableAreaForLight(this.cameraLight,frame.walkableArea));
+    this.latest.cameraLight=this.cameraLight;
     this.options.callbacks.scene(this.latest);
     const alert=this.options.announcement.announce(events,Date.now());
     if(alert)this.options.callbacks.alert(alert.text,alert.event.riskLevel);
