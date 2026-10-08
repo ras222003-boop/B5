@@ -63,6 +63,8 @@ export interface SceneDescription {
   objects: VisionDetection[];
   recognizedPlace: RecognizedPlace | null;
   walkableArea?: WalkableAreaResult;
+  /** A negative camera quality gate; NOT_LOW_LIGHT is not a safety clearance. */
+  cameraLight?: 'LOW_LIGHT' | 'NOT_LOW_LIGHT' | 'UNKNOWN';
   capturedAt: number;
 }
 

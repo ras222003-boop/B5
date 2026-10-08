@@ -17,13 +17,15 @@ page.on('console', message => { if (message.type() === 'error') console.error('B
 page.on('response', response => { if (response.status() >= 400) console.error('HTTP ERROR', response.status(), response.url()); });
 await page.addInitScript(() => localStorage.setItem('basira-b4-safety-disclaimer-v1','1'));
 await page.addInitScript({content:`(() => {
-  const listeners = new Map(); let serial = 0;
+  const listeners = new Map(); let serial = 0, watches = 0, clears = 0;
   let current = {latitude:24.7136,longitude:46.6734};
   const fix = () => ({coords:{...current,accuracy:6,heading:null,altitude:null,altitudeAccuracy:null,speed:null},timestamp:Date.now()});
-  Object.defineProperty(navigator,'geolocation',{configurable:true,value:{watchPosition:(callback) => { const id=++serial; listeners.set(id,callback); setTimeout(()=>callback(fix()),0); return id; },clearWatch:(id)=>listeners.delete(id),getCurrentPosition:(callback)=>callback(fix())}});
+  Object.defineProperty(navigator,'geolocation',{configurable:true,value:{watchPosition:(callback) => { const id=++serial; watches++; listeners.set(id,callback); setTimeout(()=>{ if(listeners.has(id))callback(fix()); },0); return id; },clearWatch:(id)=>{ if(listeners.delete(id))clears++; },getCurrentPosition:(callback)=>callback(fix())}});
   window.pushMockGps = (latitude,longitude) => { current={latitude,longitude}; for(const callback of listeners.values())callback(fix()); };
+  window.mockGpsStats = () => ({watches,clears,active:listeners.size});
 })()`});
-await page.route(/routing\.openstreetmap\.de/, route => route.fulfill({status:200,headers:{'access-control-allow-origin':'*'},contentType:'application/json',body:JSON.stringify({code:'Ok',routes:[{distance:900,geometry:{coordinates:[A,B,C,D,E].map(point=>[point.longitude,point.latitude])}}]})}));
+let walkingRouteRequests=0;
+await page.route(/routing\.openstreetmap\.de/, route => { walkingRouteRequests++; return route.fulfill({status:200,headers:{'access-control-allow-origin':'*'},contentType:'application/json',body:JSON.stringify({code:'Ok',routes:[{distance:900,geometry:{coordinates:[A,B,C,D,E].map(point=>[point.longitude,point.latitude])}}]})}); });
 await page.route('**/api/navigation/**', route => {
   const path = new URL(route.request().url()).pathname, reply = (body:unknown,status=200) => route.fulfill({status,contentType:'application/json',body:JSON.stringify(body)});
   if (path.endsWith('/buildings')) return reply({buildings:[graph.building]});
@@ -38,7 +40,7 @@ await page.route('**/api/navigation/**', route => {
   return reply({},404);
 });
 try {
-  await page.goto(`${base}/navigation`);
+  await page.goto(`${base}/navigation`,{waitUntil:'domcontentloaded'});
   const skip = page.locator('[data-testid="welcome-skip"]'); if (await skip.count()) await skip.click();
   const map = page.getByTestId('geographic-map');
   await map.waitFor(); await page.waitForFunction(() => document.querySelector('[data-testid="geographic-map"]')?.getAttribute('data-map-ready') === 'true');
@@ -58,7 +60,7 @@ try {
   assert.equal(await map.getAttribute('data-gps-quality'),'HIGH');
   await page.getByRole('button',{name:'ملء الشاشة'}).click(); await page.waitForFunction(() => (document.querySelector('[data-testid="geographic-map"]')?.getBoundingClientRect().height ?? 0) > 450); await page.getByRole('button',{name:'العودة إلى الإرشاد'}).click();
   await page.evaluate(location => sessionStorage.setItem('basira-navigation-destination',JSON.stringify({kind:'coordinate',name:'بوابة الجامعة',...location,timestamp:Date.now()})),E);
-  await page.goto(`${base}/navigation/guidance`);
+  await page.goto(`${base}/navigation/guidance`,{waitUntil:'domcontentloaded'});
   await page.getByRole('heading',{name:'خارطة بصيرة الجغرافية'}).waitFor();
   await page.getByTestId('geographic-map').waitFor();
   await page.getByRole('button',{name:'استخدم المسار'}).click();
@@ -66,5 +68,27 @@ try {
   await page.getByRole('img',{name:/خريطة الأرضي/}).waitFor();
   await page.getByRole('button',{name:'خارجي'}).click();
   await page.getByTestId('geographic-map').waitFor();
-  console.log('MAP RENDER PASS: real vector tiles, nonblank canvas, mobile height; MOCK GPS PASS: A→B→C→D and destination E, route polyline; BROWSER PASS: navigation and guidance outdoor/indoor map modes.');
+  const gpsStats = () => page.evaluate(() => (window as typeof window & {mockGpsStats:()=>{watches:number;clears:number;active:number}}).mockGpsStats());
+  const beforeRecording = await gpsStats();
+  const beforeRecordingRoutes=walkingRouteRequests;
+  await page.getByRole('button',{name:'ابدأ تسجيل طريقي'}).click();
+  await page.waitForFunction(() => (window as typeof window & {mockGpsStats:()=>{active:number}}).mockGpsStats().active === 1);
+  await page.waitForFunction(() => Number(document.querySelector('[data-testid="geographic-map"]')?.getAttribute('data-observed-points')) >= 1);
+  const duringRecording = await gpsStats();
+  assert.equal(duringRecording.watches,beforeRecording.watches+1,'Recording starts exactly one GPS watch');
+  assert.equal(walkingRouteRequests,beforeRecordingRoutes,'Recording does not request an external walking route');
+  await page.getByRole('button',{name:'إيقاف تسجيل الطريق'}).click();
+  await page.waitForFunction(() => (window as typeof window & {mockGpsStats:()=>{active:number}}).mockGpsStats().active === 0);
+  await page.getByRole('button',{name:'تحديد موقعي'}).click();
+  const manual = await gpsStats();
+  assert.equal(manual.active,1);
+  await page.getByRole('button',{name:'ابدأ تسجيل طريقي'}).click();
+  const shared = await gpsStats();
+  assert.equal(shared.active,1);
+  assert.equal(shared.watches,manual.watches,'Auto tracking reuses an existing manual watch');
+  await page.getByRole('button',{name:'إيقاف تسجيل الطريق'}).click();
+  assert.equal((await gpsStats()).active,1,'Stopping recording preserves a manually started watch');
+  await page.goto(`${base}/navigation`,{waitUntil:'domcontentloaded'});
+  assert.equal((await gpsStats()).active,0,'Unmount clears the manual GPS watch');
+  console.log('MAP RENDER PASS: real vector tiles, nonblank canvas, mobile height; MOCK GPS PASS: A→B→C→D, destination E and route polyline; AUTO TRACK PASS: one watch, no external route request, manual watch preserved and cleanup on unmount.');
 } finally { await browser.close(); }

@@ -108,6 +108,18 @@ describe('B4 route planning and guidance',()=>{
     expect(engine.session.lastRerouteReason).toBe('PERSISTENT_OBSTACLE');
     expect(engine.session.route?.orderedEdges[0].id).toBe('ad');expect(engine.planner.edges[0].temporarilyClosed).toBe(false);
   });
+  it('keeps evaluating a visible hazard while paused without rerouting the paused journey',()=>{
+    const engine=new BasiraNavigationEngine(planner(),floors);engine.prepare(destination,location());engine.start();
+    const routeId=engine.session.route?.id;engine.pause();
+    let decision=engine.observeScene(scene([chair],1000),1000);
+    decision=engine.observeScene(scene([chair],2000),2000);
+    decision=engine.observeScene(scene([chair],3000),3000);
+    expect(decision.level).toBe('WARNING');
+    expect(engine.session.safety).toBe('ROUTE_BLOCKED');
+    expect(engine.session.state).toBe('PAUSED');
+    expect(engine.session.route?.id).toBe(routeId);
+    expect(engine.constraints.active(3000)).toEqual([]);
+  });
   it('stops turn guidance on localization loss and resumes after a strong anchor',()=>{
     const engine=new BasiraNavigationEngine(planner(),floors);engine.prepare(destination,location());engine.start();
     expect(engine.updateLocation(location(0,0,'f0',{state:'LOCALIZATION_LOST',confidence:.1}),1000)).toBe('LOST');
@@ -188,7 +200,7 @@ describe('B4 route planning and guidance',()=>{
   });
   it('reroutes after repeated blocked walkable-area observations',()=>{
     const engine=new BasiraNavigationEngine(planner(),floors);engine.prepare(destination,location());engine.start();
-    const blocked={...scene([],1000),walkableArea:{...scene([],1000).walkableArea!,pathAhead:'BLOCKED' as const}};
+    const blocked={...scene([],1000),walkableArea:{...scene([],1000).walkableArea!,pathAhead:'BLOCKED' as const,confidence:.9}};
     engine.observeScene(blocked,1000);engine.observeScene({...blocked,capturedAt:2000},2000);engine.observeScene({...blocked,capturedAt:3000},3000);
     expect(engine.session.route?.orderedEdges[0].id).toBe('ad');
   });

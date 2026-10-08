@@ -18,7 +18,8 @@ export interface RouteProgress {nodeIndex:number;edgeIndex:number;distanceRemain
 export interface ArrivalEvidence {nodeProximity:boolean;visualPlace:boolean;ocrMatch:boolean;manualConfirmation?:boolean;localizationConfidence:number;doorDirection?:HorizontalDirection|null}
 export type NavigationIntent =
   | {type:'NAVIGATE_TO';query:string}
-  | {type:'WHERE_AM_I'|'WHAT_IS_AHEAD'|'REPEAT_INSTRUCTION'|'PAUSE_NAVIGATION'|'RESUME_NAVIGATION'|'CANCEL_NAVIGATION'|'REROUTE'}
+  | {type:'WHERE_AM_I'|'WHAT_IS_AHEAD'|'WHAT_IS_AROUND'|'REPEAT_INSTRUCTION'|'PAUSE_NAVIGATION'|'RESUME_NAVIGATION'|'CANCEL_NAVIGATION'|'REROUTE'}
+  | {type:'FIND_OBJECT';query:string}
   | {type:'START_NAVIGATION'}
   | {type:'ACKNOWLEDGE_DISCLAIMER'}
   | {type:'CONFIRM_LOCATION';query:string}

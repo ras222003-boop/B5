@@ -2,7 +2,7 @@ import { defineMessages } from '../define';
 
 export const navigationMessages = defineMessages({
   ar: {
-    title:'التنقل', homeTitle:'التنقل مع بصيرة', where:'إلى أين تريد الذهاب؟', open:'فتح التنقل',
+    title:'التنقل', homeTitle:'التنقل مع بصيرة', guidanceEntryHint:'افتح خطوات التوجيه واختر وجهتك أو مسارًا محفوظًا.', where:'إلى أين تريد الذهاب؟', open:'فتح التنقل',
     searchPlaceholder:'ابحث عن قاعة، قسم، مكتب، مصعد أو مكان...', search:'بحث',
     current:'موقعي الحالي', saved:'الأماكن المحفوظة', known:'المباني المعروفة في بصيرة', saveHere:'حفظ هذا المكان',
     map:'استعراض خريطة المبنى', recent:'الأماكن الأخيرة', myPlaces:'أماكني', permissions:'الخصوصية والأذونات',
@@ -48,7 +48,7 @@ export const navigationMessages = defineMessages({
     pathTypes:{CORRIDOR:'ممر',DOOR:'باب',STAIRS:'درج',RAMP:'منحدر',ELEVATOR:'مصعد',OTHER:'أخرى'},
   },
   en: {
-    title:'Navigation',homeTitle:'Navigate with Basira',where:'Where do you want to go?',open:'Open navigation',
+    title:'Navigation',homeTitle:'Navigate with Basira',guidanceEntryHint:'Open guidance steps and choose a destination or saved route.',where:'Where do you want to go?',open:'Open navigation',
     searchPlaceholder:'Search for a room, department, office, lift or place...',search:'Search',
     current:'My current location',saved:'Saved places',known:'Buildings known to Basira',saveHere:'Save this place',
     map:'Browse building map',recent:'Recent places',myPlaces:'My places',permissions:'Privacy and permissions',
@@ -93,7 +93,7 @@ export const navigationMessages = defineMessages({
     pathTypes:{CORRIDOR:'Corridor',DOOR:'Door',STAIRS:'Stairs',RAMP:'Ramp',ELEVATOR:'Lift',OTHER:'Other'},
   },
   'zh-CN': {
-    title:'导航',homeTitle:'使用 Basira 导航',where:'您想去哪里？',open:'打开导航',
+    title:'导航',homeTitle:'使用 Basira 导航',guidanceEntryHint:'打开引导步骤，选择目的地或已保存的路线。',where:'您想去哪里？',open:'打开导航',
     searchPlaceholder:'搜索教室、部门、办公室、电梯或地点...',search:'搜索',
     current:'我的当前位置',saved:'已保存地点',known:'Basira 已知建筑',saveHere:'保存此地点',
     map:'查看建筑地图',recent:'最近的地点',myPlaces:'我的地点',permissions:'隐私与权限',

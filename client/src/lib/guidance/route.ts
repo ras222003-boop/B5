@@ -24,11 +24,12 @@ export function resolveDestination(item:Place|SavedPlace,kind:'place'|'saved',no
 export class AccessibilityCostModel {
   constructor(private readonly building:Building){}
   cost(edge:MapEdge,type:RouteType):number {
-    if(edge.temporarilyClosed||!Number.isFinite(edge.distanceMeters)||edge.distanceMeters<=0)return Infinity;
+    // A high-risk edge is not a valid shortcut, even in SHORTEST mode.
+    if(edge.temporarilyClosed||edge.riskLevel==='HIGH'||!Number.isFinite(edge.distanceMeters)||edge.distanceMeters<=0)return Infinity;
     if(type==='ACCESSIBLE'&&(edge.hasStairs||edge.pathType==='STAIRS'||!edge.wheelchairAccessible))return Infinity;
     const distance=edge.distanceMeters;
-    const hazard=edge.riskLevel==='HIGH'?40:edge.riskLevel==='MEDIUM'?12:0;
-    if(type==='SHORTEST')return distance;
+    const hazard=edge.riskLevel==='MEDIUM'?12:0;
+    if(type==='SHORTEST')return distance+hazard;
     const stairs=edge.hasStairs||edge.pathType==='STAIRS'?35:0;
     const elevator=edge.pathType==='ELEVATOR'?5:0;
     const access=edge.accessibilityLevel==='UNKNOWN'?8:edge.accessibilityLevel==='STANDARD'?3:0;

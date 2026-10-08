@@ -32,6 +32,8 @@ const browser = await chromium.launch({ headless: true });
 const context = await browser.newContext();
 const page = await context.newPage();
 page.setDefaultTimeout(15_000);
+const authStatuses:number[]=[];
+page.on('response',response=>{if(response.url().includes('/api/auth/'))authStatuses.push(response.status());});
 await page.route('**/api/speech/synthesize', async route => {
   const cookie = (await context.cookies(base)).map(item => `${item.name}=${item.value}`).join('; ');
   const payload = route.request().postDataJSON() as { voiceId?: string; text?: string };
@@ -52,7 +54,8 @@ try {
   await page.getByLabel('كلمة المرور').fill(password);
   await page.getByRole('checkbox').check();
   await page.locator('form button[type="submit"]').click();
-  await page.getByRole('heading', { name: `مرحبًا، ${name}` }).waitFor();
+  try { await page.getByRole('heading', { name: `مرحبًا، ${name}` }).waitFor(); }
+  catch(error) { throw new Error(`Signup did not establish a session; auth statuses=${authStatuses.join(',')}; alerts=${(await page.getByRole('alert').allTextContents()).join(' | ')}`,{cause:error}); }
   const [users] = await db.query<any[]>('SELECT id FROM `user` WHERE email=?', [email]);
   assert.equal(users.length, 1);
   userId = users[0].id;
