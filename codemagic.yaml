@@ -21,7 +21,7 @@ workflows:
           #!/bin/bash
           set -euo pipefail
           command -v xcodegen >/dev/null || brew install xcodegen
-          swift ios/DepthCalibrationLab/scripts/generate-lab-icon.swift
+          python3 ios/DepthCalibrationLab/scripts/generate-lab-icon.py
           /usr/libexec/PlistBuddy -c "Set :CFBundleVersion ${PROJECT_BUILD_NUMBER:?}" ios/DepthCalibrationLab/DepthCalibrationLab/Info.plist
           cd ios/DepthCalibrationLab
           xcodegen generate
