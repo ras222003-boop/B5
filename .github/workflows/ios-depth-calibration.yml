@@ -1,0 +1,36 @@
+name: iOS LiDAR calibration compile
+
+on:
+  push:
+    branches: ['codex/**']
+    paths:
+      - 'ios/DepthCalibrationLab/**'
+      - '.github/workflows/ios-depth-calibration.yml'
+  pull_request:
+    paths:
+      - 'ios/DepthCalibrationLab/**'
+      - '.github/workflows/ios-depth-calibration.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  build-native-calibration:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install XcodeGen
+        run: brew install xcodegen
+      - name: Generate Xcode project
+        working-directory: ios/DepthCalibrationLab
+        run: xcodegen generate
+      - name: Build without signing in simulator
+        working-directory: ios/DepthCalibrationLab
+        run: |
+          xcodebuild \
+            -project BasiraDepthCalibrationLab.xcodeproj \
+            -scheme BasiraDepthCalibrationLab \
+            -configuration Debug \
+            -destination 'generic/platform=iOS Simulator' \
+            CODE_SIGNING_ALLOWED=NO \
+            build
