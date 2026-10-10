@@ -67,6 +67,13 @@ describe('provider routing', () => {
     vi.stubEnv('AZURE_SPEECH_REGION', 'https://basira-speech.cognitiveservices.azure.com/');
     expect(new AzureSaudiProvider().isAvailable()).toBe(true);
   });
+  it('prefers the Basira-specific Azure location over malformed legacy aliases', () => {
+    vi.stubEnv('AZURE_TTS_ENABLED', 'true');
+    vi.stubEnv('AZURESPEECHKEY', 'configured-key');
+    vi.stubEnv('AZURE_SPEECH_REGION', 'not-a-region');
+    vi.stubEnv('BASIRA_AZURE_SPEECH_REGION', 'eastus');
+    expect(new AzureSaudiProvider().isAvailable()).toBe(true);
+  });
 });
 
 describe('premium synthesis access and quotas', () => {

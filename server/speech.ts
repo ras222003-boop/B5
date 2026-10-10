@@ -17,7 +17,7 @@ const MAX_AUDIO_BYTES = 8_000_000;
 // Values are never logged or sent anywhere except Azure's Speech endpoint.
 const azureSpeechKey = () => process.env.AZURE_SPEECH_KEY || process.env.AZURESPEECHKEY || '';
 const azureSpeechRegion = () => {
-  const raw = (process.env.AZURE_SPEECH_REGION || process.env.AZURESPEECHREGION || process.env.AZYRESPEECHREGION || '').trim();
+  const raw = (process.env.BASIRA_AZURE_SPEECH_REGION || process.env.AZURE_SPEECH_REGION || process.env.AZURESPEECHREGION || process.env.AZYRESPEECHREGION || '').trim();
   if (/^[a-z0-9-]{2,64}$/i.test(raw)) return raw.toLowerCase();
   try {
     const host = new URL(raw).hostname.toLowerCase();
@@ -26,7 +26,7 @@ const azureSpeechRegion = () => {
   } catch { return ''; }
 };
 const azureSpeechEndpoint = () => {
-  const raw = (process.env.AZURE_SPEECH_REGION || process.env.AZURESPEECHREGION || process.env.AZYRESPEECHREGION || '').trim();
+  const raw = (process.env.BASIRA_AZURE_SPEECH_REGION || process.env.AZURE_SPEECH_REGION || process.env.AZURESPEECHREGION || process.env.AZYRESPEECHREGION || '').trim();
   const region = azureSpeechRegion();
   if (region) return `https://${region}.tts.speech.microsoft.com/cognitiveservices/v1`;
   try {
