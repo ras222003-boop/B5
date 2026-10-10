@@ -41,7 +41,10 @@ try {
     courses = page.getByRole("region", { name: "المقررات" });
   await teachers.getByLabel("الاسم").fill("الأستاذة ليلى");
   await teachers.getByLabel("البريد الإلكتروني").fill("layla@example.test");
+  const teacherResponse=page.waitForResponse(response=>response.url().includes('/api/academics/teachers')&&response.request().method()==='POST');
   await teachers.getByRole("button", { name: "إضافة المعلم" }).click();
+  const result=await teacherResponse;
+  assert.equal(result.status(),201,`Teacher save returned ${result.status()}: ${await result.text()}`);
   await teachers.getByText("layla@example.test").waitFor();
   await courses.getByLabel("الاسم").fill("رياضيات ١");
   await courses.getByLabel("رمز المقرر").fill("MATH101");

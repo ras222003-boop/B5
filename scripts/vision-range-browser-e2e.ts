@@ -19,7 +19,7 @@ try {
   assert.equal(await range.inputValue(), "5");
   await page.reload();
   assert.equal(await range.inputValue(), "5");
-  await page.getByLabel("مسافة مخصصة").fill("1.5");
+  await page.getByRole("spinbutton", { name: "مسافة مخصصة" }).fill("1.5");
   assert.equal(await range.inputValue(), "custom");
   assert.equal(
     await page.evaluate(() =>
