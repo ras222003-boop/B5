@@ -1,4 +1,4 @@
-import type { BoundingBox, MetricDepthMap, RelativeDepthMap, SegmentationGrid, VisionDetection, VisionObjectType, WalkableAreaProvider, WalkableAreaResult } from '@shared/vision';
+import type { BoundingBox, GroundSurface, MetricDepthMap, RelativeDepthMap, SegmentationGrid, VisionDetection, VisionObjectType, WalkableAreaProvider, WalkableAreaResult } from '@shared/vision';
 import { classifyDirection, classifyVertical } from './safety';
 
 export const SEG = { OTHER:0, FLOOR:1, ROAD:2, SIDEWALK:3, PATH:4, STAIRS:5, DOOR:6, COLUMN:7, WALL:8, BARRIER:9, SIGN:10, SOLID:11 } as const;
@@ -19,6 +19,7 @@ export function semanticCode(label: string): number {
   }
 }
 export const isGround=(code:number)=>code===SEG.FLOOR||code===SEG.ROAD||code===SEG.SIDEWALK||code===SEG.PATH;
+const groundSurface=(code:number):GroundSurface=>code===SEG.FLOOR?'FLOOR':code===SEG.ROAD?'ROAD':code===SEG.SIDEWALK?'SIDEWALK':code===SEG.PATH?'PATH':'UNKNOWN';
 
 interface Region { code:number; count:number; x0:number; y0:number; x1:number; y1:number }
 /** Four-connected components keep adjacent doors or obstacles from becoming one huge box. */
@@ -37,7 +38,7 @@ export function semanticRegions(grid:SegmentationGrid):Region[] {
         if(next>=0&&!seen[next]&&labels[next]===code){seen[next]=1;queue.push(next);}
       }
     }
-    if(region.count>=Math.max(5,Math.round(w*h*0.003)))regions.push(region);
+    if(region.count>=Math.max(4,Math.round(w*h*0.0015)))regions.push(region);
   }
   return regions;
 }
@@ -51,7 +52,7 @@ export function detectionsFromSegmentation(grid:SegmentationGrid):VisionDetectio
     const boundingBox:BoundingBox={x:region.x0/grid.width,y:region.y0/grid.height,width:(region.x1-region.x0+1)/grid.width,height:(region.y1-region.y0+1)/grid.height};
     const type=regionType[region.code];if(!type)return [];
     // Semantic masks have no calibrated score. This is a conservative region-quality estimate.
-    const quality=Math.min(0.72,0.5+region.count/(grid.width*grid.height));
+    const quality=Math.min(type==='STAIRS_UNCERTAIN'?.78:.72,0.5+region.count/(grid.width*grid.height));
     return [{id:`seg-${grid.timestamp}-${index}`,type,confidence:quality,boundingBox,
       horizontalDirection:classifyDirection(boundingBox),verticalPosition:classifyVertical(boundingBox),
       approximateDistance:null,timestamp:grid.timestamp,source:'SEGMENTATION' as const,
@@ -61,17 +62,21 @@ export function detectionsFromSegmentation(grid:SegmentationGrid):VisionDetectio
 const intersectsPath=(d:VisionDetection)=>d.boundingBox.x<0.67&&d.boundingBox.x+d.boundingBox.width>0.33&&d.boundingBox.y+d.boundingBox.height>0.55;
 export class SemanticWalkableAreaProvider implements WalkableAreaProvider {
   analyze(grid:SegmentationGrid,detections:VisionDetection[]):WalkableAreaResult {
-    const counts=[0,0,0],total=[0,0,0];
+    const counts=[0,0,0],total=[0,0,0],surfaces=new Map<GroundSurface,number>();
     for(let y=Math.floor(grid.height*0.55);y<Math.floor(grid.height*0.9);y++)for(let x=0;x<grid.width;x++){
       const sector=Math.min(2,Math.floor(x*3/grid.width));total[sector]++;
-      if(isGround(grid.labels[y*grid.width+x]))counts[sector]++;
+      const code=grid.labels[y*grid.width+x];
+      if(isGround(code)){counts[sector]++;const surface=groundSurface(code);surfaces.set(surface,(surfaces.get(surface)??0)+1);}
     }
     const free=counts.map((n,i)=>total[i]?n/total[i]:0);
     const blocked=detections.some(d=>intersectsPath(d)&&d.type!=='SIGN'&&d.type!=='DOOR');
     const center=free[1];
     const pathAhead=blocked||center<0.25&&counts[1]>0?'BLOCKED':center>=0.7&&!blocked?'CLEAR':'UNKNOWN';
+    const surfaceEntries=Array.from(surfaces.entries()).sort((a,b)=>b[1]-a[1]);
+    const [surface='UNKNOWN',surfacePixels=0]=surfaceEntries[0]??[];
+    const sampled=total.reduce((sum,value)=>sum+value,0);
     return {pathAhead,freeSpaceLeft:free[0],freeSpaceCenter:center,freeSpaceRight:free[2],
-      confidence:Math.min(0.7,Math.max(...free)),source:'SEMANTIC_SEGMENTATION'};
+      confidence:Math.min(0.7,Math.max(...free)),source:'SEMANTIC_SEGMENTATION',surface:surfacePixels/sampled>=.12?surface:'UNKNOWN',surfaceCoverage:sampled?surfacePixels/sampled:0};
   }
 }
 

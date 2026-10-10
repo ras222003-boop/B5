@@ -1,16 +1,19 @@
 import { previewText, priorityRank, voicesFor, type ArabicStyle, type SpeechContext, type SpeechLanguage, type SpeechPriority, type SpeechRequest } from '@shared/speech';
 
-export type SpeechPreferences = { language: SpeechLanguage; arabicStyle: ArabicStyle; gender: 'FEMALE' | 'MALE'; voiceId: string; rate: number; screenReaderMode: boolean };
+export type SpeechPreferences = { language: SpeechLanguage; arabicStyle: ArabicStyle; gender: 'FEMALE' | 'MALE'; voiceId: string; rate: number; screenReaderMode: boolean; preferAzureArabic: boolean };
 const storageKey = 'basira-speech-preferences-v1';
-const defaults: SpeechPreferences = { language: 'ar', arabicStyle: 'SAUDI', gender: 'FEMALE', voiceId: 'ar-SA-ZariyahNeural', rate: 1, screenReaderMode: false };
+const defaults: SpeechPreferences = { language: 'ar', arabicStyle: 'SAUDI', gender: 'FEMALE', voiceId: 'ar-SA-ZariyahNeural', rate: 1, screenReaderMode: false, preferAzureArabic: true };
 export function getSpeechPreferences(): SpeechPreferences {
   try {
     const raw = JSON.parse(localStorage.getItem(storageKey) || '{}') as Partial<SpeechPreferences>;
     const language = ['ar', 'en', 'zh-CN'].includes(raw.language || '') ? raw.language! : defaults.language;
-    const arabicStyle = raw.arabicStyle === 'SAUDI' ? 'SAUDI' : 'MSA';
+    // Earlier releases treated an absent setting as MSA, which selected a
+    // non-configured provider and caused an invisible browser-voice fallback.
+    const preferAzureArabic = raw.preferAzureArabic !== false;
+    const arabicStyle = language === 'ar' && preferAzureArabic ? 'SAUDI' : raw.arabicStyle === 'SAUDI' ? 'SAUDI' : 'MSA';
     const gender = raw.gender === 'MALE' ? 'MALE' : 'FEMALE';
     const choices = voicesFor(language, arabicStyle);
-    return { language, arabicStyle, gender, voiceId: choices.find(v => v.id === raw.voiceId && v.gender === gender)?.id ?? choices.find(v => v.gender === gender)!.id, rate: typeof raw.rate === 'number' && raw.rate >= .7 && raw.rate <= 1.3 ? raw.rate : 1, screenReaderMode: raw.screenReaderMode === true };
+    return { language, arabicStyle, gender, voiceId: choices.find(v => v.id === raw.voiceId && v.gender === gender)?.id ?? choices.find(v => v.gender === gender)!.id, rate: typeof raw.rate === 'number' && raw.rate >= .7 && raw.rate <= 1.3 ? raw.rate : 1, screenReaderMode: raw.screenReaderMode === true, preferAzureArabic };
   } catch { return { ...defaults }; }
 }
 export function saveSpeechPreferences(value: SpeechPreferences) {

@@ -146,7 +146,7 @@ export class VisionPipeline {
     const events=this.options.mode==='NAVIGATION'
       ? [...allowed].sort((a,b)=>hazardRank(b)-hazardRank(a)).filter(event=>hazardRank(event)>=3)
       : allowed;
-    this.latest=this.scene.summarize(events,this.recognizedPlace,Date.now(),walkableAreaForLight(this.cameraLight,frame.walkableArea));
+    this.latest=this.scene.summarize(events,this.recognizedPlace,Date.now(),walkableAreaForLight(this.cameraLight,frame.walkableArea),frame.surfaceAnalysis);
     this.latest.cameraLight=this.cameraLight;
     this.options.callbacks.scene(this.latest);
     // Medium-information objects remain available for an on-demand scene summary.

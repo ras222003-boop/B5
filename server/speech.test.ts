@@ -9,13 +9,14 @@ function provider(id: TtsProvider['id'], available = true, synthesize = vi.fn(as
   return { id, isAvailable: () => available, listVoices: () => VOICES.filter(v => v.provider === id), synthesize };
 }
 async function withApi(run: (post: (body?: unknown) => Promise<Response>, voices: () => Promise<Response>, raw: (body: string) => Promise<Response>) => Promise<void>, options: {
-  enabled?: boolean; user?: string | null; limits?: SpeechLimits; provider?: TtsProvider; resolveUser?: () => Promise<string | null>;
+  enabled?: boolean; user?: string | null; limits?: SpeechLimits; provider?: TtsProvider; resolveUser?: () => Promise<string | null>; allowGuestAzure?: boolean;
 } = {}) {
   const app = express(); app.use(express.json());
   registerSpeechRoutes(app, new SpeechProviderRouter([options.provider ?? provider('AZURE')]), {
     premiumEnabled: () => options.enabled ?? true,
     resolveUser: options.resolveUser ?? (async () => options.user === undefined ? 'user-1' : options.user),
     limits: options.limits ?? limits,
+    allowGuestAzure: () => options.allowGuestAzure ?? true,
   });
   const server = app.listen(0);
   try {
@@ -54,18 +55,37 @@ describe('provider routing', () => {
     vi.stubEnv('AZURESPEECHKEY', 'configured-key'); vi.stubEnv('AZYRESPEECHREGION', 'uaenorth');
     expect(new AzureSaudiProvider().isAvailable()).toBe(true);
   });
+  it('accepts Azure regional TTS endpoint URLs without exposing the configured value', () => {
+    vi.stubEnv('AZURE_TTS_ENABLED', 'true');
+    vi.stubEnv('AZURE_SPEECH_KEY', 'configured-key');
+    vi.stubEnv('AZURE_SPEECH_REGION', 'https://uaenorth.tts.speech.microsoft.com/cognitiveservices/v1');
+    expect(new AzureSaudiProvider().isAvailable()).toBe(true);
+  });
+  it('accepts Azure Speech resource endpoints without exposing the configured value', () => {
+    vi.stubEnv('AZURE_TTS_ENABLED', 'true');
+    vi.stubEnv('AZURE_SPEECH_KEY', 'configured-key');
+    vi.stubEnv('AZURE_SPEECH_REGION', 'https://basira-speech.cognitiveservices.azure.com/');
+    expect(new AzureSaudiProvider().isAvailable()).toBe(true);
+  });
 });
 
 describe('premium synthesis access and quotas', () => {
-  it('never invokes a paid provider for an anonymous request', async () => {
+  it('uses the configured Saudi Azure voice for an anonymous visitor within strict quotas', async () => {
     const synthesize = vi.fn(async () => Buffer.from('audio'));
     await withApi(async post => {
       const response = await post();
-      expect(response.status).toBe(401);
-      expect(await response.json()).toEqual({ error: 'sign_in_required', fallback: 'browser' });
+      expect(response.status).toBe(200);
       expect(response.headers.get('cache-control')).toBe('no-store');
-      expect(synthesize).not.toHaveBeenCalled();
+      expect(synthesize).toHaveBeenCalledOnce();
     }, { user: null, provider: provider('AZURE', true, synthesize) });
+  });
+  it('keeps non-Azure and explicitly disabled guest synthesis behind sign-in', async () => {
+    await withApi(async post => {
+      expect((await post({ ...request, language: 'en', arabicStyle: 'MSA', voiceId: 'en-US-Chirp3-HD-Aoede' })).status).toBe(401);
+    }, { user: null, provider: provider('GOOGLE') });
+    await withApi(async post => {
+      expect((await post()).status).toBe(401);
+    }, { user: null, provider: provider('AZURE'), allowGuestAzure: false });
   });
   it('allows an authenticated user within quota and validates the request', async () => {
     const synthesize = vi.fn(async () => Buffer.from('mock-audio'));

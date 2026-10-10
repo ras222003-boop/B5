@@ -14,13 +14,14 @@ const objectPhrase=(event:ObstacleDetection,copy:VisionCopy)=>{
 
 export class SceneUnderstandingService {
   constructor(private readonly copy:VisionCopy) {}
-  summarize(events:ObstacleDetection[],recognizedPlace:RecognizedPlace|null,capturedAt:number,walkableArea:WalkableAreaResult|null=null):SceneDescription {
+  summarize(events:ObstacleDetection[],recognizedPlace:RecognizedPlace|null,capturedAt:number,walkableArea:WalkableAreaResult|null=null,surfaceAnalysis:WalkableAreaResult|null=walkableArea):SceneDescription {
     const top=events.slice(0,4);
     const phrases=top.map(event=>objectPhrase(event,this.copy));
     const pathText=walkableArea?.pathAhead==='BLOCKED'?this.copy.pathBlocked:walkableArea?.pathAhead==='UNKNOWN'?this.copy.pathUnknown:'';
-    const shortText=phrases.length?`${this.copy.scenePrefix}: ${phrases.slice(0,2).join('، ')}.${pathText?` ${pathText}`:''}`:pathText||this.copy.noDetections;
-    const detailedText=phrases.length?`${this.copy.sceneDetails}: ${phrases.join('، ')}.${recognizedPlace?` ${this.copy.placeRecognized(recognizedPlace.name)}.`:''}${pathText?` ${pathText}`:''}`:pathText||this.copy.noDetections;
-    return {shortText,detailedText,riskLevel:events[0]?.riskLevel??null,objects:events,recognizedPlace,walkableArea:walkableArea??undefined,capturedAt};
+    const surfaceText=surfaceAnalysis?.surface&&surfaceAnalysis.surface!=='UNKNOWN'?` ${this.copy.surface(surfaceAnalysis.surface)}.`:'';
+    const shortText=phrases.length?`${this.copy.scenePrefix}: ${phrases.slice(0,2).join('، ')}.${pathText?` ${pathText}`:''}${surfaceText}`:`${pathText||this.copy.noDetections}${surfaceText}`;
+    const detailedText=phrases.length?`${this.copy.sceneDetails}: ${phrases.join('، ')}.${recognizedPlace?` ${this.copy.placeRecognized(recognizedPlace.name)}.`:''}${pathText?` ${pathText}`:''}${surfaceText}`:`${pathText||this.copy.noDetections}${surfaceText}`;
+    return {shortText,detailedText,riskLevel:events[0]?.riskLevel??null,objects:events,recognizedPlace,walkableArea:walkableArea??undefined,surfaceAnalysis:surfaceAnalysis??undefined,capturedAt};
   }
 }
 

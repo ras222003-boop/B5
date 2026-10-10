@@ -12,6 +12,6 @@ export function detectVisionCapabilities():VisionCapabilities {
   const cores=navigator.hardwareConcurrency??4;
   const performanceTier=memory>=6&&cores>=6?'HIGH':memory>=3&&cores>=4?'STANDARD':'LOW';
   return {camera,webGL,webGPU,nativeDepth:Boolean(window.BasiraNativeDepth),performanceTier,
-    segmentationIntervalMs:performanceTier==='LOW'?5000:performanceTier==='STANDARD'?3000:1800,
-    depthIntervalMs:performanceTier==='HIGH'?6000:10000};
+    segmentationIntervalMs:performanceTier==='LOW'?4000:performanceTier==='STANDARD'?1800:1200,
+    depthIntervalMs:performanceTier==='HIGH'?4000:7500};
 }

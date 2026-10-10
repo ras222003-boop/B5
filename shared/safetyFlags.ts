@@ -6,4 +6,7 @@ export interface SafetyFlags {
   nativeArLocalization:boolean;
   experimentalObstacleClasses:boolean;
 }
-export const SAFE_DEFAULT_FLAGS:SafetyFlags={dropOffDetection:false,stairDirection:false,metricDepth:false,nativeArLocalization:false,experimentalObstacleClasses:false};
+// Metric depth remains inactive unless a validated native depth bridge is present.
+// Enable it by default so a supported phone can honor the selected metre range;
+// BASIRA_METRIC_DEPTH=false remains an immediate server-side kill switch.
+export const SAFE_DEFAULT_FLAGS:SafetyFlags={dropOffDetection:false,stairDirection:false,metricDepth:true,nativeArLocalization:false,experimentalObstacleClasses:false};

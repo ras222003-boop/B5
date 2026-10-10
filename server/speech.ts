@@ -16,7 +16,27 @@ const MAX_AUDIO_BYTES = 8_000_000;
 // Accept the documented names and the existing project-secret aliases during migration.
 // Values are never logged or sent anywhere except Azure's Speech endpoint.
 const azureSpeechKey = () => process.env.AZURE_SPEECH_KEY || process.env.AZURESPEECHKEY || '';
-const azureSpeechRegion = () => process.env.AZURE_SPEECH_REGION || process.env.AZURESPEECHREGION || process.env.AZYRESPEECHREGION || '';
+const azureSpeechRegion = () => {
+  const raw = (process.env.AZURE_SPEECH_REGION || process.env.AZURESPEECHREGION || process.env.AZYRESPEECHREGION || '').trim();
+  if (/^[a-z0-9-]{2,64}$/i.test(raw)) return raw.toLowerCase();
+  try {
+    const host = new URL(raw).hostname.toLowerCase();
+    const match = host.match(/^([a-z0-9-]+)\.tts\.speech\.microsoft\.com$/);
+    return match?.[1] ?? '';
+  } catch { return ''; }
+};
+const azureSpeechEndpoint = () => {
+  const raw = (process.env.AZURE_SPEECH_REGION || process.env.AZURESPEECHREGION || process.env.AZYRESPEECHREGION || '').trim();
+  const region = azureSpeechRegion();
+  if (region) return `https://${region}.tts.speech.microsoft.com/cognitiveservices/v1`;
+  try {
+    const url = new URL(raw);
+    const host = url.hostname.toLowerCase();
+    if (/^[a-z0-9-]+\.cognitiveservices\.azure\.com$/.test(host)) return `https://${host}/cognitiveservices/v1`;
+    if (/^[a-z0-9-]+\.api\.cognitive\.microsoft\.com$/.test(host)) return `https://${host}/cognitiveservices/v1`;
+  } catch { /* An invalid configured endpoint is treated as unavailable. */ }
+  return '';
+};
 async function boundedBody(response: Response, maxBytes: number): Promise<Buffer> {
   const reader = response.body?.getReader();
   if (!reader) throw new Error('empty_provider_response');
@@ -56,14 +76,14 @@ export class GoogleChirpProvider implements TtsProvider {
 function escapeXml(text: string) { return text.replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&apos;' })[char]!); }
 export class AzureSaudiProvider implements TtsProvider {
   readonly id = 'AZURE' as const;
-  isAvailable() { return process.env.AZURE_TTS_ENABLED !== 'false' && Boolean(azureSpeechKey() && azureSpeechRegion()); }
+  isAvailable() { return process.env.AZURE_TTS_ENABLED !== 'false' && Boolean(azureSpeechKey() && azureSpeechEndpoint()); }
   listVoices() { return VOICES.filter(voice => voice.provider === this.id); }
   async synthesize(input: SpeechRequest, voice: Voice, signal: AbortSignal) {
-    const region = azureSpeechRegion();
-    if (!region || !/^[a-z0-9]+$/.test(region)) throw new Error('azure_region_invalid');
+    const endpoint = azureSpeechEndpoint();
+    if (!endpoint) throw new Error('azure_endpoint_invalid');
     const ratePercent = Math.round((input.rate - 1) * 100);
     const ssml = `<speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" xml:lang="ar-SA"><voice name="${voice.id}"><prosody rate="${ratePercent >= 0 ? '+' : ''}${ratePercent}%">${escapeXml(normalizeSpeechText(input))}</prosody></voice></speak>`;
-    const response = await fetch(`https://${region}.tts.speech.microsoft.com/cognitiveservices/v1`, {
+    const response = await fetch(endpoint, {
       method: 'POST', signal,
       headers: { 'Ocp-Apim-Subscription-Key': azureSpeechKey(), 'Content-Type': 'application/ssml+xml', 'X-Microsoft-OutputFormat': 'audio-24khz-96kbitrate-mono-mp3', 'User-Agent': 'BasiraSpeechEngine' },
       body: ssml,
@@ -104,11 +124,15 @@ async function sessionUser(req: Request): Promise<string | null> {
   const session = await auth.api.getSession({ headers: fromNodeHeaders(req.headers) });
   return session?.user?.id ?? null;
 }
-export type SpeechRouteOptions = { resolveUser?: (req: Request) => Promise<string | null>; limits?: SpeechLimits; premiumEnabled?: () => boolean };
+export type SpeechRouteOptions = { resolveUser?: (req: Request) => Promise<string | null>; limits?: SpeechLimits; premiumEnabled?: () => boolean; allowGuestAzure?: () => boolean };
 
 export function registerSpeechRoutes(app: Express, router = new SpeechProviderRouter(), options: SpeechRouteOptions = {}) {
   const limits = options.limits ?? defaultLimits();
   const premiumEnabled = () => options.premiumEnabled?.() ?? router.listVoices().some(voice => voice.available);
+  // The website itself remains access-controlled. Allowing the configured Saudi
+  // Azure voice for a visitor prevents an unauthenticated session from silently
+  // falling back to the browser voice; IP and global quotas remain enforced.
+  const allowGuestAzure = () => options.allowGuestAzure?.() ?? process.env.AZURE_GUEST_TTS_ENABLED !== 'false';
   const userMinute = new Map<string, Usage>();
   const userDay = new Map<string, Usage>();
   const globalDay = new Map<string, Usage>();
@@ -128,33 +152,41 @@ export function registerSpeechRoutes(app: Express, router = new SpeechProviderRo
   app.get('/api/speech/voices', (_req, res) => res.json({ voices: router.listVoices().map(voice => ({ ...voice, available: premiumEnabled() && voice.available })) }));
   app.post('/api/speech/synthesize', async (req, res) => {
     if (!premiumEnabled()) return res.status(503).json({ error: 'premium_voice_disabled', fallback: 'browser' });
-    let userId: string | null;
-    try { userId = await (options.resolveUser ?? sessionUser)(req); }
-    catch { return res.status(503).json({ error: 'premium_auth_unavailable', fallback: 'browser' }); }
-    if (!userId) return res.status(401).json({ error: 'sign_in_required', fallback: 'browser' });
     const parsed = SpeechRequestSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: 'invalid_speech_request' });
     if (parsed.data.voiceId && !voicesFor(parsed.data.language, parsed.data.arabicStyle).some(voice => voice.id === parsed.data.voiceId)) return res.status(400).json({ error: 'invalid_voice' });
     const { voice, provider } = router.route(parsed.data);
     if (!provider) return res.status(503).json({ error: 'premium_voice_unavailable', fallback: 'browser' });
+    let userId: string | null;
+    try { userId = await (options.resolveUser ?? sessionUser)(req); }
+    catch { return res.status(503).json({ error: 'premium_auth_unavailable', fallback: 'browser' }); }
+    const anonymous = !userId;
+    if (anonymous && !(voice.provider === 'AZURE' && allowGuestAzure())) return res.status(401).json({ error: 'sign_in_required', fallback: 'browser' });
+    const actorId = userId ?? `guest:${req.ip ?? 'unknown'}`;
+    const actorLimits = anonymous ? {
+      ...limits,
+      userRequestsPerMinute: Math.min(limits.userRequestsPerMinute, 6),
+      userCharactersPerMinute: Math.min(limits.userCharactersPerMinute, 1800),
+      userCharactersPerDay: Math.min(limits.userCharactersPerDay, 6000),
+    } : limits;
     if (active >= limits.concurrent) return res.status(429).json({ error: 'speech_capacity_limited', fallback: 'browser' });
     const now = Date.now(), chars = Array.from(parsed.data.text).length;
     const ip = req.ip ?? 'unknown';
     const minuteReset = now + 60_000;
     const dayReset = Math.floor(now / 86_400_000) * 86_400_000 + 86_400_000;
     // Check all buckets before charging any. All updates are synchronous in one event loop.
-    const minute = userMinute.get(userId), day = userDay.get(userId), globalUsage = globalDay.get('all'), ipUsage = ipMinute.get(ip);
+    const minute = userMinute.get(actorId), day = userDay.get(actorId), globalUsage = globalDay.get('all'), ipUsage = ipMinute.get(ip);
     const liveMinute = minute && minute.resetsAt > now ? minute : undefined;
     const liveDay = day && day.resetsAt > now ? day : undefined;
     const liveGlobal = globalUsage && globalUsage.resetsAt > now ? globalUsage : undefined;
     const liveIp = ipUsage && ipUsage.resetsAt > now ? ipUsage : undefined;
-    if ((liveMinute?.requests ?? 0) + 1 > limits.userRequestsPerMinute ||
-        (liveMinute?.characters ?? 0) + chars > limits.userCharactersPerMinute ||
-        (liveDay?.characters ?? 0) + chars > limits.userCharactersPerDay ||
+    if ((liveMinute?.requests ?? 0) + 1 > actorLimits.userRequestsPerMinute ||
+        (liveMinute?.characters ?? 0) + chars > actorLimits.userCharactersPerMinute ||
+        (liveDay?.characters ?? 0) + chars > actorLimits.userCharactersPerDay ||
         (liveGlobal?.characters ?? 0) + chars > limits.globalCharactersPerDay ||
         (liveIp?.requests ?? 0) + 1 > limits.ipRequestsPerMinute) return res.status(429).json({ error: 'speech_quota_exceeded', fallback: 'browser' });
-    consume(userMinute, userId, now, minuteReset, chars, limits.userRequestsPerMinute, limits.userCharactersPerMinute);
-    consume(userDay, userId, now, dayReset, chars, Number.MAX_SAFE_INTEGER, limits.userCharactersPerDay);
+    consume(userMinute, actorId, now, minuteReset, chars, actorLimits.userRequestsPerMinute, actorLimits.userCharactersPerMinute);
+    consume(userDay, actorId, now, dayReset, chars, Number.MAX_SAFE_INTEGER, actorLimits.userCharactersPerDay);
     consume(globalDay, 'all', now, dayReset, chars, Number.MAX_SAFE_INTEGER, limits.globalCharactersPerDay);
     consume(ipMinute, ip, now, minuteReset, 0, limits.ipRequestsPerMinute, Number.MAX_SAFE_INTEGER);
     prune(userMinute, now); prune(userDay, now); prune(ipMinute, now);

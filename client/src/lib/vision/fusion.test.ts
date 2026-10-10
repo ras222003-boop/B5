@@ -30,6 +30,8 @@ describe('local semantic vision and fusion',()=>{
     const provider=new SemanticWalkableAreaProvider();
     const open=provider.analyze(g,[]);
     expect(open.pathAhead).toBe('CLEAR');
+    expect(open.surface).toBe('FLOOR');
+    expect(open.surfaceCoverage).toBeGreaterThan(.7);
     expect(open.freeSpaceCenter).toBeGreaterThan(.7);
     expect(provider.analyze(g,[object('UNKNOWN_OBSTACLE')]).pathAhead).toBe('BLOCKED');
     expect(provider.analyze(grid(),[]).pathAhead).toBe('UNKNOWN');

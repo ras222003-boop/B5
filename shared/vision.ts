@@ -63,12 +63,15 @@ export interface SceneDescription {
   objects: VisionDetection[];
   recognizedPlace: RecognizedPlace | null;
   walkableArea?: WalkableAreaResult;
+  /** Raw semantic surface observation. It is shown to the user but never treated as a clearance decision in low light. */
+  surfaceAnalysis?: WalkableAreaResult;
   /** A negative camera quality gate; NOT_LOW_LIGHT is not a safety clearance. */
   cameraLight?: 'LOW_LIGHT' | 'NOT_LOW_LIGHT' | 'UNKNOWN';
   capturedAt: number;
 }
 
 export type PathAhead = 'CLEAR' | 'BLOCKED' | 'UNKNOWN';
+export type GroundSurface = 'FLOOR' | 'ROAD' | 'SIDEWALK' | 'PATH' | 'UNKNOWN';
 export interface WalkableAreaResult {
   pathAhead: PathAhead;
   freeSpaceLeft: number;
@@ -76,6 +79,8 @@ export interface WalkableAreaResult {
   freeSpaceRight: number;
   confidence: number;
   source: 'SEMANTIC_SEGMENTATION';
+  surface?: GroundSurface;
+  surfaceCoverage?: number;
 }
 /** SegFormer labels sampled to a small grid. A mask has no calibrated per-pixel confidence. */
 export interface SegmentationGrid { width: number; height: number; labels: Uint8Array; timestamp: number }

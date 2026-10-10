@@ -163,7 +163,11 @@ export function registerNavigationRoutes(app: Express) {
   registerOrganizationRoutes(api);
   registerSavedRouteRoutes(api);
   api.get('/safety-flags',(_req,res)=>{
-    const flags=Object.fromEntries(Object.keys(SAFE_DEFAULT_FLAGS).map(key=>[key,process.env[`BASIRA_${key.replace(/[A-Z]/g,letter=>`_${letter}`).toUpperCase()}`]==='true'])) as unknown as SafetyFlags;
+    const flags=Object.fromEntries(Object.keys(SAFE_DEFAULT_FLAGS).map(key=>{
+      const name=`BASIRA_${key.replace(/[A-Z]/g,letter=>`_${letter}`).toUpperCase()}`;
+      const value=process.env[name];
+      return [key,value==='true'||(value===undefined&&SAFE_DEFAULT_FLAGS[key as keyof SafetyFlags])];
+    })) as unknown as SafetyFlags;
     res.set('Cache-Control','no-store').json(flags);
   });
   api.get('/access', asyncRoute(async (req, res) => res.set('Cache-Control','no-store').json(await identity(req))));

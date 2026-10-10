@@ -26,7 +26,7 @@ export interface FusionInput {
   relativeDepth:RelativeDepthMap|null;metricDepth:MetricDepthMap|null;
   signs:VisionDetection[];
 }
-export interface FusionFrame { detections:VisionDetection[];events:ObstacleDetection[];walkableArea:WalkableAreaResult|null }
+export interface FusionFrame { detections:VisionDetection[];events:ObstacleDetection[];walkableArea:WalkableAreaResult|null;surfaceAnalysis:WalkableAreaResult|null }
 /** One frame result with duplicate classes removed, hazard evidence ranked before ordinary objects. */
 export class VisionFusionEngine {
   private readonly walkable=new SemanticWalkableAreaProvider();
@@ -46,6 +46,6 @@ export class VisionFusionEngine {
     const walkableArea=input.segmentation?this.walkable.analyze(input.segmentation,objects):null;
     const detections=[...objects,...input.signs];
     const enriched=detections.map(d=>({...d,approximateDistance:input.metricDepth?metricDepthForDetection(d,input.metricDepth):d.approximateDistance}));
-    return {detections:enriched,events:this.safety.classifyAll(enriched),walkableArea};
+    return {detections:enriched,events:this.safety.classifyAll(enriched),walkableArea,surfaceAnalysis:walkableArea};
   }
 }
