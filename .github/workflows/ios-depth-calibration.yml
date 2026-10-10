@@ -21,6 +21,8 @@ jobs:
       - uses: actions/checkout@v4
       - name: Install XcodeGen
         run: brew install xcodegen
+      - name: Generate research app icon
+        run: swift ios/DepthCalibrationLab/scripts/generate-lab-icon.swift
       - name: Generate Xcode project
         working-directory: ios/DepthCalibrationLab
         run: xcodegen generate
