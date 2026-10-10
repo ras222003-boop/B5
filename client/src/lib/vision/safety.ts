@@ -1,4 +1,4 @@
-import type { BoundingBox, DistanceBand, HorizontalDirection, ObstacleDetection, RiskLevel, VerticalPosition, VisionDetection } from '@shared/vision';
+import type { BoundingBox, DistanceBand, HorizontalDirection, ObstacleDetection, RiskLevel, VerticalPosition, VisionDetection, VisionObjectType } from '@shared/vision';
 import type { VisionConfig } from './config';
 
 export function classifyDirection(box: BoundingBox): HorizontalDirection {
@@ -21,16 +21,29 @@ export function distanceBand(detection: VisionDetection, config: VisionConfig): 
   if (depth.distanceMeters < config.distanceMeters.medium) return 'MEDIUM';
   return 'FAR';
 }
+export function metricDistanceMeters(detection: VisionDetection, minConfidence = 0.7): number | null {
+  const depth = detection.approximateDistance;
+  if (!depth || depth.source === 'MONOCULAR_ESTIMATE' || depth.confidence < minConfidence || !Number.isFinite(depth.distanceMeters) || depth.distanceMeters <= 0) return null;
+  return depth.distanceMeters;
+}
 const riskRank: Record<RiskLevel, number> = { INFORMATION: 0, MEDIUM: 1, HIGH: 2, CRITICAL: 3 };
 export function rankRisk(risk: RiskLevel) { return riskRank[risk]; }
 const central = (d: VisionDetection) => ['FRONT_LEFT','FRONT','FRONT_RIGHT'].includes(d.horizontalDirection);
+const vehicles = new Set<VisionObjectType>(['VEHICLE', 'CAR', 'BUS', 'TRUCK', 'MOTORCYCLE']);
+const namedObstacles = new Set<VisionObjectType>(['PERSON', 'CHAIR', 'TABLE', 'BICYCLE', 'CART', 'BOX', 'VEHICLE', 'CAR', 'BUS', 'TRUCK', 'MOTORCYCLE']);
 
 export class BasiraSafetyEngine {
-  constructor(private readonly config: VisionConfig) {}
+  private alertDistanceMeters: number;
+  constructor(private readonly config: VisionConfig) { this.alertDistanceMeters = config.alertDistanceMeters; }
+  setAlertDistanceMeters(value: number) {
+    this.alertDistanceMeters = Number.isFinite(value) ? Math.max(0.5, Math.min(12, value)) : this.config.alertDistanceMeters;
+  }
   classify(detection: VisionDetection): ObstacleDetection {
     const band = distanceBand(detection, this.config);
     const centered = central(detection);
-    const reliableNear = (band === 'VERY_CLOSE' || band === 'CLOSE') && detection.approximateDistance?.source !== 'MONOCULAR_ESTIMATE';
+    const metricDistance = metricDistanceMeters(detection, this.config.minDepthConfidence);
+    const reliableNear = (band === 'VERY_CLOSE' || band === 'CLOSE') && metricDistance !== null;
+    const namedObjectWithinRange = centered && detection.confidence >= 0.65 && metricDistance !== null && metricDistance <= this.alertDistanceMeters;
     let riskLevel: RiskLevel = 'INFORMATION';
     let reason: ObstacleDetection['reason'] = 'TYPE';
     switch (detection.type) {
@@ -40,17 +53,21 @@ export class BasiraSafetyEngine {
         reason = band === 'UNKNOWN' ? 'UNCERTAIN' : 'PROXIMITY'; break;
       case 'STAIRS_UP': case 'STAIRS_UNCERTAIN': case 'DROP_OFF_UNCERTAIN':
         riskLevel = 'HIGH'; reason = detection.type.endsWith('UNCERTAIN') ? 'UNCERTAIN' : 'TYPE'; break;
-      case 'VEHICLE':
-        riskLevel = centered && reliableNear && detection.confidence >= 0.75 ? 'CRITICAL' : 'HIGH';
-        reason = band === 'UNKNOWN' ? 'UNCERTAIN' : 'PROXIMITY'; break;
+      default:
+        if (vehicles.has(detection.type)) {
+          riskLevel = namedObjectWithinRange ? (reliableNear && detection.confidence >= 0.75 ? 'CRITICAL' : 'HIGH') : 'MEDIUM';
+          reason = metricDistance === null ? 'UNCERTAIN' : 'PROXIMITY'; break;
+        }
+        if (namedObstacles.has(detection.type)) {
+          riskLevel = namedObjectWithinRange ? 'HIGH' : 'MEDIUM';
+          reason = metricDistance === null ? 'UNCERTAIN' : 'PROXIMITY'; break;
+        }
+        riskLevel = 'INFORMATION';
+        break;
       case 'BARRIER': case 'COLUMN': case 'WALL':
         riskLevel = centered ? 'HIGH' : 'MEDIUM'; break;
       case 'UNKNOWN_OBSTACLE':
         riskLevel = centered && reliableNear ? 'CRITICAL' : centered ? 'HIGH' : 'MEDIUM'; reason = 'UNCERTAIN'; break;
-      case 'PERSON': case 'CHAIR': case 'TABLE': case 'BICYCLE': case 'CART': case 'BOX':
-        riskLevel = centered && reliableNear ? 'HIGH' : 'MEDIUM';
-        reason = band === 'UNKNOWN' ? 'UNCERTAIN' : 'PROXIMITY'; break;
-      default: riskLevel = 'INFORMATION';
     }
     return { ...detection, riskLevel, distanceBand: band, reason };
   }
@@ -61,7 +78,7 @@ export class BasiraSafetyEngine {
 
 export function hazardPriority(type:VisionDetection['type']):number {
   if(type==='DROP_OFF'||type==='DROP_OFF_UNCERTAIN'||type==='STAIRS_DOWN')return 7;
-  if(type==='VEHICLE')return 6;
+  if(['VEHICLE','CAR','BUS','TRUCK','MOTORCYCLE'].includes(type))return 6;
   if(type==='UNKNOWN_OBSTACLE')return 5;
   if(type==='STAIRS_UP'||type==='STAIRS_UNCERTAIN')return 4;
   if(type==='BARRIER'||type==='COLUMN'||type==='WALL')return 3;

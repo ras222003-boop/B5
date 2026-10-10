@@ -83,9 +83,9 @@ export class NavigationEarconService {
       const now=this.context.currentTime;
       const oscillator=this.context.createOscillator(),gain=this.context.createGain();
       oscillator.type='sine';
-      oscillator.frequency.value=kind==='STOP'?520:kind==='LEFT'?650:kind==='RIGHT'?850:kind==='ARRIVAL'?950:720;
+      oscillator.frequency.value=kind==='STOP'?520:kind==='LEFT'?650:kind==='RIGHT'?850:kind==='ARRIVAL'?950:880;
       gain.gain.setValueAtTime(0.0001,now);
-      gain.gain.exponentialRampToValueAtTime(kind==='STOP'?0.07:0.035,now+0.005);
+      gain.gain.exponentialRampToValueAtTime(kind==='STOP'?0.07:kind==='STEP_ESTIMATE'?0.05:0.035,now+0.005);
       gain.gain.exponentialRampToValueAtTime(0.0001,now+0.075);
       oscillator.connect(gain);gain.connect(this.context.destination);
       oscillator.start(now);oscillator.stop(now+0.08);

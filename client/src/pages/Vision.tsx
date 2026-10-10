@@ -6,7 +6,7 @@ import { visionMessages } from '@/i18n/locales/vision';
 import { navigationMessages } from '@/i18n/locales/navigation';
 import { useTextToSpeech } from '@/hooks/useSpeech';
 import { permissionService, type PermissionState } from '@/lib/permissionService';
-import { DEFAULT_VISION_CONFIG } from '@/lib/vision/config';
+import { DEFAULT_VISION_CONFIG, VISION_ALERT_DISTANCE_OPTIONS, getVisionAlertDistance, saveVisionAlertDistance, visionConfigForAlertDistance } from '@/lib/vision/config';
 import { CameraService, CameraServiceError } from '@/lib/vision/camera';
 import { MediaPipeVisionProvider, TesseractOCRProvider, UnavailableDepthProvider } from '@/lib/vision/providers';
 import { MonocularRelativeDepthProvider, NativeMetricDepthProvider, SegFormerSceneProvider } from '@/lib/vision/modelProviders';
@@ -52,6 +52,7 @@ export default function Vision() {
   const [cameraPermission,setCameraPermission]=useState<PermissionState>('not_requested');
   const [online,setOnline]=useState(typeof navigator==='undefined'?true:navigator.onLine);
   const [spokenSummary,setSpokenSummary]=useState('');
+  const [alertDistanceMeters,setAlertDistanceMeters]=useState(()=>getVisionAlertDistance());
   useEffect(()=>{permissionService.status('camera').then(setCameraPermission).catch(()=>{});const update=()=>setOnline(navigator.onLine);window.addEventListener('online',update);window.addEventListener('offline',update);return()=>{window.removeEventListener('online',update);window.removeEventListener('offline',update);};},[]);
   useEffect(()=>{if(!locationEstimate)return;const timer=window.setInterval(()=>setLocationEstimate(localizationRef.current.fusion.current(Date.now())),5000);return()=>window.clearInterval(timer);},[Boolean(locationEstimate)]);
 
@@ -79,10 +80,11 @@ export default function Vision() {
     try {
       const safetyFlags=await loadSafetyFlags();
       const detected=detectVisionCapabilities();setCapabilities(detected);
+      const visionConfig=visionConfigForAlertDistance(alertDistanceMeters);
       await cameraRef.current.start(videoRef.current);
       if(run!==generation.current){cameraRef.current.stop(videoRef.current);return;}
       setCameraPermission('allowed');
-      const provider=await MediaPipeVisionProvider.open(DEFAULT_VISION_CONFIG);
+      const provider=await MediaPipeVisionProvider.open(visionConfig);
       if(run!==generation.current){await provider.close();cameraRef.current.stop(videoRef.current);return;}
       let segmentation:SegFormerSceneProvider|undefined;
       try{segmentation=await SegFormerSceneProvider.open();}
@@ -99,10 +101,10 @@ export default function Vision() {
       const currentBuildingId=sessionStorage.getItem('basira-current-building');
       graphNodesRef.current=currentBuildingId?(await navApi.graph(currentBuildingId).then(result=>result.nodes).catch(()=>[])):[];
       if(run!==generation.current){await Promise.allSettled([provider.close(),segmentation?.close(),relativeDepth?.close()]);cameraRef.current.stop(videoRef.current);return;}
-      const announcement=new VisionAnnouncementService(t,text=>speak(text,0.9,lang),new BrowserHapticFeedbackProvider(),DEFAULT_VISION_CONFIG.alertCooldownMs);
+      const announcement=new VisionAnnouncementService(t,text=>speak(text,0.9,lang),new BrowserHapticFeedbackProvider(),visionConfig.alertCooldownMs);
       const pipeline=new VisionPipeline({video:videoRef.current,vision:provider,ocr:new TesseractOCRProvider(),depth:new UnavailableDepthProvider(),
         segmentation,relativeDepth,metricDepth,segmentationIntervalMs:detected.segmentationIntervalMs,depthIntervalMs:detected.depthIntervalMs,
-        config:DEFAULT_VISION_CONFIG,copy:t,mode:'EXPLORATION',buildingId:currentBuildingId,floorId:null,announcement,safetyFlags,
+        config:visionConfig,copy:t,mode:'EXPLORATION',buildingId:currentBuildingId,floorId:null,announcement,safetyFlags,
         callbacks:{
           scene:description=>{if(run===generation.current){setScene(description);setState('ANALYZING');}},
           alert:(text,level)=>{if(run===generation.current){setLastAlert(text);setRisk(level);}},
@@ -153,6 +155,7 @@ export default function Vision() {
     <header><h1 className="text-3xl font-black">{t.title}</h1><p className="mt-3 text-lg text-stone-300">{t.description}</p></header>
     <p className="rounded-xl border border-amber-300/40 bg-amber-300/10 p-4 text-amber-100">{t.advisory}</p>
     <div className="flex flex-wrap gap-3">{state==='STOPPED'?<button type="button" className={button} onClick={start}>{t.start}</button>:<button type="button" className={button} onClick={()=>void stop()}>{t.stop}</button>}</div>
+    <section className="rounded-2xl border border-amber-200/20 bg-stone-900 p-5"><label className="block font-bold">{t.alertDistanceLabel}<select className="mt-2 min-h-14 w-full rounded-xl border border-amber-200/40 bg-stone-950 px-4 text-white" value={alertDistanceMeters} onChange={event=>{const value=saveVisionAlertDistance(Number(event.target.value));setAlertDistanceMeters(value);pipelineRef.current?.setAlertDistanceMeters(value);}}>{VISION_ALERT_DISTANCE_OPTIONS.map(value=><option key={value} value={value}>{value} {lang==='en'?'metres':lang==='zh-CN'?'米':'متر'}</option>)}</select></label><p className="mt-2 text-sm text-stone-300">{t.alertDistanceNote}</p></section>
     <div className="flex flex-wrap gap-3"><button className={secondary} type="button" disabled={state==='STOPPED'||state==='STARTING'} onClick={()=>report(false)}>{t.whatAhead}</button><button className={secondary} type="button" disabled={state==='STOPPED'||state==='STARTING'} onClick={()=>report(true)}>{t.describe}</button></div>
     <p aria-live="polite" role="status" className="min-h-6">{spokenSummary}</p>
     <section aria-label={t.status} className="rounded-2xl border border-amber-200/20 bg-stone-900 p-5">

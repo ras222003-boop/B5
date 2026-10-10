@@ -18,6 +18,8 @@
     { "path": "/navigation/indoor-manager", "title": "إدارة الخرائط الداخلية" },
     { "path": "/navigation/capabilities", "title": "قدرات التنقل" },
     { "path": "/settings/privacy-permissions", "title": "الخصوصية والأذونات" },
+    { "path": "/settings/voice", "title": "إعدادات الصوت" },
+    { "path": "/settings/voice-validation", "title": "التحقق من الصوت" },
     { "path": "/navigation/admin", "title": "إدارة خريطة التنقل" },
     { "path": "/navigation/buildings/:id", "title": "خريطة المبنى" },
     { "path": "/how-it-works", "title": "آلية العمل" },

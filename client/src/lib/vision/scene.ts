@@ -3,7 +3,14 @@ import { visionMessages } from '@/i18n/locales/vision';
 import { AlertDeduplicator } from './safety';
 
 export type VisionCopy = typeof visionMessages.ar;
-const objectPhrase=(event:ObstacleDetection,copy:VisionCopy)=>`${copy.object[event.type]} ${copy.direction[event.horizontalDirection]}`;
+const metricDistance=(event:ObstacleDetection)=>{
+  const depth=event.approximateDistance;
+  return depth&&depth.source!=='MONOCULAR_ESTIMATE'&&depth.confidence>=.7&&Number.isFinite(depth.distanceMeters)&&depth.distanceMeters>0?depth.distanceMeters:null;
+};
+const objectPhrase=(event:ObstacleDetection,copy:VisionCopy)=>{
+  const distance=metricDistance(event);
+  return `${copy.object[event.type]} ${copy.direction[event.horizontalDirection]}${distance===null?'':`، ${copy.distance(distance)}`}`;
+};
 
 export class SceneUnderstandingService {
   constructor(private readonly copy:VisionCopy) {}

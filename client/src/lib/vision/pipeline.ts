@@ -85,6 +85,7 @@ export class VisionPipeline {
   get snapshot(){return this.latest;}
   get active(){return this.running;}
   setFindingDestination(active:boolean){this.findingDestination=active;}
+  setAlertDistanceMeters(value:number){this.safety.setAlertDistanceMeters(value);}
   async start(){
     if(this.running)return;
     this.running=true;
@@ -148,7 +149,9 @@ export class VisionPipeline {
     this.latest=this.scene.summarize(events,this.recognizedPlace,Date.now(),walkableAreaForLight(this.cameraLight,frame.walkableArea));
     this.latest.cameraLight=this.cameraLight;
     this.options.callbacks.scene(this.latest);
-    const alert=this.options.announcement.announce(events,Date.now());
+    // Medium-information objects remain available for an on-demand scene summary.
+    // Automatic audio is reserved for safety hazards and named objects within the configured metric range.
+    const alert=this.options.announcement.announce(events.filter(event=>event.riskLevel==='HIGH'||event.riskLevel==='CRITICAL'),Date.now());
     if(alert)this.options.callbacks.alert(alert.text,alert.event.riskLevel);
   }
   private async processGeometry(generation:number,timestamp:number){

@@ -5,7 +5,7 @@ import { classifyDirection, classifyVertical } from './safety';
 const clamp = (n: number) => Math.max(0, Math.min(1, n));
 const cocoTypes: Record<string, VisionObjectType> = {
   person: 'PERSON', chair: 'CHAIR', 'dining table': 'TABLE', bicycle: 'BICYCLE',
-  car: 'VEHICLE', bus: 'VEHICLE', truck: 'VEHICLE', motorcycle: 'VEHICLE',
+  car: 'CAR', bus: 'BUS', truck: 'TRUCK', motorcycle: 'MOTORCYCLE',
   'stop sign': 'SIGN', 'traffic light': 'SIGN',
 };
 

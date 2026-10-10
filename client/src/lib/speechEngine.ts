@@ -2,7 +2,7 @@ import { previewText, priorityRank, voicesFor, type ArabicStyle, type SpeechCont
 
 export type SpeechPreferences = { language: SpeechLanguage; arabicStyle: ArabicStyle; gender: 'FEMALE' | 'MALE'; voiceId: string; rate: number; screenReaderMode: boolean };
 const storageKey = 'basira-speech-preferences-v1';
-const defaults: SpeechPreferences = { language: 'ar', arabicStyle: 'MSA', gender: 'FEMALE', voiceId: 'ar-XA-Chirp3-HD-Aoede', rate: 1, screenReaderMode: false };
+const defaults: SpeechPreferences = { language: 'ar', arabicStyle: 'SAUDI', gender: 'FEMALE', voiceId: 'ar-SA-ZariyahNeural', rate: 1, screenReaderMode: false };
 export function getSpeechPreferences(): SpeechPreferences {
   try {
     const raw = JSON.parse(localStorage.getItem(storageKey) || '{}') as Partial<SpeechPreferences>;

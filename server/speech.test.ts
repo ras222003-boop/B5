@@ -48,6 +48,12 @@ describe('provider routing', () => {
     expect(new GoogleChirpProvider().isAvailable()).toBe(true);
     expect(new AzureSaudiProvider().isAvailable()).toBe(true);
   });
+  it('accepts the existing project Azure secret aliases without exposing their values', () => {
+    vi.stubEnv('AZURE_TTS_ENABLED', 'true');
+    vi.stubEnv('AZURE_SPEECH_KEY', ''); vi.stubEnv('AZURE_SPEECH_REGION', '');
+    vi.stubEnv('AZURESPEECHKEY', 'configured-key'); vi.stubEnv('AZYRESPEECHREGION', 'uaenorth');
+    expect(new AzureSaudiProvider().isAvailable()).toBe(true);
+  });
 });
 
 describe('premium synthesis access and quotas', () => {

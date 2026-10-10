@@ -1,7 +1,7 @@
 /** Data contracts shared by B2 and future native/on-device vision adapters. */
 export const VISION_OBJECT_TYPES = [
   'PERSON', 'CHAIR', 'TABLE', 'DOOR', 'WALL', 'COLUMN', 'STAIRS_UP',
-  'STAIRS_DOWN', 'STAIRS_UNCERTAIN', 'ELEVATOR', 'VEHICLE', 'BICYCLE',
+  'STAIRS_DOWN', 'STAIRS_UNCERTAIN', 'ELEVATOR', 'VEHICLE', 'CAR', 'BUS', 'TRUCK', 'MOTORCYCLE', 'BICYCLE',
   'CART', 'BOX', 'BARRIER', 'SIGN', 'CORRIDOR', 'ENTRANCE', 'EXIT',
   'UNKNOWN_OBSTACLE', 'DROP_OFF', 'DROP_OFF_UNCERTAIN',
 ] as const;

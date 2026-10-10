@@ -14,7 +14,7 @@ const messages = {
     blocked: 'الممر أمامك يبدو محجوبًا. توقف وتحقق.', obstacle: 'عائق محتمل',
     head: 'قد يوجد عائق مرتفع', stop: 'توقف.', warning: 'انتبه.',
     direction: { LEFT: 'على يسارك', FRONT_LEFT: 'أمامك إلى اليسار', FRONT: 'أمامك', FRONT_RIGHT: 'أمامك إلى اليمين', RIGHT: 'على يمينك' },
-    object: { PERSON: 'شخص', CHAIR: 'كرسي', TABLE: 'طاولة', DOOR: 'باب', WALL: 'جدار', COLUMN: 'عمود', STAIRS_UP: 'درج صاعد', STAIRS_DOWN: 'درج نازل', STAIRS_UNCERTAIN: 'درج غير محدد الاتجاه', ELEVATOR: 'مصعد', VEHICLE: 'مركبة', BICYCLE: 'دراجة', CART: 'عربة', BOX: 'صندوق', BARRIER: 'حاجز', SIGN: 'لافتة', CORRIDOR: 'ممر', ENTRANCE: 'مدخل', EXIT: 'مخرج', UNKNOWN_OBSTACLE: 'جسم غير محدد', DROP_OFF: 'حافة هابطة', DROP_OFF_UNCERTAIN: 'حافة هابطة محتملة' },
+    object: { PERSON: 'شخص', CHAIR: 'كرسي', TABLE: 'طاولة أو مكتب', DOOR: 'باب', WALL: 'جدار', COLUMN: 'عمود', STAIRS_UP: 'درج صاعد', STAIRS_DOWN: 'درج نازل', STAIRS_UNCERTAIN: 'درج غير محدد الاتجاه', ELEVATOR: 'مصعد', VEHICLE: 'مركبة', CAR: 'سيارة', BUS: 'حافلة', TRUCK: 'شاحنة', MOTORCYCLE: 'دراجة نارية', BICYCLE: 'دراجة', CART: 'عربة', BOX: 'صندوق', BARRIER: 'حاجز', SIGN: 'لافتة', CORRIDOR: 'ممر', ENTRANCE: 'مدخل', EXIT: 'مخرج', UNKNOWN_OBSTACLE: 'جسم غير محدد', DROP_OFF: 'حافة هابطة', DROP_OFF_UNCERTAIN: 'حافة هابطة محتملة' },
     close: 'قريب جدًا', about: (meters: number) => `على بعد نحو ${meters} متر`,
   },
   'ar-SA': {
@@ -23,7 +23,7 @@ const messages = {
     blocked: 'الطريق قدامك يبدو مسدودًا. وقف وتأكد.', obstacle: 'عائق محتمل',
     head: 'ممكن فيه عائق مرتفع', stop: 'وقف.', warning: 'انتبه.',
     direction: { LEFT: 'على يسارك', FRONT_LEFT: 'قدامك على اليسار', FRONT: 'قدامك', FRONT_RIGHT: 'قدامك على اليمين', RIGHT: 'على يمينك' },
-    object: { PERSON: 'شخص', CHAIR: 'كرسي', TABLE: 'طاولة', DOOR: 'باب', WALL: 'جدار', COLUMN: 'عمود', STAIRS_UP: 'درج صاعد', STAIRS_DOWN: 'درج نازل', STAIRS_UNCERTAIN: 'درج غير واضح الاتجاه', ELEVATOR: 'مصعد', VEHICLE: 'مركبة', BICYCLE: 'دراجة', CART: 'عربة', BOX: 'صندوق', BARRIER: 'حاجز', SIGN: 'لوحة', CORRIDOR: 'ممر', ENTRANCE: 'مدخل', EXIT: 'مخرج', UNKNOWN_OBSTACLE: 'جسم غير واضح', DROP_OFF: 'حافة نازلة', DROP_OFF_UNCERTAIN: 'حافة نازلة محتملة' },
+    object: { PERSON: 'شخص', CHAIR: 'كرسي', TABLE: 'طاولة أو مكتب', DOOR: 'باب', WALL: 'جدار', COLUMN: 'عمود', STAIRS_UP: 'درج صاعد', STAIRS_DOWN: 'درج نازل', STAIRS_UNCERTAIN: 'درج غير واضح الاتجاه', ELEVATOR: 'مصعد', VEHICLE: 'مركبة', CAR: 'سيارة', BUS: 'حافلة', TRUCK: 'شاحنة', MOTORCYCLE: 'دراجة نارية', BICYCLE: 'دراجة', CART: 'عربة', BOX: 'صندوق', BARRIER: 'حاجز', SIGN: 'لوحة', CORRIDOR: 'ممر', ENTRANCE: 'مدخل', EXIT: 'مخرج', UNKNOWN_OBSTACLE: 'جسم غير واضح', DROP_OFF: 'حافة نازلة', DROP_OFF_UNCERTAIN: 'حافة نازلة محتملة' },
     close: 'قريب جدًا', about: (meters: number) => `على بعد نحو ${meters} متر`,
   },
   en: {
@@ -32,7 +32,7 @@ const messages = {
     blocked: 'The path ahead appears blocked. Stop and check.', obstacle: 'Possible obstacle',
     head: 'There may be a raised obstacle', stop: 'Stop.', warning: 'Caution.',
     direction: { LEFT: 'to your left', FRONT_LEFT: 'ahead to your left', FRONT: 'ahead', FRONT_RIGHT: 'ahead to your right', RIGHT: 'to your right' },
-    object: { PERSON: 'person', CHAIR: 'chair', TABLE: 'table', DOOR: 'door', WALL: 'wall', COLUMN: 'column', STAIRS_UP: 'ascending stairs', STAIRS_DOWN: 'descending stairs', STAIRS_UNCERTAIN: 'stairs of uncertain direction', ELEVATOR: 'elevator', VEHICLE: 'vehicle', BICYCLE: 'bicycle', CART: 'cart', BOX: 'box', BARRIER: 'barrier', SIGN: 'sign', CORRIDOR: 'corridor', ENTRANCE: 'entrance', EXIT: 'exit', UNKNOWN_OBSTACLE: 'unidentified object', DROP_OFF: 'drop-off', DROP_OFF_UNCERTAIN: 'possible drop-off' },
+    object: { PERSON: 'person', CHAIR: 'chair', TABLE: 'table or desk', DOOR: 'door', WALL: 'wall', COLUMN: 'column', STAIRS_UP: 'ascending stairs', STAIRS_DOWN: 'descending stairs', STAIRS_UNCERTAIN: 'stairs of uncertain direction', ELEVATOR: 'elevator', VEHICLE: 'vehicle', CAR: 'car', BUS: 'bus', TRUCK: 'truck', MOTORCYCLE: 'motorcycle', BICYCLE: 'bicycle', CART: 'cart', BOX: 'box', BARRIER: 'barrier', SIGN: 'sign', CORRIDOR: 'corridor', ENTRANCE: 'entrance', EXIT: 'exit', UNKNOWN_OBSTACLE: 'unidentified object', DROP_OFF: 'drop-off', DROP_OFF_UNCERTAIN: 'possible drop-off' },
     close: 'very close', about: (meters: number) => `about ${meters} metres away`,
   },
   'zh-CN': {
@@ -41,7 +41,7 @@ const messages = {
     blocked: '前方通道似乎受阻。请停下确认。', obstacle: '可能有障碍物',
     head: '可能有高处障碍物', stop: '请停下。', warning: '请注意。',
     direction: { LEFT: '在左侧', FRONT_LEFT: '在左前方', FRONT: '在前方', FRONT_RIGHT: '在右前方', RIGHT: '在右侧' },
-    object: { PERSON: '行人', CHAIR: '椅子', TABLE: '桌子', DOOR: '门', WALL: '墙', COLUMN: '柱子', STAIRS_UP: '上行楼梯', STAIRS_DOWN: '下行楼梯', STAIRS_UNCERTAIN: '方向不明的楼梯', ELEVATOR: '电梯', VEHICLE: '车辆', BICYCLE: '自行车', CART: '推车', BOX: '箱子', BARRIER: '障碍物', SIGN: '标识', CORRIDOR: '走廊', ENTRANCE: '入口', EXIT: '出口', UNKNOWN_OBSTACLE: '不明物体', DROP_OFF: '落差', DROP_OFF_UNCERTAIN: '可能的落差' },
+    object: { PERSON: '行人', CHAIR: '椅子', TABLE: '桌子或办公桌', DOOR: '门', WALL: '墙', COLUMN: '柱子', STAIRS_UP: '上行楼梯', STAIRS_DOWN: '下行楼梯', STAIRS_UNCERTAIN: '方向不明的楼梯', ELEVATOR: '电梯', VEHICLE: '车辆', CAR: '汽车', BUS: '公交车', TRUCK: '卡车', MOTORCYCLE: '摩托车', BICYCLE: '自行车', CART: '推车', BOX: '箱子', BARRIER: '障碍物', SIGN: '标识', CORRIDOR: '走廊', ENTRANCE: '入口', EXIT: '出口', UNKNOWN_OBSTACLE: '不明物体', DROP_OFF: '落差', DROP_OFF_UNCERTAIN: '可能的落差' },
     close: '非常近', about: (meters: number) => `约 ${meters} 米远`,
   },
 } as const;
@@ -63,7 +63,7 @@ function metricDistance(object: VisionDetection): number | null {
 export function hazardRank(object: VisionDetection): number {
   if (['DOOR', 'ELEVATOR', 'SIGN', 'CORRIDOR', 'ENTRANCE', 'EXIT'].includes(object.type)) return 0;
   if (object.type === 'DROP_OFF' || object.type === 'DROP_OFF_UNCERTAIN' || object.type === 'STAIRS_DOWN' || object.type === 'STAIRS_UNCERTAIN') return 8;
-  if (object.type === 'VEHICLE' || object.type === 'STAIRS_UP' || possibleHeadLevel(object)) return 7;
+  if (['VEHICLE', 'CAR', 'BUS', 'TRUCK', 'MOTORCYCLE'].includes(object.type) || object.type === 'STAIRS_UP' || possibleHeadLevel(object)) return 7;
   const distance = metricDistance(object);
   if (distance !== null && distance < 1) return 6;
   if (object.type === 'BARRIER' || object.type === 'WALL') return 5;
@@ -72,7 +72,7 @@ export function hazardRank(object: VisionDetection): number {
   return 0;
 }
 
-const dynamicTypes = new Set<VisionDetection['type']>(['PERSON', 'VEHICLE', 'BICYCLE', 'CART']);
+const dynamicTypes = new Set<VisionDetection['type']>(['PERSON', 'VEHICLE', 'CAR', 'BUS', 'TRUCK', 'MOTORCYCLE', 'BICYCLE', 'CART']);
 const criticalSurfaces = new Set<VisionDetection['type']>(['DROP_OFF', 'DROP_OFF_UNCERTAIN', 'STAIRS_DOWN', 'STAIRS_UNCERTAIN']);
 const credibleDetection = (object: VisionDetection) => Number.isFinite(object.confidence)
   && object.confidence <= 1 && object.confidence >= (criticalSurfaces.has(object.type) ? .5 : .55);

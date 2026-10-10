@@ -13,6 +13,10 @@ export interface TtsProvider {
 const googleAuth = new GoogleAuth({ scopes: ['https://www.googleapis.com/auth/cloud-platform'] });
 const enabled = (name: string) => process.env[name] === 'true';
 const MAX_AUDIO_BYTES = 8_000_000;
+// Accept the documented names and the existing project-secret aliases during migration.
+// Values are never logged or sent anywhere except Azure's Speech endpoint.
+const azureSpeechKey = () => process.env.AZURE_SPEECH_KEY || process.env.AZURESPEECHKEY || '';
+const azureSpeechRegion = () => process.env.AZURE_SPEECH_REGION || process.env.AZURESPEECHREGION || process.env.AZYRESPEECHREGION || '';
 async function boundedBody(response: Response, maxBytes: number): Promise<Buffer> {
   const reader = response.body?.getReader();
   if (!reader) throw new Error('empty_provider_response');
@@ -52,16 +56,16 @@ export class GoogleChirpProvider implements TtsProvider {
 function escapeXml(text: string) { return text.replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&apos;' })[char]!); }
 export class AzureSaudiProvider implements TtsProvider {
   readonly id = 'AZURE' as const;
-  isAvailable() { return enabled('AZURE_TTS_ENABLED') && Boolean(process.env.AZURE_SPEECH_KEY && process.env.AZURE_SPEECH_REGION); }
+  isAvailable() { return process.env.AZURE_TTS_ENABLED !== 'false' && Boolean(azureSpeechKey() && azureSpeechRegion()); }
   listVoices() { return VOICES.filter(voice => voice.provider === this.id); }
   async synthesize(input: SpeechRequest, voice: Voice, signal: AbortSignal) {
-    const region = process.env.AZURE_SPEECH_REGION;
+    const region = azureSpeechRegion();
     if (!region || !/^[a-z0-9]+$/.test(region)) throw new Error('azure_region_invalid');
     const ratePercent = Math.round((input.rate - 1) * 100);
     const ssml = `<speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" xml:lang="ar-SA"><voice name="${voice.id}"><prosody rate="${ratePercent >= 0 ? '+' : ''}${ratePercent}%">${escapeXml(normalizeSpeechText(input))}</prosody></voice></speak>`;
     const response = await fetch(`https://${region}.tts.speech.microsoft.com/cognitiveservices/v1`, {
       method: 'POST', signal,
-      headers: { 'Ocp-Apim-Subscription-Key': process.env.AZURE_SPEECH_KEY!, 'Content-Type': 'application/ssml+xml', 'X-Microsoft-OutputFormat': 'audio-24khz-96kbitrate-mono-mp3', 'User-Agent': 'BasiraSpeechEngine' },
+      headers: { 'Ocp-Apim-Subscription-Key': azureSpeechKey(), 'Content-Type': 'application/ssml+xml', 'X-Microsoft-OutputFormat': 'audio-24khz-96kbitrate-mono-mp3', 'User-Agent': 'BasiraSpeechEngine' },
       body: ssml,
     });
     if (!response.ok) throw new Error(`azure_tts_${response.status}`);
@@ -104,6 +108,7 @@ export type SpeechRouteOptions = { resolveUser?: (req: Request) => Promise<strin
 
 export function registerSpeechRoutes(app: Express, router = new SpeechProviderRouter(), options: SpeechRouteOptions = {}) {
   const limits = options.limits ?? defaultLimits();
+  const premiumEnabled = () => options.premiumEnabled?.() ?? router.listVoices().some(voice => voice.available);
   const userMinute = new Map<string, Usage>();
   const userDay = new Map<string, Usage>();
   const globalDay = new Map<string, Usage>();
@@ -120,9 +125,9 @@ export function registerSpeechRoutes(app: Express, router = new SpeechProviderRo
     if (map.size > 1000) map.forEach((value, key) => { if (value.resetsAt <= now) map.delete(key); });
   };
   app.use('/api/speech', (_req, res, next) => { res.set('Cache-Control', 'no-store'); next(); });
-  app.get('/api/speech/voices', (_req, res) => res.json({ voices: router.listVoices().map(voice => ({ ...voice, available: (options.premiumEnabled?.() ?? enabled('PREMIUM_TTS_ENABLED')) && voice.available })) }));
+  app.get('/api/speech/voices', (_req, res) => res.json({ voices: router.listVoices().map(voice => ({ ...voice, available: premiumEnabled() && voice.available })) }));
   app.post('/api/speech/synthesize', async (req, res) => {
-    if (!(options.premiumEnabled?.() ?? enabled('PREMIUM_TTS_ENABLED'))) return res.status(503).json({ error: 'premium_voice_disabled', fallback: 'browser' });
+    if (!premiumEnabled()) return res.status(503).json({ error: 'premium_voice_disabled', fallback: 'browser' });
     let userId: string | null;
     try { userId = await (options.resolveUser ?? sessionUser)(req); }
     catch { return res.status(503).json({ error: 'premium_auth_unavailable', fallback: 'browser' }); }

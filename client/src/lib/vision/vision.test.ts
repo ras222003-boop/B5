@@ -2,10 +2,12 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Place } from '@shared/navigation';
 import type { VisionDetection } from '@shared/vision';
 import { navApi } from '@/lib/navigationApi';
-import { DEFAULT_VISION_CONFIG } from './config';
+import { DEFAULT_VISION_CONFIG, visionConfigForAlertDistance } from './config';
 import { classifyCameraError } from './camera';
 import { VisualPlaceRecognitionService, matchPlace, normalizePlaceText, signTypeForText } from './placeRecognition';
 import { AlertDeduplicator, BasiraSafetyEngine, classifyDirection } from './safety';
+import { SceneUnderstandingService } from './scene';
+import { visionMessages } from '@/i18n/locales/vision';
 
 const detection=(changes:Partial<VisionDetection>={}):VisionDetection=>({
   id:'one',type:'CHAIR',confidence:0.94,boundingBox:{x:0.4,y:0.2,width:0.2,height:0.5},
@@ -20,10 +22,10 @@ describe('direction and safety',()=>{
     expect([0.05,0.25,0.45,0.65,0.85].map(x=>classifyDirection({x,y:0,width:0.1,height:0.2})))
       .toEqual(['LEFT','FRONT_LEFT','FRONT','FRONT_RIGHT','RIGHT']);
   });
-  it('does not call an unmeasured descending stair or vehicle critical',()=>{
+  it('does not call an unmeasured descending stair critical or a named vehicle within range',()=>{
     const engine=new BasiraSafetyEngine(DEFAULT_VISION_CONFIG);
     expect(engine.classify(detection({type:'STAIRS_DOWN'})).riskLevel).toBe('HIGH');
-    expect(engine.classify(detection({type:'VEHICLE'})).riskLevel).toBe('HIGH');
+    expect(engine.classify(detection({type:'VEHICLE'})).riskLevel).toBe('MEDIUM');
     expect(engine.classify(detection({type:'STAIRS_UNCERTAIN'})).reason).toBe('UNCERTAIN');
   });
   it('reserves critical for nearby high-confidence metric depth',()=>{
@@ -46,6 +48,31 @@ describe('direction and safety',()=>{
     expect(dedup.shouldAnnounce(nearer,1600)).toBe(true);
     expect(dedup.shouldAnnounce(nearer,1700)).toBe(false);
     expect(dedup.shouldAnnounce(nearer,7000)).toBe(true);
+  });
+  it('alerts a named object only within the user-selected metric range',()=>{
+    const engine=new BasiraSafetyEngine(visionConfigForAlertDistance(5));
+    const within=engine.classify(detection({type:'CHAIR',approximateDistance:{distanceMeters:4.6,confidence:.9,source:'LIDAR'}}));
+    const outside=engine.classify(detection({type:'CHAIR',approximateDistance:{distanceMeters:5.4,confidence:.9,source:'LIDAR'}}));
+    const monocular=engine.classify(detection({type:'CHAIR',approximateDistance:{distanceMeters:1,confidence:.9,source:'MONOCULAR_ESTIMATE'}}));
+    expect(within.riskLevel).toBe('HIGH');
+    expect(outside.riskLevel).toBe('MEDIUM');
+    expect(monocular.riskLevel).toBe('MEDIUM');
+  });
+  it('keeps named vehicles silent outside the selected metric range',()=>{
+    const engine=new BasiraSafetyEngine(visionConfigForAlertDistance(5));
+    expect(engine.classify(detection({type:'CAR',approximateDistance:{distanceMeters:4.6,confidence:.9,source:'LIDAR'}})).riskLevel).toBe('HIGH');
+    expect(engine.classify(detection({type:'CAR',approximateDistance:{distanceMeters:5.4,confidence:.9,source:'LIDAR'}})).riskLevel).toBe('MEDIUM');
+    expect(engine.classify(detection({type:'CAR',approximateDistance:{distanceMeters:1,confidence:.9,source:'MONOCULAR_ESTIMATE'}})).riskLevel).toBe('MEDIUM');
+  });
+  it('speaks the detected vehicle type and measured distance without inventing monocular metres',()=>{
+    const engine=new BasiraSafetyEngine(DEFAULT_VISION_CONFIG);
+    const car=engine.classify(detection({type:'CAR',approximateDistance:{distanceMeters:2.4,confidence:.9,source:'LIDAR'}}));
+    const measured=new SceneUnderstandingService(visionMessages.ar).summarize([car],null,1000).shortText;
+    const unmeasured=new SceneUnderstandingService(visionMessages.ar).summarize([engine.classify(detection({type:'CAR',approximateDistance:{distanceMeters:2.4,confidence:.9,source:'MONOCULAR_ESTIMATE'}}))],null,1000).shortText;
+    expect(measured).toContain('سيارة');
+    expect(measured).toContain('2');
+    expect(unmeasured).toContain('سيارة');
+    expect(unmeasured).not.toContain('2 متر');
   });
 });
 
