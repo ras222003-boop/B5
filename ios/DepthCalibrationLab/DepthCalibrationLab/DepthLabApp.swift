@@ -1,20 +1,21 @@
 import SwiftUI
 
-/// Research-only companion. Does not enable production obstacle or stair guidance.
+/// A completely offline native test laboratory. No website or cloud is required to measure
+/// after the app has been installed through TestFlight.
 @main
 struct BasiraDepthLabApp: App {
     var body: some Scene {
         WindowGroup {
-            DepthLabWebScreen()
+            NativeCalibrationScreen()
                 .ignoresSafeArea()
         }
     }
 }
 
-private struct DepthLabWebScreen: UIViewControllerRepresentable {
-    func makeUIViewController(context: Context) -> DepthLabBrowserController {
-        DepthLabBrowserController()
+private struct NativeCalibrationScreen: UIViewControllerRepresentable {
+    func makeUIViewController(context: Context) -> NativeCalibrationHomeController {
+        NativeCalibrationHomeController()
     }
 
-    func updateUIViewController(_ uiViewController: DepthLabBrowserController, context: Context) {}
+    func updateUIViewController(_ uiViewController: NativeCalibrationHomeController, context: Context) {}
 }
