@@ -8,9 +8,9 @@ let destination = root.appendingPathComponent("ios/DepthCalibrationLab/DepthCali
 try FileManager.default.createDirectory(at: destination.deletingLastPathComponent(), withIntermediateDirectories: true)
 
 guard let bitmap = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: 1024, pixelsHigh: 1024,
-                                    bitsPerSample: 8, samplesPerPixel: 3, hasAlpha: false,
+                                    bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: false,
                                     isPlanar: false, colorSpaceName: .deviceRGB,
-                                    bytesPerRow: 0, bitsPerPixel: 0),
+                                    bytesPerRow: 4096, bitsPerPixel: 32),
       let graphics = NSGraphicsContext(bitmapImageRep: bitmap) else {
     fatalError("Cannot allocate icon bitmap")
 }
