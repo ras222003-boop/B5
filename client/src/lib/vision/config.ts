@@ -25,21 +25,22 @@ export const DEFAULT_VISION_CONFIG: VisionConfig = {
   alertDistanceMeters: 3,
 };
 
-export const VISION_ALERT_DISTANCE_OPTIONS = [1, 2, 3, 5, 8] as const;
+export const VISION_ALERT_DISTANCE_OPTIONS = [0.5, 1, 2, 3, 5, 8] as const;
 const alertDistanceKey = 'basira-vision-alert-distance-meters-v1';
 
 export function normalizeVisionAlertDistance(value: number) {
-  return VISION_ALERT_DISTANCE_OPTIONS.includes(value as typeof VISION_ALERT_DISTANCE_OPTIONS[number]) ? value : DEFAULT_VISION_CONFIG.alertDistanceMeters;
+  return Number.isFinite(value) && value >= 0.5 && value <= 10 ? Math.round(value * 10) / 10 : DEFAULT_VISION_CONFIG.alertDistanceMeters;
 }
 
 export function getVisionAlertDistance() {
   if (typeof localStorage === 'undefined') return DEFAULT_VISION_CONFIG.alertDistanceMeters;
-  return normalizeVisionAlertDistance(Number(localStorage.getItem(alertDistanceKey)));
+  try { const stored=localStorage.getItem(alertDistanceKey); return stored===null?DEFAULT_VISION_CONFIG.alertDistanceMeters:normalizeVisionAlertDistance(Number(stored)); }
+  catch { return DEFAULT_VISION_CONFIG.alertDistanceMeters; }
 }
 
 export function saveVisionAlertDistance(value: number) {
   const normalized = normalizeVisionAlertDistance(value);
-  localStorage.setItem(alertDistanceKey, String(normalized));
+  try { localStorage.setItem(alertDistanceKey, String(normalized)); } catch { /* Storage may be disabled. */ }
   return normalized;
 }
 

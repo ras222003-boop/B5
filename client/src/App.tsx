@@ -37,6 +37,7 @@ const Guidance=lazy(()=>import('./pages/Guidance'));
 const SharedMap=lazy(()=>import('./pages/SharedMap'));
 const IndoorManager=lazy(()=>import('./pages/IndoorManager'));
 const NavigationCapabilities=lazy(()=>import('./pages/NavigationCapabilities'));
+const AcademicDirectory=lazy(()=>import('./pages/AcademicDirectory'));
 
 function Router() {
   const {lang}=useI18n();
@@ -72,6 +73,7 @@ function Router() {
       <Route path="/ai-guide" component={AIGuide} />
       <Route path="/exam-demo" component={ExamDemo} />
       <Route path="/online-exams" component={OnlineExams} />
+      <Route path="/academics" component={AcademicDirectory} />
       <Route path="/teacher" component={TeacherPanel} />
       <Route path="/teacher-panel" component={TeacherPanel} />
       <Route path="/assistant-analytics" component={AssistantAnalytics} />

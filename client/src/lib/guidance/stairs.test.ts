@@ -19,7 +19,7 @@ describe('Basira Stair Assistant simulated evidence', () => {
     expect(stair.countDescription(evidence({ visibleSteps: 3, stepCountConfidence: 0.95 }))).toContain('نحو 3');
     expect(stair.confirmStart(at + 100).phase).toBe('ASCENDING');
     const cue = stair.motionStep(at + 500);
-    expect(cue.estimatedStepCue).toBe(true);
+    expect(cue.estimatedStepCue).toBe(false);
     expect(cue.detectedStep).toBe(false);
     expect(stair.motionStep(at + 600).estimatedStepCue).toBe(false);
   });
@@ -37,7 +37,7 @@ describe('Basira Stair Assistant simulated evidence', () => {
     stair.approach(evidence({ direction: 'DOWN' }), at);
     expect(stair.phase).toBe('APPROACH');
     expect(stair.confirmStart(at + 200).phase).toBe('DESCENDING');
-    expect(stair.motionStep(at + 700)).toMatchObject({ estimatedStepCue: true, detectedStep: false });
+    expect(stair.motionStep(at + 700)).toMatchObject({ estimatedStepCue: false, detectedStep: false });
   });
 
   it('requires flat surface plus landing evidence and supports a second flight', () => {

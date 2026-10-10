@@ -3,6 +3,9 @@ export const VISION_OBJECT_TYPES = [
   'PERSON', 'CHAIR', 'TABLE', 'DOOR', 'WALL', 'COLUMN', 'STAIRS_UP',
   'STAIRS_DOWN', 'STAIRS_UNCERTAIN', 'ELEVATOR', 'VEHICLE', 'CAR', 'BUS', 'TRUCK', 'MOTORCYCLE', 'BICYCLE',
   'CART', 'BOX', 'BARRIER', 'SIGN', 'CORRIDOR', 'ENTRANCE', 'EXIT',
+  'SOFA', 'BED', 'BENCH',
+  'BACKPACK', 'HANDBAG', 'SUITCASE', 'TV', 'LAPTOP', 'REFRIGERATOR',
+  'MICROWAVE', 'OVEN', 'POTTED_PLANT', 'TRAFFIC_LIGHT',
   'UNKNOWN_OBSTACLE', 'DROP_OFF', 'DROP_OFF_UNCERTAIN',
 ] as const;
 export type VisionObjectType = typeof VISION_OBJECT_TYPES[number];
@@ -34,6 +37,7 @@ export interface ObstacleDetection extends VisionDetection {
   riskLevel: RiskLevel;
   distanceBand: DistanceBand;
   reason: 'TYPE' | 'PROXIMITY' | 'UNCERTAIN';
+  approachSpeedMps?: number;
 }
 export interface OCRDetection {
   text: string;

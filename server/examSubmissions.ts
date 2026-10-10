@@ -5,7 +5,7 @@ import nodemailer from 'nodemailer';
 import { pool } from './auth';
 import { createReportPdf, limited, sanitizePayload, sessionFor, validEmail } from './examDelivery';
 
-type Recipient = { name: string; email: string; course: string; organization: string | null };
+type Recipient = { name: string; email: string; course: string; organization: string | null; teacherId?: string };
 type SubmissionRow = RowDataPacket & { id: string; user_id: string; course_name: string; exam_title: string; pdf_data: Buffer; status: string };
 type OperationRow = RowDataPacket & { id: string; status: string; submission_id: string };
 type TargetRow = RowDataPacket & { recipient_name: string; recipient_email: string; course_name: string; organization: string | null; delivery_status: string; sent_at: Date | null; failure_reason_code: string | null };
@@ -18,7 +18,9 @@ function parseRecipient(value: unknown, course: string): Recipient | null {
   const name = plain(item?.name, 120), email = plain(item?.email, 254).toLowerCase();
   const recipientCourse = plain(item?.course, 180) || course, organization = plain(item?.organization, 180);
   if (!name || name.length > 120 || !validEmail(email) || !recipientCourse || recipientCourse.length > 180 || organization.length > 180) return null;
-  return { name, email, course: recipientCourse, organization: organization || null };
+  const teacherId=item?.teacherId==null?undefined:safeId(item.teacherId);
+  if(item?.teacherId!=null&&!teacherId)return null;
+  return { name, email, course: recipientCourse, organization: organization || null, teacherId:teacherId??undefined };
 }
 function parseRecipients(value: unknown, course: string): Recipient[] | null {
   if (!Array.isArray(value) || value.length < 1 || value.length > 5) return null;
@@ -47,16 +49,20 @@ async function settleStaleOperation(id: string, userId: string) {
   await pool.execute("UPDATE basira_exam_delivery_targets SET delivery_status='UNCERTAIN',failure_reason_code='delivery_interrupted' WHERE operation_id=? AND delivery_status='SENDING'", [id]);
   await pool.execute("UPDATE basira_exam_submissions SET status='FAILED',sending_started_at=NULL WHERE id=(SELECT submission_id FROM basira_exam_delivery_operations WHERE id=?) AND user_id=? AND status='SENDING'", [id, userId]);
 }
-async function deliver(recipient: Recipient, pdf: Buffer, senderEmail: string, title: string, operationId: string): Promise<'SENT' | 'FAILED' | 'UNCERTAIN'> {
+export function deliveryMessage(recipient:Recipient,studentName:string,examDate:Date,operationId:string){
+  return {subject:`اختبار الطالب – ${recipient.course}`,
+    text:`السلام عليكم ورحمة الله وبركاته،\n\nمرفق لكم الاختبار المكتمل بواسطة الطالب عبر منصة بصيرة، المخصصة لدعم الوصول المستقل إلى الاختبارات للأشخاص ذوي الإعاقة البصرية.\n\nاسم الطالب: ${studentName}\nاسم المقرر: ${recipient.course}\nتاريخ الاختبار: ${examDate.toISOString().slice(0,10)}\nمرجع الإرسال: ${operationId}\n\nمع خالص التحية،\nمنصة بصيرة BASIRA`};
+}
+async function deliver(recipient: Recipient, pdf: Buffer, senderEmail: string, studentName:string, operationId: string): Promise<'SENT' | 'FAILED' | 'UNCERTAIN'> {
   if (!smtpReady()) return 'FAILED';
   const secure = process.env.SUPPORT_SMTP_SECURE?.toLowerCase() === 'true';
   let transport: ReturnType<typeof nodemailer.createTransport> | null = null;
   try {
     transport = nodemailer.createTransport({ host: process.env.SUPPORT_SMTP_HOST!, port: Number(process.env.SUPPORT_SMTP_PORT || 587), secure, requireTLS: !secure, auth: { user: process.env.SUPPORT_SMTP_USER!, pass: process.env.SUPPORT_SMTP_PASSWORD! }, connectionTimeout: 12000, socketTimeout: 12000, disableFileAccess: true, disableUrlAccess: true });
+    const message=deliveryMessage(recipient,studentName,new Date(),operationId);
     const receipt = await transport.sendMail({
       from: process.env.SUPPORT_EMAIL_FROM!, to: recipient.email, replyTo: senderEmail,
-      subject: `تسليم اختبار عبر منصة بصيرة – ${recipient.course}`,
-      text: `تسليم اختبار عبر منصة بصيرة\nالمقرر: ${recipient.course}\nالاختبار: ${title}\nالمستلم: ${recipient.name}\nمرجع التسليم: ${operationId}\nوقت التسليم: ${new Date().toISOString()}\nالاختبار النهائي مرفق بصيغة PDF.`,
+      subject:message.subject,text:message.text,
       attachments: [{ filename: 'basira-final-exam.pdf', content: pdf, contentType: 'application/pdf' }],
     });
     return receipt.accepted?.some((address: string) => address.toLowerCase() === recipient.email) ? 'SENT' : 'FAILED';
@@ -152,6 +158,16 @@ export function registerExamSubmissionRoutes(app: Express) {
       if (submission.status === 'SENT' && req.body?.resend !== true) return res.status(409).json({ error: 'explicit_resend_required' });
       const recipients = parseRecipients(req.body?.recipients, submission.course_name);
       if (!recipients || recipients.some(item => item.course !== submission.course_name)) return res.status(400).json({ error: 'invalid_recipients' });
+      if(req.body?.courseId!=null){
+        const courseId=safeId(req.body.courseId);
+        if(!courseId||recipients.some(item=>!item.teacherId))return res.status(400).json({error:'invalid_directory_selection'});
+        const [linked]=await pool.execute<(RowDataPacket&{teacher_id:string;name:string;email:string;institution:string|null;course_name:string})[]>(
+          'SELECT t.id AS teacher_id,t.name,t.email,t.institution,c.name AS course_name FROM basira_courses c JOIN basira_course_teachers ct ON ct.course_id=c.id JOIN basira_teachers t ON t.id=ct.teacher_id AND t.user_id=c.user_id WHERE c.id=? AND c.user_id=?',[courseId,session.user.id]);
+        if(!linked.length||linked[0].course_name!==submission.course_name||recipients.some(item=>{
+          const teacher=linked.find(row=>row.teacher_id===item.teacherId);
+          return !teacher||teacher.name!==item.name||teacher.email.toLowerCase()!==item.email||(teacher.institution??null)!==item.organization;
+        }))return res.status(409).json({error:'directory_selection_changed'});
+      }
       if (limited(req, session.user.id)) return res.status(429).json({ error: 'delivery_rate_limited' });
       const [claim] = await pool.execute<ResultSetHeader>("UPDATE basira_exam_submissions SET status='SENDING',sending_started_at=CURRENT_TIMESTAMP(3) WHERE id=? AND user_id=? AND status IN ('READY_TO_SEND','FAILED','SENT')", [submissionId, session.user.id]);
       if (!claim.affectedRows) {
@@ -166,7 +182,7 @@ export function registerExamSubmissionRoutes(app: Express) {
       claimed.operationId = id;
       for (const recipient of recipients) await pool.execute('INSERT INTO basira_exam_delivery_targets (id,operation_id,recipient_name,recipient_email,course_name,organization,delivery_status) VALUES (?,?,?,?,?,?,?)', [randomUUID(), id, recipient.name, recipient.email, recipient.course, recipient.organization, 'SENDING']);
       for (const recipient of recipients) {
-        const result = await deliver(recipient, submission.pdf_data, session.user.email, submission.exam_title, id);
+        const result = await deliver(recipient, submission.pdf_data, session.user.email,session.user.name||session.user.email,id);
         await pool.execute('UPDATE basira_exam_delivery_targets SET delivery_status=?,sent_at=?,failure_reason_code=? WHERE operation_id=? AND recipient_email=?', [result, result === 'SENT' ? new Date() : null, result === 'SENT' ? null : !smtpReady() ? 'smtp_not_configured' : result === 'UNCERTAIN' ? 'smtp_unconfirmed' : 'smtp_rejected', id, recipient.email]);
       }
       const [statuses] = await pool.execute<RowDataPacket[]>('SELECT delivery_status FROM basira_exam_delivery_targets WHERE operation_id=?', [id]);

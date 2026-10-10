@@ -8,6 +8,7 @@ import { ensureSchema } from "./migrations";
 import { registerSupportRoutes, startTicketMailWorker } from "./support";
 import { registerExamDeliveryRoutes } from "./examDelivery";
 import { registerExamSubmissionRoutes } from "./examSubmissions";
+import { registerAcademicDirectoryRoutes } from "./academicDirectory";
 import { registerOcrRoute } from "./ocr";
 import { registerNavigationRoutes } from "./navigation";
 import { toExamLanguage, assistantSystem, guideSystem, aiFallback, pdfLabels, escapeHtml } from "./locale";
@@ -82,6 +83,7 @@ async function startServer() {
   registerSupportRoutes(app);
   registerExamDeliveryRoutes(app);
   registerExamSubmissionRoutes(app);
+  registerAcademicDirectoryRoutes(app);
   registerNavigationRoutes(app);
   startTicketMailWorker();
 

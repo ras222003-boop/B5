@@ -47,6 +47,7 @@ describe('approved exam delivery', () => {
       if (sql.startsWith('UPDATE basira_exam_delivery_targets')) { const target=targets.find(value=>value.operation_id===args[3]&&value.recipient_email===args[4]); Object.assign(target,{delivery_status:args[0],sent_at:args[1],failure_reason_code:args[2]}); return [{affectedRows:1}]; }
       if (sql.startsWith('SELECT delivery_status FROM basira_exam_delivery_targets')) return [targets.filter(value=>value.operation_id===args[0]).map(value=>({delivery_status:value.delivery_status}))];
       if (sql.startsWith('SELECT recipient_name,recipient_email')) return [targets.filter(value=>value.operation_id===args[0])];
+      if (sql.startsWith('SELECT t.id AS teacher_id')) return [[{teacher_id:uuid,name:'Professor',email:'one@example.com',institution:null,course_name:'Calculus'}]];
       throw new Error(`Unmocked SQL: ${sql}`);
     });
     const {registerExamSubmissionRoutes}=await import('./examSubmissions'); registerExamSubmissionRoutes(app);
@@ -67,7 +68,15 @@ describe('approved exam delivery', () => {
     const invalid=res(); await routes.get('POST /api/exam-delivery/operations')!(req({...body,recipients:[recipient('invalid')]}),invalid); expect(invalid.statusCode).toBe(400);
     const sent=res(); await routes.get('POST /api/exam-delivery/operations')!(req(body),sent); expect(sent.statusCode).toBe(201); expect(sent.body.status).toBe('SENT'); expect(sent.body.recipients).toHaveLength(2); expect(mocks.sendMail).toHaveBeenCalledTimes(2);
     expect(mocks.sendMail.mock.calls[0][0].subject).toContain('Calculus'); expect(mocks.sendMail.mock.calls[0][0].subject).not.toContain('Private exam');
+    expect(mocks.sendMail.mock.calls[0][0].text).toContain('اسم الطالب: student@example.com');
     const duplicate=res(); await routes.get('POST /api/exam-delivery/operations')!(req(body),duplicate); expect(duplicate.body.duplicate).toBe(true); expect(mocks.sendMail).toHaveBeenCalledTimes(2);
+  });
+  it('requires a selected teacher to match the owned course and reviewed email',async()=>{
+    const accepted=await prepare();
+    const wrong=res();await routes.get('POST /api/exam-delivery/operations')!(req({submissionId:accepted.body.submissionId,confirmed:true,courseId:uuid,recipients:[{...recipient('wrong@example.com'),teacherId:uuid}]}),wrong);
+    expect(wrong.statusCode).toBe(409);expect(mocks.sendMail).not.toHaveBeenCalled();
+    const correct=res();await routes.get('POST /api/exam-delivery/operations')!(req({submissionId:accepted.body.submissionId,confirmed:true,courseId:uuid,recipients:[{...recipient('one@example.com'),teacherId:uuid}]}),correct);
+    expect(correct.statusCode).toBe(201);expect(mocks.sendMail).toHaveBeenCalledTimes(1);
   });
   it('prevents another user from reading or sending the final exam', async () => {
     const accepted=await prepare(); const get=res(); await routes.get('GET /api/exam-delivery/submissions/:id')!(req({},outsider),get); expect(get.statusCode).toBe(404);
