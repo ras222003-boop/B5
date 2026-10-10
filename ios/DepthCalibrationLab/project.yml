@@ -1,0 +1,21 @@
+name: BasiraDepthCalibrationLab
+options:
+  minimumXcodeGenVersion: 2.42.0
+settings:
+  base:
+    SWIFT_VERSION: "5.9"
+    IPHONEOS_DEPLOYMENT_TARGET: "16.0"
+targets:
+  BasiraDepthCalibrationLab:
+    type: application
+    platform: iOS
+    sources:
+      - path: DepthCalibrationLab
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: sa.basira.depthcalibration
+        INFOPLIST_FILE: DepthCalibrationLab/Info.plist
+        GENERATE_INFOPLIST_FILE: NO
+        CODE_SIGN_STYLE: Automatic
+        TARGETED_DEVICE_FAMILY: "1"
+        SWIFT_STRICT_CONCURRENCY: minimal
