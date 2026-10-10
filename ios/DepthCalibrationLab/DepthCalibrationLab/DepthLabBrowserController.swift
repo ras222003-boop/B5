@@ -106,7 +106,7 @@ final class DepthLabBrowserController: UIViewController, WKNavigationDelegate {
         pendingCapture = true
         let scanner = NativeLiDARCaptureController { [weak self] result in
             self?.pendingCapture = false
-            reply(result ?? NSNull(), nil)
+            reply(result.map { $0 as Any } ?? NSNull(), nil)
         }
         scanner.modalPresentationStyle = .fullScreen
         present(scanner, animated: true)
