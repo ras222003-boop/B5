@@ -65,9 +65,9 @@ export class VoiceNavigationService {
 export class HapticNavigationService {
   private enabled=true;
   setEnabled(enabled:boolean){this.enabled=enabled;if(!enabled&&typeof navigator!=='undefined'&&'vibrate'in navigator)navigator.vibrate(0);}
-  pulse(kind:'CONTINUE'|'RIGHT'|'LEFT'|'HAZARD'|'STOP'|'ARRIVAL'|'RELOCALIZE'|'STAIR'|'STEP_ESTIMATE'){
+  pulse(kind:'CONTINUE'|'RIGHT'|'LEFT'|'HAZARD'|'STOP'|'ARRIVAL'|'RELOCALIZE'|'STAIR'){
     if(!this.enabled||typeof navigator==='undefined'||!('vibrate'in navigator))return false;
-    const pattern:Record<typeof kind,number[]>={CONTINUE:[70],RIGHT:[70,70,170],LEFT:[170,70,70],HAZARD:[240,80,240,80,240],STOP:[350],ARRIVAL:[90,80,90,80,260],RELOCALIZE:[120,100,120,100,120],STAIR:[100,90,100,90,250],STEP_ESTIMATE:[35]};
+    const pattern:Record<typeof kind,number[]>={CONTINUE:[70],RIGHT:[70,70,170],LEFT:[170,70,70],HAZARD:[240,80,240,80,240],STOP:[350],ARRIVAL:[90,80,90,80,260],RELOCALIZE:[120,100,120,100,120],STAIR:[100,90,100,90,250]};
     try{return navigator.vibrate(pattern[kind]);}catch{return false;}
   }
 }
@@ -75,7 +75,7 @@ export class HapticNavigationService {
 /** Very short optional cues leave environmental audio available; no sound is looped. */
 export class NavigationEarconService {
   private context:AudioContext|null=null;
-  play(kind:'STEP_ESTIMATE'|'LEFT'|'RIGHT'|'STOP'|'ARRIVAL'){
+  play(kind:'LEFT'|'RIGHT'|'STOP'|'ARRIVAL'){
     if(typeof window==='undefined')return false;
     const Context=window.AudioContext;if(!Context)return false;
     try{
@@ -85,7 +85,7 @@ export class NavigationEarconService {
       oscillator.type='sine';
       oscillator.frequency.value=kind==='STOP'?520:kind==='LEFT'?650:kind==='RIGHT'?850:kind==='ARRIVAL'?950:880;
       gain.gain.setValueAtTime(0.0001,now);
-      gain.gain.exponentialRampToValueAtTime(kind==='STOP'?0.07:kind==='STEP_ESTIMATE'?0.05:0.035,now+0.005);
+      gain.gain.exponentialRampToValueAtTime(kind==='STOP'?0.07:0.035,now+0.005);
       gain.gain.exponentialRampToValueAtTime(0.0001,now+0.075);
       oscillator.connect(gain);gain.connect(this.context.destination);
       oscillator.start(now);oscillator.stop(now+0.08);

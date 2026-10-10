@@ -63,19 +63,21 @@ export class MonocularRelativeDepthProvider implements RelativeDepthProvider {
 
 /** A native wrapper must provide a camera-aligned metric map; all values are validated. */
 export interface BasiraNativeDepthBridge {
-  getAlignedDepth():Promise<{width:number;height:number;values:number[];confidence:number;source:'ARKIT_DEPTH'|'LIDAR'|'ARCORE_DEPTH'|'DEPTH_SENSOR'}|null>;
+  /** The host must attest alignment with the same camera frame and monotonic clock. */
+  getAlignedDepth(frameTimestampMs:number):Promise<{width:number;height:number;values:number[];confidence:number;source:'ARKIT_DEPTH'|'LIDAR'|'ARCORE_DEPTH'|'DEPTH_SENSOR';frameTimestampMs:number;alignedToVideo:boolean}|null>;
 }
 declare global { interface Window { BasiraNativeDepth?:BasiraNativeDepthBridge } }
 export class NativeMetricDepthProvider implements MetricDepthProvider {
   constructor(private readonly bridge:BasiraNativeDepthBridge) {}
   async capture(timestamp:number):Promise<MetricDepthMap|null> {
-    const result=await this.bridge.getAlignedDepth();
+    const result=await this.bridge.getAlignedDepth(timestamp);
     if(!result)return null;
     const {width,height,confidence,source,values}=result;
     if(!Number.isInteger(width)||!Number.isInteger(height)||width<4||height<4||width*height>2_000_000||values.length!==width*height||
-      !Number.isFinite(confidence)||confidence<0||confidence>1||!['ARKIT_DEPTH','LIDAR','ARCORE_DEPTH','DEPTH_SENSOR'].includes(source))return null;
+      !Number.isFinite(confidence)||confidence<0||confidence>1||!['ARKIT_DEPTH','LIDAR','ARCORE_DEPTH','DEPTH_SENSOR'].includes(source)||
+      result.alignedToVideo!==true||!Number.isFinite(result.frameTimestampMs)||Math.abs(result.frameTimestampMs-timestamp)>250)return null;
     const map=new Float32Array(values.map(n=>Number.isFinite(n)&&n>0?n:NaN));
-    return {width,height,values:map,confidence,source,timestamp};
+    return {width,height,values:map,confidence,source,timestamp:result.frameTimestampMs};
   }
   async close(){/* Owned by the native bridge. */}
 }

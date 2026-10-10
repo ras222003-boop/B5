@@ -5,9 +5,12 @@ import { classifyDirection, classifyVertical } from './safety';
 const clamp = (n: number) => Math.max(0, Math.min(1, n));
 const cocoTypes: Record<string, VisionObjectType> = {
   person: 'PERSON', chair: 'CHAIR', 'dining table': 'TABLE', bicycle: 'BICYCLE',
-  car: 'CAR', bus: 'BUS', truck: 'TRUCK', motorcycle: 'MOTORCYCLE',
-  'stop sign': 'SIGN', 'traffic light': 'SIGN',
+  car:'CAR',bus:'BUS',truck:'TRUCK',motorcycle:'MOTORCYCLE',
+  couch:'SOFA',bed:'BED',bench:'BENCH',backpack:'BACKPACK',handbag:'HANDBAG',suitcase:'SUITCASE',
+  tv:'TV',laptop:'LAPTOP',refrigerator:'REFRIGERATOR',microwave:'MICROWAVE',oven:'OVEN','potted plant':'POTTED_PLANT',
+  'stop sign': 'SIGN', 'traffic light': 'TRAFFIC_LIGHT',
 };
+export const mappedCocoType=(label:string,score:number):VisionObjectType|null=>score>=0.6?cocoTypes[label.toLowerCase()]??null:null;
 
 /** EfficientDet-Lite0/COCO: only labels actually represented by the model are mapped. */
 export class MediaPipeVisionProvider implements VisionProvider {
@@ -30,9 +33,9 @@ export class MediaPipeVisionProvider implements VisionProvider {
       const category=entry.categories[0], box=entry.boundingBox;
       if (!category || !box || !category.categoryName) return [];
       const boundingBox={x:clamp(box.originX/width),y:clamp(box.originY/height),width:clamp(box.width/width),height:clamp(box.height/height)};
-      const mapped=cocoTypes[category.categoryName.toLowerCase()];
+      const mapped=mappedCocoType(category.categoryName,category.score);
       const center=boundingBox.x+boundingBox.width/2;
-      const type=mapped ?? (boundingBox.width*boundingBox.height>=0.1 && center>=0.3 && center<=0.7 ? 'UNKNOWN_OBSTACLE' : null);
+      const type=mapped ?? (category.score>=0.7&&boundingBox.width*boundingBox.height>=0.1 && center>=0.3 && center<=0.7 ? 'UNKNOWN_OBSTACLE' : null);
       if (!type) return [];
       return [{
         id:`${timestamp}-${index}`,type,confidence:clamp(category.score),boundingBox,

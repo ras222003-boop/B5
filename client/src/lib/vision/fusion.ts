@@ -9,7 +9,7 @@ const overlap=(a:VisionDetection,b:VisionDetection)=>{
   return intersection/(a.boundingBox.width*a.boundingBox.height+b.boundingBox.width*b.boundingBox.height-intersection||1);
 };
 export function metricDepthForDetection(d:VisionDetection,map:MetricDepthMap):VisionDetection['approximateDistance'] {
-  if(map.confidence<.7)return null;
+  if(map.confidence<.7||Math.abs(d.timestamp-map.timestamp)>250)return null;
   const cx=d.boundingBox.x+d.boundingBox.width/2,cy=d.boundingBox.y+d.boundingBox.height/2;
   const samples:number[]=[];
   for(const dx of [-.08,0,.08])for(const dy of [-.08,0,.08]){

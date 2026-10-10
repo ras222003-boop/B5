@@ -2,8 +2,9 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Place } from '@shared/navigation';
 import type { VisionDetection } from '@shared/vision';
 import { navApi } from '@/lib/navigationApi';
-import { DEFAULT_VISION_CONFIG, visionConfigForAlertDistance } from './config';
+import { DEFAULT_VISION_CONFIG, normalizeVisionAlertDistance, visionConfigForAlertDistance } from './config';
 import { classifyCameraError } from './camera';
+import { mappedCocoType } from './providers';
 import { VisualPlaceRecognitionService, matchPlace, normalizePlaceText, signTypeForText } from './placeRecognition';
 import { AlertDeduplicator, BasiraSafetyEngine, classifyDirection } from './safety';
 import { SceneUnderstandingService } from './scene';
@@ -57,6 +58,23 @@ describe('direction and safety',()=>{
     expect(within.riskLevel).toBe('HIGH');
     expect(outside.riskLevel).toBe('MEDIUM');
     expect(monocular.riskLevel).toBe('MEDIUM');
+  });
+  it('accepts half a metre and custom distances, and rejects invalid values',()=>{
+    expect(normalizeVisionAlertDistance(0.5)).toBe(0.5);
+    expect(normalizeVisionAlertDistance(1.5)).toBe(1.5);
+    expect(normalizeVisionAlertDistance(0)).toBe(DEFAULT_VISION_CONFIG.alertDistanceMeters);
+  });
+  it('tracks approach speed from fresh metric readings on the same object',()=>{
+    const engine=new BasiraSafetyEngine(visionConfigForAlertDistance(3));
+    engine.classify(detection({trackId:'chair-approach',timestamp:1000,approximateDistance:{distanceMeters:2.5,confidence:.9,source:'LIDAR'}}));
+    const approaching=engine.classify(detection({trackId:'chair-approach',timestamp:2000,approximateDistance:{distanceMeters:1.5,confidence:.9,source:'LIDAR'}}));
+    expect(approaching.approachSpeedMps).toBeCloseTo(1);
+    expect(approaching.riskLevel).toBe('HIGH');
+  });
+  it('maps additional COCO classes to their spoken names',()=>{
+    expect(mappedCocoType('couch',.8)).toBe('SOFA');
+    expect(mappedCocoType('backpack',.8)).toBe('BACKPACK');
+    expect(visionMessages.ar.object.SOFA).toBe('أريكة');
   });
   it('keeps named vehicles silent outside the selected metric range',()=>{
     const engine=new BasiraSafetyEngine(visionConfigForAlertDistance(5));

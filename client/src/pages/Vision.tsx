@@ -43,6 +43,7 @@ export default function Vision() {
   const [modelWarning,setModelWarning]=useState('');
   const [depthWarning,setDepthWarning]=useState('');
   const [capabilities,setCapabilities]=useState<VisionCapabilities|null>(null);
+  const [depthEnabled,setDepthEnabled]=useState(false);
   const [lastAlert,setLastAlert]=useState('');
   const [risk,setRisk]=useState<RiskLevel|null>(null);
   const [scene,setScene]=useState<SceneDescription|null>(null);
@@ -53,6 +54,9 @@ export default function Vision() {
   const [online,setOnline]=useState(typeof navigator==='undefined'?true:navigator.onLine);
   const [spokenSummary,setSpokenSummary]=useState('');
   const [alertDistanceMeters,setAlertDistanceMeters]=useState(()=>getVisionAlertDistance());
+  const alertDistanceRef=useRef(alertDistanceMeters);
+  const [customDistance,setCustomDistance]=useState(String(alertDistanceMeters));
+  const changeDistance=(value:number)=>{if(!Number.isFinite(value)||value<0.5||value>10)return;const saved=saveVisionAlertDistance(value);alertDistanceRef.current=saved;setAlertDistanceMeters(saved);pipelineRef.current?.setAlertDistanceMeters(saved);};
   useEffect(()=>{permissionService.status('camera').then(setCameraPermission).catch(()=>{});const update=()=>setOnline(navigator.onLine);window.addEventListener('online',update);window.addEventListener('offline',update);return()=>{window.removeEventListener('online',update);window.removeEventListener('offline',update);};},[]);
   useEffect(()=>{if(!locationEstimate)return;const timer=window.setInterval(()=>setLocationEstimate(localizationRef.current.fusion.current(Date.now())),5000);return()=>window.clearInterval(timer);},[Boolean(locationEstimate)]);
 
@@ -79,8 +83,9 @@ export default function Vision() {
     setError('');setOCRWarning('');setModelWarning('');setDepthWarning('');setLastAlert('');setRisk(null);setSpokenSummary('');setState('STARTING');
     try {
       const safetyFlags=await loadSafetyFlags();
+      setDepthEnabled(safetyFlags.metricDepth);
       const detected=detectVisionCapabilities();setCapabilities(detected);
-      const visionConfig=visionConfigForAlertDistance(alertDistanceMeters);
+      const visionConfig=visionConfigForAlertDistance(alertDistanceRef.current);
       await cameraRef.current.start(videoRef.current);
       if(run!==generation.current){cameraRef.current.stop(videoRef.current);return;}
       setCameraPermission('allowed');
@@ -155,7 +160,7 @@ export default function Vision() {
     <header><h1 className="text-3xl font-black">{t.title}</h1><p className="mt-3 text-lg text-stone-300">{t.description}</p></header>
     <p className="rounded-xl border border-amber-300/40 bg-amber-300/10 p-4 text-amber-100">{t.advisory}</p>
     <div className="flex flex-wrap gap-3">{state==='STOPPED'?<button type="button" className={button} onClick={start}>{t.start}</button>:<button type="button" className={button} onClick={()=>void stop()}>{t.stop}</button>}</div>
-    <section className="rounded-2xl border border-amber-200/20 bg-stone-900 p-5"><label className="block font-bold">{t.alertDistanceLabel}<select className="mt-2 min-h-14 w-full rounded-xl border border-amber-200/40 bg-stone-950 px-4 text-white" value={alertDistanceMeters} onChange={event=>{const value=saveVisionAlertDistance(Number(event.target.value));setAlertDistanceMeters(value);pipelineRef.current?.setAlertDistanceMeters(value);}}>{VISION_ALERT_DISTANCE_OPTIONS.map(value=><option key={value} value={value}>{value} {lang==='en'?'metres':lang==='zh-CN'?'米':'متر'}</option>)}</select></label><p className="mt-2 text-sm text-stone-300">{t.alertDistanceNote}</p></section>
+    <section className="rounded-2xl border border-amber-200/20 bg-stone-900 p-5"><label className="block font-bold">{t.alertDistanceLabel}<select className="mt-2 min-h-14 w-full rounded-xl border border-amber-200/40 bg-stone-950 px-4 text-white" value={VISION_ALERT_DISTANCE_OPTIONS.some(value=>value===alertDistanceMeters)?alertDistanceMeters:'custom'} onChange={event=>{if(event.target.value==='custom'){changeDistance(Number(customDistance));return;}changeDistance(Number(event.target.value));setCustomDistance(event.target.value);}}>{VISION_ALERT_DISTANCE_OPTIONS.map(value=><option key={value} value={value}>{value} {lang==='en'?'metres':lang==='zh-CN'?'米':'متر'}</option>)}<option value="custom">{t.customRange}</option></select></label><label className="mt-3 block">{t.customRange}<input className="mt-1 min-h-14 w-full rounded-xl border border-amber-200/40 bg-stone-950 px-4 text-white" type="number" min="0.5" max="10" step="0.1" value={customDistance} onChange={event=>{setCustomDistance(event.target.value);changeDistance(Number(event.target.value));}} /></label><p className="mt-2 text-sm text-stone-300">{t.alertDistanceNote}</p><p className="mt-2 text-sm text-stone-300" role="status">{t.distanceStatus}: {scene?.objects.some(item=>item.approximateDistance?.source!=='MONOCULAR_ESTIMATE'&&(item.approximateDistance?.confidence??0)>=0.7)?t.distanceMeasured:t.distanceNotMeasured}</p></section>
     <div className="flex flex-wrap gap-3"><button className={secondary} type="button" disabled={state==='STOPPED'||state==='STARTING'} onClick={()=>report(false)}>{t.whatAhead}</button><button className={secondary} type="button" disabled={state==='STOPPED'||state==='STARTING'} onClick={()=>report(true)}>{t.describe}</button></div>
     <p aria-live="polite" role="status" className="min-h-6">{spokenSummary}</p>
     <section aria-label={t.status} className="rounded-2xl border border-amber-200/20 bg-stone-900 p-5">
@@ -169,10 +174,12 @@ export default function Vision() {
     {modelWarning&&<p role="status" aria-live="polite" className="text-amber-200">{modelWarning}</p>}
     {depthWarning&&<p role="status" aria-live="polite" className="text-amber-200">{depthWarning}</p>}
     {!online&&<p role="status" className="rounded-xl border border-amber-300/40 p-4 text-amber-100">{t.offline}</p>}
-    <p className="text-sm text-stone-300">{capabilities?.nativeDepth?t.nativeDepthAvailable:t.depthUnavailable}</p>
+    <p className="text-sm text-stone-300">{capabilities?.nativeDepth&&depthEnabled?t.nativeDepthAvailable:t.depthUnavailable}</p>
+    <section className="rounded-xl border border-amber-200/30 p-4"><h2 className="font-bold">{t.stairEscort}</h2><p className="mt-2">{t.stairUnavailable}</p><button type="button" className={`${secondary} mt-3`} disabled={state==='STOPPED'} onClick={()=>void stop()}>{t.stairStop}</button></section>
     {scene?.walkableArea&&<p role="status" className="text-amber-100">{scene.walkableArea.pathAhead==='BLOCKED'?t.pathBlocked:scene.walkableArea.pathAhead==='CLEAR'?t.pathClearObserved:t.pathUnknown}</p>}
     {scene?.surfaceAnalysis&&<p role="status" className="text-amber-100">{t.surfaceStatus(scene.surfaceAnalysis.surface??'UNKNOWN',scene.surfaceAnalysis.surfaceCoverage??0)}</p>}
     {scene?.objects.some(object=>object.type==='STAIRS_UNCERTAIN'||object.type==='STAIRS_UP'||object.type==='STAIRS_DOWN')&&<p role="alert" className="text-amber-100">{t.stairsObserved}</p>}
+    {scene?.objects.length? <section className="rounded-xl border border-amber-200/30 p-4"><h2 className="font-bold">{t.recognizedObjects}</h2><ul className="mt-2 space-y-2">{scene.objects.slice(0,5).map(object=><li key={object.id}>{t.object[object.type]} {t.direction[object.horizontalDirection]} · {t.confidenceLabel} {Math.round(object.confidence*100)}٪{object.approximateDistance?.source!=='MONOCULAR_ESTIMATE'&&(object.approximateDistance?.confidence??0)>=0.7?` · ${t.distance(object.approximateDistance!.distanceMeters)}`:''}</li>)}</ul></section>:null}
     {recognized&&<p role="status" className="rounded-xl border border-emerald-300/40 p-4 text-emerald-100">{t.placeRecognized(recognized.name)}</p>}
     {locationEstimate?.state==='TRACKING'&&<section className="space-y-3 rounded-xl border border-amber-300/40 p-4"><p>موقعك الحالي: بالقرب من {recognized?.name??'مكان معروف'} · الثقة {Math.round(locationEstimate.confidence*100)}٪. التقدير مرتبط بلوحة معروفة وليس قياسًا ميدانيًا للدقة.</p><div className="flex flex-wrap gap-2"><input className="min-h-12 rounded-xl border border-amber-200/40 bg-stone-950 px-3" value={savedName} onChange={e=>setSavedName(e.target.value)} placeholder="اسم مكانك الخاص" aria-label="اسم مكانك الخاص"/><button className={secondary} disabled={!savedName.trim()} onClick={savePersonal}>احفظ هذا المكان</button></div><p role="status" aria-live="polite">{saveNotice}</p></section>}
     {locationEstimate?.state==='LOCALIZATION_LOST'&&<p role="alert" className="rounded-xl border border-amber-300/40 p-4">تعذر تحديد موقعك بدقة داخل المبنى. وجّه الكاميرا نحو لوحة مكان معروف لإعادة التثبيت.</p>}
