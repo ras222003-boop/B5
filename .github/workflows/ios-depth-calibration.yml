@@ -22,7 +22,7 @@ jobs:
       - name: Install XcodeGen
         run: brew install xcodegen
       - name: Generate research app icon
-        run: swift ios/DepthCalibrationLab/scripts/generate-lab-icon.swift
+        run: python3 ios/DepthCalibrationLab/scripts/generate-lab-icon.py
       - name: Generate Xcode project
         working-directory: ios/DepthCalibrationLab
         run: xcodegen generate
