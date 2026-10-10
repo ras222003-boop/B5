@@ -3,6 +3,7 @@ import type { LocalizationEstimate } from '@shared/localization';
 import type { HorizontalDirection, SceneDescription, VisionDetection } from '@shared/vision';
 import type { GuidanceLanguage } from './instructions';
 import type { ArabicStyle } from '@shared/speech';
+import { visionMessages } from '@/i18n/locales/vision';
 
 export type SafetyLevel = 'INFO' | 'CAUTION' | 'WARNING' | 'STOP';
 export type HeightEvidence = 'POSSIBLE_HEAD_LEVEL' | 'UNSPECIFIED';
@@ -171,7 +172,7 @@ export class NavigationSafetyFusion {
       const distanceText = distance === null ? '' : distance < 1 ? `${separator}${t.close}` : `${separator}${t.about(Math.round(distance))}`;
       const direction = t.direction[object.horizontalDirection];
       const description = raised ? `${t.head} ${direction}${distanceText}`
-        : `${t.obstacle}: ${t.object[object.type]} ${direction}${distanceText}`;
+        : `${t.obstacle}: ${(t.object as Record<string,string>)[object.type]??visionMessages[this.language].object[object.type]} ${direction}${distanceText}`;
       const message = `${level === 'STOP' ? t.stop : level === 'WARNING' ? t.warning : ''} ${description}.`.trim();
       return {
         state: level === 'STOP' || level === 'WARNING' ? 'ROUTE_BLOCKED' : 'ROUTE_UNCERTAIN',

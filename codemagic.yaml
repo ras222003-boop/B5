@@ -1,0 +1,55 @@
+# Cloud-only signing and internal beta distribution (no local Mac required).
+# Manual start in Codemagic. Apple credentials live in Codemagic Developer Portal integration
+# "basira_apple", NEVER in this repository.
+workflows:
+  basira-iphone14pro-testflight:
+    name: Basira LiDAR (iPhone 14 Pro) — TestFlight
+    max_build_duration: 60
+    instance_type: mac_mini_m2
+    integrations:
+      app_store_connect: basira_apple
+    environment:
+      ios_signing:
+        distribution_type: app_store
+        bundle_identifier: sa.basira.depthcalibration
+      vars:
+        XCODE_SCHEME: "BasiraDepthCalibrationLab"
+      xcode: latest
+    scripts:
+      - name: Generate signed iOS project
+        script: |
+          #!/bin/bash
+          set -euo pipefail
+          command -v xcodegen >/dev/null || brew install xcodegen
+          python3 ios/DepthCalibrationLab/scripts/generate-lab-icon.py
+          /usr/libexec/PlistBuddy -c "Set :CFBundleVersion ${PROJECT_BUILD_NUMBER:?}" ios/DepthCalibrationLab/DepthCalibrationLab/Info.plist
+          cd ios/DepthCalibrationLab
+          xcodegen generate
+
+      - name: Apply Apple distribution profile
+        script: |
+          #!/bin/bash
+          set -euo pipefail
+          xcode-project use-profiles \
+            --project "$CM_BUILD_DIR/ios/DepthCalibrationLab/BasiraDepthCalibrationLab.xcodeproj"
+
+      - name: Create distribution-signed IPA
+        script: |
+          #!/bin/bash
+          set -euo pipefail
+          xcode-project build-ipa \
+            --project "$CM_BUILD_DIR/ios/DepthCalibrationLab/BasiraDepthCalibrationLab.xcodeproj" \
+            --scheme "$XCODE_SCHEME"
+
+    artifacts:
+      - build/ios/ipa/*.ipa
+      - /tmp/xcodebuild_logs/*.log
+      - $HOME/Library/Developer/Xcode/DerivedData/**/Build/**/*.dSYM
+
+    publishing:
+      app_store_connect:
+        auth: integration
+        submit_to_testflight: true
+        beta_groups:
+          - Basira Internal Testers
+        submit_to_app_store: false

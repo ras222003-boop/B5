@@ -36,6 +36,7 @@ export class VisionAnnouncementService {
   constructor(private readonly copy:VisionCopy,private readonly speak:(text:string)=>void,private readonly haptic:HapticFeedbackProvider,cooldownMs:number) {
     this.deduplicator=new AlertDeduplicator(cooldownMs);
   }
+  setAlertDistanceMeters(_meters:number){this.deduplicator.reset();}
   announce(events:ObstacleDetection[],now:number):{text:string;event:ObstacleDetection}|null {
     const top=events[0];
     if(top?.riskLevel==='INFORMATION'&&now<this.hazardUntil)return null;
@@ -46,7 +47,7 @@ export class VisionAnnouncementService {
       :top.type==='STAIRS_DOWN'&&top.riskLevel==='CRITICAL'?this.copy.stairsDown
       :top.type==='STAIRS_UNCERTAIN'||top.type==='STAIRS_DOWN'&&top.reason==='UNCERTAIN'
       ? this.copy.uncertainStairs
-      : `${top.riskLevel==='CRITICAL'||top.riskLevel==='HIGH'?`${this.copy.alertPrefix}، `:''}${objectPhrase(top,this.copy)}.`;
+      : `${top.riskLevel==='CRITICAL'?`${this.copy.urgentPrefix}، `:top.riskLevel==='HIGH'?`${this.copy.alertPrefix}، `:''}${objectPhrase(top,this.copy)}${top.approachSpeedMps&&top.approachSpeedMps>=0.5?`، ${this.copy.approaching}`:''}.`;
     if(top.riskLevel==='CRITICAL')this.haptic.critical();
     this.speak(text);
     return {text,event:top};

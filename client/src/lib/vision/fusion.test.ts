@@ -67,6 +67,11 @@ describe('local semantic vision and fusion',()=>{
     const result=new VisionFusionEngine(new BasiraSafetyEngine(DEFAULT_VISION_CONFIG)).fuse({objects:[],segmentation:g,relativeDepth:oldDepth,metricDepth:null,signs:[]});
     expect(result.detections.some(d=>d.type==='DROP_OFF_UNCERTAIN')).toBe(false);
   });
+  it('does not attach stale metric depth to a later object',()=>{
+    const metric:MetricDepthMap={width:30,height:30,values:new Float32Array(900).fill(1),confidence:.9,source:'LIDAR',timestamp:100};
+    const frame=new VisionFusionEngine(new BasiraSafetyEngine(DEFAULT_VISION_CONFIG)).fuse({objects:[{...object('CHAIR'),timestamp:1000}],segmentation:null,relativeDepth:null,metricDepth:metric,signs:[]});
+    expect(frame.detections[0].approximateDistance).toBeNull();
+  });
   it('does not let an informational sign interrupt a recent high-risk alert',()=>{
     const speak=vi.fn(),haptic={critical:vi.fn()};
     const announce=new VisionAnnouncementService(visionMessages.ar,speak,haptic,5000);

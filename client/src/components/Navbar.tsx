@@ -4,7 +4,7 @@ import { Menu, X, UserRound } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import BrandLogo from "./BrandLogo";
 import LanguageSelector from "./LanguageSelector";
-import { useCommonMessages } from "@/i18n";
+import { useCommonMessages, useI18n } from "@/i18n";
 import { useMessages } from "@/i18n";
 import { navigationMessages } from "@/i18n/locales/navigation";
 
@@ -13,6 +13,7 @@ export default function Navbar() {
   const [location] = useLocation();
   const t = useCommonMessages();
   const navigation = useMessages(navigationMessages);
+  const {lang}=useI18n();
 
   const links = [
     { href: "/", label: t.nav.home },
@@ -20,6 +21,7 @@ export default function Navbar() {
     { href: "/features", label: t.nav.services },
     { href: "/navigation", label: navigation.title },
     { href: "/exam-demo", label: t.nav.examDemo },
+    { href: "/academics", label: lang==='ar'?'المعلمون والمقررات':lang==='zh-CN'?'教师与课程':'Teachers and courses' },
     { href: "/assistant", label: t.nav.assistant },
     { href: "/support", label: t.nav.support },
   ];

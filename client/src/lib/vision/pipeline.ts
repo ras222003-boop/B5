@@ -85,7 +85,7 @@ export class VisionPipeline {
   get snapshot(){return this.latest;}
   get active(){return this.running;}
   setFindingDestination(active:boolean){this.findingDestination=active;}
-  setAlertDistanceMeters(value:number){this.safety.setAlertDistanceMeters(value);}
+  setAlertDistanceMeters(value:number){this.safety.setAlertDistanceMeters(value);this.options.announcement.setAlertDistanceMeters(value);}
   async start(){
     if(this.running)return;
     this.running=true;
@@ -109,6 +109,10 @@ export class VisionPipeline {
         if(previous!==this.cameraLight)this.options.callbacks.quality?.(this.cameraLight);
       }
       const detections=await this.options.vision.detect(this.options.video,started);
+      if(!this.running||generation!==this.generation)return;
+      if(this.options.metricDepth){
+        try{this.metricDepth=await this.options.metricDepth.capture(started);}catch{this.metricDepth=null;this.options.callbacks.depthFailure();}
+      }
       if(!this.running||generation!==this.generation)return;
       const enriched=await Promise.all(detections.map(async detection=>({ ...detection,approximateDistance:await this.readDepth(detection,started) })));
       if(!this.running||generation!==this.generation)return;
@@ -162,9 +166,6 @@ export class VisionPipeline {
       const grid=await this.options.segmentation!.segment(frame.blob,timestamp);
       if(!this.running||generation!==this.generation)return;
       this.segmentation=grid;
-      if(this.options.metricDepth){
-        try{this.metricDepth=await this.options.metricDepth.capture(timestamp);}catch{this.metricDepth=null;this.options.callbacks.depthFailure();}
-      }
       if(!this.metricDepth&&this.options.relativeDepth&&this.relativeDepthEnabled&&timestamp-this.lastDepth>=(this.options.depthIntervalMs??8000)){
         this.lastDepth=timestamp;
         try{this.relativeDepth=await this.options.relativeDepth.estimate(frame.blob,timestamp);}
@@ -172,7 +173,7 @@ export class VisionPipeline {
       }
       if(this.running&&generation===this.generation)this.publish(performance.now());
     }catch{
-      if(this.running&&generation===this.generation){this.geometryEnabled=false;this.segmentation=null;this.metricDepth=null;this.relativeDepth=null;this.options.callbacks.segmentationFailure();}
+      if(this.running&&generation===this.generation){this.geometryEnabled=false;this.segmentation=null;this.relativeDepth=null;this.options.callbacks.segmentationFailure();}
     }finally{this.geometryBusy=false;}
   }
   private async readDepth(detection:VisionDetection,now:number):Promise<DepthReading|null>{

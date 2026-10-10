@@ -96,6 +96,24 @@ export function vitePluginApiProxy(): Plugin {
           res.end(JSON.stringify({ error: 'navigation_api_unavailable' }));
         });
       });
+      let academicApp:Promise<express.Express>|null=null;
+      server.middlewares.use((req,res,next)=>{
+        if(!req.url?.startsWith('/api/exam-delivery/')&&!req.url?.startsWith('/api/academics'))return next();
+        academicApp??=(async()=>{
+          const [{ensureSchema},{registerExamDeliveryRoutes},{registerExamSubmissionRoutes},{registerAcademicDirectoryRoutes}]=await Promise.all([
+            import('./migrations'),import('./examDelivery'),import('./examSubmissions'),import('./academicDirectory'),
+          ]);
+          await ensureSchema();
+          const app=express();app.use(express.json({limit:'20mb'}));
+          registerExamDeliveryRoutes(app);registerExamSubmissionRoutes(app);registerAcademicDirectoryRoutes(app);
+          return app;
+        })().catch(error=>{academicApp=null;throw error;});
+        academicApp.then(app=>app(req as Request,res as Response,next)).catch(error=>{
+          console.error('Academic development API unavailable',error);
+          res.writeHead(503,{'Content-Type':'application/json','Cache-Control':'no-store'});
+          res.end(JSON.stringify({error:'academic_api_unavailable'}));
+        });
+      });
       // Use the same bounded parser, image pipeline and response contract as
       // production. The former development-only OCR implementation used an old
       // two-language schema and returned no quality report to the exam page.

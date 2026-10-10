@@ -64,7 +64,6 @@ export class StairAssistantEngine {
   direction: StairDirection = 'UNKNOWN';
   source: StairEvidence['source'] | null = null;
   private lastEvidence: StairEvidence | null = null;
-  private lastMotionCue = -Infinity;
   private latestLanding: StairEvidence | null = null;
   private latestEnd: StairEvidence | null = null;
   private conflict = false;
@@ -98,7 +97,7 @@ export class StairAssistantEngine {
   confirmStart(now = Date.now()): StairUpdate {
     if (this.phase !== 'APPROACH' || !this.lastEvidence || now - this.lastEvidence.timestamp > 30_000 || this.direction === 'UNKNOWN') return update(this.phase);
     this.phase = this.direction === 'DOWN' ? 'DESCENDING' : 'ASCENDING';
-    return update(this.phase, `بدأ وضع الدرج ${this.direction === 'DOWN' ? 'النازل' : 'الصاعد'}. ثبّت اتجاهك وتحقق بكل خطوة بوسيلة التنقل المعتادة؛ التنبيهات الإيقاعية لا تؤكد موضع القدم.`);
+    return update(this.phase, `بدأ وضع الدرج ${this.direction === 'DOWN' ? 'النازل' : 'الصاعد'}. ثبّت اتجاهك وتحقق بكل خطوة بوسيلة التنقل المعتادة؛ جرس كل درجة معطّل لأن الهاتف لا يؤكد موضع القدم.`);
   }
 
   chooseDirection(direction: Exclude<StairDirection, 'UNKNOWN'>, now = Date.now()): StairUpdate {
@@ -110,11 +109,9 @@ export class StairAssistantEngine {
     return update(this.phase, `سُجل اتجاه الدرج ${direction === 'UP' ? 'الصاعد' : 'النازل'} حسب تأكيدك. تحقق من الحافة والدرابزين قبل البدء.`);
   }
 
-  /** IMU walking events are rhythm estimates, never detected staircase steps. */
-  motionStep(now = Date.now()): StairUpdate {
-    if (!['ASCENDING', 'DESCENDING'].includes(this.phase) || this.cueMode === 'OFF' || now - this.lastMotionCue < 350) return update(this.phase);
-    this.lastMotionCue = now;
-    return update(this.phase, null, true);
+  /** A phone IMU cannot verify foot placement; never turn its step event into a stair cue. */
+  motionStep(_now = Date.now()): StairUpdate {
+    return update(this.phase);
   }
 
   observeLanding(evidence: StairEvidence, now = Date.now()): StairUpdate {
@@ -162,6 +159,6 @@ export class StairAssistantEngine {
 
   reset() {
     this.phase = 'IDLE'; this.direction = 'UNKNOWN'; this.source = null;
-    this.lastEvidence = null; this.latestLanding = null; this.latestEnd = null; this.lastMotionCue = -Infinity; this.conflict = false;
+    this.lastEvidence = null; this.latestLanding = null; this.latestEnd = null; this.conflict = false;
   }
 }
