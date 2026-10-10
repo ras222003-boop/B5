@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DEPTH_TARGETS, evaluateCalibration, rejectNativeSample, type LabObservation, type NativeDepthLabSample } from './depthCalibration';
+import { DEPTH_TARGETS, evaluateCalibration, rejectNativeSample, type LabCondition, type LabObservation, type NativeDepthLabSample } from './depthCalibration';
 
 const sample = (meters:number):NativeDepthLabSample => ({
   source:'ARCORE_DEPTH',frameId:'camera-depth-frame-1',frameTimestampMs:1024,
@@ -18,7 +18,7 @@ describe('isolated native depth laboratory (never controls navigation)', () => {
   });
   it('requires all reference distances, sufficient coverage and varied conditions', () => {
     const observations:LabObservation[]=DEPTH_TARGETS.flatMap(targetMeters=>
-      Array.from({length:20},(_,i)=>({targetMeters,condition:(i<10?'INDOOR_BRIGHT':'INDOOR_DIM') as const,
+      Array.from({length:20},(_,i)=>({targetMeters,condition:(i<10?'INDOOR_BRIGHT':'INDOOR_DIM') as LabCondition,
         sample:sample(targetMeters+(i%2?.04:-.04))})));
     const report=evaluateCalibration(observations);
     expect(report.labCriteriaMet).toBe(true);
@@ -28,7 +28,7 @@ describe('isolated native depth laboratory (never controls navigation)', () => {
   });
   it('fails high error and missing native depth', () => {
     const poor:LabObservation[]=DEPTH_TARGETS.flatMap(targetMeters=>
-      Array.from({length:20},(_,i)=>({targetMeters,condition:(i<10?'INDOOR_BRIGHT':'OUTDOOR') as const,
+      Array.from({length:20},(_,i)=>({targetMeters,condition:(i<10?'INDOOR_BRIGHT':'OUTDOOR') as LabCondition,
         sample:i<3?null:sample(targetMeters+1)})));
     const report=evaluateCalibration(poor);
     expect(report.labCriteriaMet).toBe(false);
