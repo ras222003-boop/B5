@@ -1,41 +1,35 @@
-# BASIRA iPhone LiDAR calibration companion — research prototype
+# تطبيق بصيرة لقياس عمق LiDAR على iPhone 14 Pro — مختبر تجريبي
 
-This is a real **Swift/ARKit native sensor capture implementation**, not a web camera distance estimate. It is **not yet compiled on macOS or tested on an iPhone**. The web calibration lab is at `/navigation/depth-lab` and was added by this branch earlier.
+## طريقة التشغيل الحالية
 
-## Supported prototype device
+يبدأ تطبيق iOS مباشرة بواجهة **معايرة أصلية تعمل دون إنترنت** بعد تثبيت التطبيق. لا يحتاج إلى عنوان موقع بصيرة ولا إلى أي صفحة ويب منشورة. ينشئ مشروع iOS عبر [XcodeGen](https://github.com/yonaskolb/XcodeGen) ويقرأ من `ARKit.sceneDepth` عند تصوير سطح ثابت.
 
-iPhone 14 Pro (LiDAR); must pass `ARWorldTrackingConfiguration.supportsFrameSemantics(.sceneDepth)` at runtime. iOS 16+ is the project deployment minimum. Other devices are rejected if scene depth is unsupported.
+**للتثبيت دون جهاز Mac:** اتبع الدليل [Codemagic + TestFlight](../../docs/codemagic-testflight-lidar-iphone14pro.md). ملف `codemagic.yaml` في جذر المستودع جاهز للتفعيل بعد ربط Apple Developer.
 
-## Build in Xcode on a Mac (or CI for compiler validation)
+## ما يفعله
 
-1. Install current Xcode and XcodeGen (`brew install xcodegen`).
-2. Set `BasiraLabURL` in `DepthCalibrationLab/Info.plist` to the **actual deployed HTTPS** BASIRA URL ending with `/navigation/depth-lab`. The template `.example` host intentionally does not load.
-3. From `ios/DepthCalibrationLab`, run `xcodegen generate`.
-4. Open `BasiraDepthCalibrationLab.xcodeproj`, choose your development team and an available bundle ID for signing, select the connected iPhone 14 Pro and Run.
-5. Grant permission for the camera. Keep the device **stationary** in a safe controlled environment.
-6. On the lab web page select a ground-truth distance, measured independently lens-to-target, then tap **سجّل قراءة من المستشعر**. The native ARSCNView preview opens, with a crosshair at the center. Aim at a flat visible target and tap **التقاط قراءة LiDAR**.
-7. Repeat at 0.5, 1, 2, 3 and 5 meters in multiple conditions (at least 20 trials per distance), export CSV and assess results. Keep all physical testing supervised and never walk while viewing this prototype.
+1. تختار المسافة المرجعية التي قستها بشريط قياس: 0.5 أو 1 أو 2 أو 3 أو 5 أمتار.
+2. تختار حالة الإضاءة.
+3. تضغط **التقاط قياس من LiDAR**، فتفتح معاينة ARKit الأصلية.
+4. عند التتبع المستقر، تُقرأ نافذة 9×9 حول **منتصف خريطة العمق**، ويستخدم وسيط القراءات المقبولة عالية الثقة فقط.
+5. يعود القياس بالمتر إلى واجهة المعايرة؛ تحفظ المسافة المرجعية وقراءة العمق وخطأها والثقة وتاريخ الالتقاط **داخل الجهاز**.
+6. تستطيع تصدير جميع القياسات إلى CSV عبر نافذة المشاركة أو حذفها محليًا بعد التأكيد.
 
-## Native architecture / guarantees
+## حدود السلامة والخصوصية
 
-- Only a native ARKit ARSession obtains the rear camera preview and `frame.sceneDepth`; **the web `getUserMedia` camera is not involved**.
-- The native capture modal samples a 9×9 **central ROI** of `ARDepthData.depthMap` (Float32 meters), restricted to pixels whose `confidenceMap` equals `ARConfidenceLevel.high`. It requires >=70% valid high-confidence pixels and uses their median.
-- The native ARSession callback and `session.currentFrame` timestamps must match; the frame must have arrived within 250 ms and AR camera tracking must be normal. Capture/permission errors return no metric sample.
-- The confidence number reported to the JS lab is the proportion of HIGH-confidence valid pixels, **not an undocumented numeric conversion** of Apple's ordinal confidence levels.
-- The viewfinder and the depth map belong to the same native ARSession. Calibration concerns the **central camera ray only**, which stays central under portrait orientation. No promise of pixelwise alignment of arbitrary objects, body-space foot clearance, or outdoor walking safety.
-- The bridge is injected only into the trusted HTTPS origin's main frame and only used at `/navigation/depth-lab`. It is a one-shot sample interface, separate from the production `BasiraNativeDepth` provider.
-- `ARSCNView` starts only when the modal is shown and pauses when it closes; depth frames are not uploaded or stored by native code. CSV generation happens in the web page only on an explicit action.
+- القياس يخص الشعاع المركزي للكاميرا إلى السطح المرئي، لا مسافة الساق أو القدم، ولا كامل مساحة العوائق أمام المستخدم.
+- لا تُحفظ صور الكاميرا ولا تُرسل إلى خادم بصيرة؛ تحفظ الأرقام محليًا حتى تصديرها يدويًا.
+- لا تُفعّل أي تنبيهات ملاحة أو حساب درجة سلم أو تعليمات حركة.
+- يجب اختبار الجهاز **وهو ثابت وفي مكان آمن** دون التجول أو الاقتراب من الشوارع أو السلالم.
+- نجاح بناء مشروع iOS على GitHub لا يثبت دقة LiDAR؛ يلزم التثبيت الفعلي والمعايرة.
 
-## Known limitations
+## تشغيل مطوّر iOS على Mac (بديل لا نحتاجه مع Codemagic)
 
-- Requires compiling and signing the native iOS app in Xcode before physical testing. GitHub macOS CI can validate the compilation, but not LiDAR hardware behavior.
-- Sensor behavior and error rates for the user's iPhone 14 Pro have not been measured.
-- Crosshair central ROI can cover a different surface than the intended reference if the device moves, target is narrow, or the preview/AR rendering has a geometric mismatch. Verify alignment physically.
-- Running the native app does **not** turn on BASIRA metric alerts or stair guidance. It never sends full depth maps into production detection.
-- An Xcode installation on Windows is not provided by Apple; use a Mac or an authorized macOS CI/build environment.
+1. ثبّت Xcode وXcodeGen.
+2. نفّذ من هذا المجلد `xcodegen generate`.
+3. افتح `BasiraDepthCalibrationLab.xcodeproj` واضبط Team وBundle ID والتوقيع وفق حساب Apple.
+4. حدد iPhone 14 Pro وشغّل التطبيق.
 
-Official docs: [Apple iPhone 14 Pro LiDAR](https://support.apple.com/en-us/111849), [ARKit scene depth](https://developer.apple.com/documentation/arkit/arconfiguration/framesemantics-swift.struct/scenedepth), [ARDepthData](https://developer.apple.com/documentation/arkit/ardepthdata).
+المكونات: `DepthLabApp.swift` و`NativeCalibrationHomeController.swift` و`NativeLiDARCaptureController.swift`.
 
-## Next engineering milestone
-
-Compile with the macOS workflow, fix compile errors and then measure on an iPhone 14 Pro. After lab benchmarks and manual inspection, implement an **atomic native video-frame + depth-frame pipeline** with pixelwise alignment before using depth in object warnings; keep the safety gating separate and off by default.
+يوجد `DepthLabBrowserController.swift` كمسار تجريبي قديم لجسر صفحة ويب مع مستشعر أصلي؛ **ليس مستخدمًا في نقطة دخول التطبيق الحالية**، ويجب عدم استخدامه لتمرير قراءات إلى كاميرا `getUserMedia` مستقلة أو تنبيهات الملاحة.
