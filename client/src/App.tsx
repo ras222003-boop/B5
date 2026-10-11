@@ -41,6 +41,10 @@ const AcademicDirectory=lazy(()=>import('./pages/AcademicDirectory'));
 const DepthCalibrationLab=lazy(()=>import('./pages/DepthCalibrationLab'));
 const NativeMetricVision=lazy(()=>import('./pages/NativeMetricVision'));
 const ArImageTargetsLab=lazy(()=>import('./pages/ArImageTargetsLab'));
+const ArLabsHub=lazy(()=>import('./pages/ArLabsHub'));
+const ArFaceLab=lazy(()=>import('./pages/ArEffectsLab').then(page=>({default:page.ArFaceLab})));
+const ArSkyLab=lazy(()=>import('./pages/ArEffectsLab').then(page=>({default:page.ArSkyLab})));
+const ArWorldReadiness=lazy(()=>import('./pages/ArWorldReadiness'));
 
 
 function Router() {
@@ -81,6 +85,10 @@ function Router() {
       <Route path="/navigation/depth-lab" component={DepthCalibrationLab} />
       <Route path="/navigation/native-vision" component={NativeMetricVision} />
       <Route path="/navigation/ar-lab/image-targets" component={ArImageTargetsLab} />
+      <Route path="/navigation/ar-lab" component={ArLabsHub} />
+      <Route path="/navigation/ar-lab/face" component={ArFaceLab} />
+      <Route path="/navigation/ar-lab/sky" component={ArSkyLab} />
+      <Route path="/navigation/ar-lab/world" component={ArWorldReadiness} />
       <Route path="/teacher" component={TeacherPanel} />
       <Route path="/teacher-panel" component={TeacherPanel} />
       <Route path="/assistant-analytics" component={AssistantAnalytics} />

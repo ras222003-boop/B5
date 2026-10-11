@@ -1,4 +1,5 @@
 import { BASIRA_IMAGE_TARGET_NAME, parseLandmarkEvent, type LandmarkDetection } from './imageTargetLandmarks';
+import { reserveBasiraArCamera, releaseBasiraArCamera } from './cameraOwnership';
 
 /**
  * Experimental MIT engine: image targets only, NO SLAM/world tracking,
@@ -129,6 +130,7 @@ export async function startBasiraImageTargetSession(
     throw new Error('camera_unavailable');
   }
   // Reserve the single shared browser XR engine before asynchronous startup.
+  if (!reserveBasiraArCamera('basira-image-target-lab')) throw new Error('camera_session_busy');
   activeSession = true;
   let xr8: XrRuntime | null = null;
   let names: string[] = [];
@@ -171,6 +173,7 @@ export async function startBasiraImageTargetSession(
       stop: () => {
         if (!activeSession) return;
         activeSession = false;
+        releaseBasiraArCamera('basira-image-target-lab');
         try { xr8?.stop(); } finally {
           try { xr8?.removeCameraPipelineModules(names); } catch { /* stopping is best effort */ }
         }
@@ -178,6 +181,7 @@ export async function startBasiraImageTargetSession(
     };
   } catch (error) {
     activeSession = false;
+    releaseBasiraArCamera('basira-image-target-lab');
     try { xr8?.stop(); } catch { /* permission may have been denied */ }
     if (names.length) {
       try { xr8?.removeCameraPipelineModules(names); } catch { /* best effort */ }
