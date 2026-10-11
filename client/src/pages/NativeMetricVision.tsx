@@ -7,6 +7,7 @@ import { useTextToSpeech } from '@/hooks/useSpeech';
 import { DEFAULT_VISION_CONFIG, getVisionAlertDistance } from '@/lib/vision/config';
 import { MediaPipeVisionProvider } from '@/lib/vision/providers';
 import { estimateNativeObjectDepth } from '@/lib/vision/nativeObjectDepth';
+import { NativeDepthTrialPanel } from '@/lib/vision/NativeDepthTrialPanel';
 import { checkAtomicFrame, rotateNativeDepthClockwise } from '@/lib/vision/nativeFramePair';
 import type { VisionDetection } from '@shared/vision';
 
@@ -29,6 +30,7 @@ export default function NativeMetricVision() {
   const cancelRef=useRef<(()=>void)|null>(null);
   const lastFrameRef=useRef('');
   const [active,setActive]=useState(false);
+  const [frozen,setFrozen]=useState(false);
   const [status,setStatus]=useState('');
   const [objects,setObjects]=useState<MeasuredObject[]>([]);
   const [frameId,setFrameId]=useState('');
@@ -38,14 +40,14 @@ export default function NativeMetricVision() {
 
   useEffect(()=>()=>{cancelRef.current?.();stopSpeech();},[]);
   useEffect(()=>{
-    const onVisibility=()=>{if(document.hidden){cancelRef.current?.();cancelRef.current=null;setActive(false);setObjects([]);}};
+    const onVisibility=()=>{if(document.hidden){cancelRef.current?.();cancelRef.current=null;setActive(false);setFrozen(false);setObjects([]);}};
     document.addEventListener('visibilitychange',onVisibility);
     return()=>document.removeEventListener('visibilitychange',onVisibility);
   },[]);
 
   const stop=()=>{
     cancelRef.current?.(); cancelRef.current=null;
-    stopSpeech();setActive(false);setObjects([]);setCoverage(null);
+    stopSpeech();setActive(false);setFrozen(false);setObjects([]);setCoverage(null);
     setStatus(localized(lang,'أوقفت قراءة المستشعر.','Sensor reading stopped.','已停止传感器读取。'));
   };
 
@@ -56,6 +58,7 @@ export default function NativeMetricVision() {
       return;
     }
     lastFrameRef.current='';
+    setFrozen(false);setObjects([]);setFrameId('');
     setActive(true);setStatus(localized(lang,'تهيئة الكشف المحلي…','Preparing on-device detection…','正在准备设备端检测…'));
     let cancelled=false;
     let timer:ReturnType<typeof setTimeout>|undefined;
@@ -121,6 +124,12 @@ export default function NativeMetricVision() {
     }
   };
 
+  const freezeForCalibration=()=>{
+    if(!active||!frameId||!objects.length)return;
+    cancelRef.current?.();cancelRef.current=null;
+    setActive(false);setFrozen(true);
+    setStatus(localized(lang,'ثُبّتت اللقطة للفحص بشريط قياس؛ لا تستخدم القياسات للمشي.','Frame frozen for tape-measure comparison, not for walking.','画面已冻结供卷尺测试，勿用于行走。'));
+  };
   const speakReading=()=>{
     if(Date.now()-lastUpdated>2500){
       speak(localized(lang,'قراءات الأجسام قديمة. لا توجد مسافات حديثة مؤكدة.','Object measurements are stale. No recent confirmed distances.','物体读数已过期，没有可信的最新距离。'),0.9,lang);
@@ -152,6 +161,9 @@ export default function NativeMetricVision() {
       <button className={button} disabled={!active||!objects.length} onClick={speakReading}>
         {localized(lang,'انطق المسافات الحالية','Speak current distances','播报当前距离')}
       </button>
+      <button className={button} disabled={!active||!objects.length} onClick={freezeForCalibration}>
+        {localized(lang,'تثبيت لقطة للفحص','Freeze frame for accuracy test','冻结画面测试精度')}
+      </button>
     </div>
     <p role="status" aria-live="polite">{status}</p>
     <div className="relative mx-auto aspect-[3/4] w-full max-w-sm overflow-hidden rounded-xl border-2 border-amber-400 bg-black">
@@ -174,5 +186,6 @@ export default function NativeMetricVision() {
       <p className="text-sm text-stone-300">{localized(lang,'مدى التحذير المحفوظ','Saved alert threshold','已保存的警告阈值')}: {distanceLimit} {localized(lang,'متر، غير مفعّل للملاحة في هذه التجربة.','metres — NOT enabled for navigation.','米（此实验不用于导航）。')}</p>
       <p className="text-xs text-stone-400">{frameId? `ARKit frame: ${frameId} · High-confidence depth coverage: ${Math.round((coverage??0)*100)}% · ${new Date(lastUpdated).toLocaleTimeString()}`:''}</p>
     </section>
+    <NativeDepthTrialPanel frozen={frozen} frameId={frameId} objects={objects}/>
   </main></Layout>;
 }
