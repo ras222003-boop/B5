@@ -41,6 +41,20 @@ export function displacementMetres(start: WorldPose, end: WorldPose): number | n
   return Number.isFinite(d) && d >= 0 && d <= 100 ? d : null;
 }
 
+/** Only surface the estimate when the SLAM pose is fresh in this same tab.
+ *  It is camera-to-camera displacement, never per-object depth or walking clearance.
+ */
+export function recentCameraDisplacementMetres(
+  start:WorldPose|null,
+  current:WorldPose|null,
+  nowMs:number,
+):number|null {
+  if(!start||!current||!Number.isFinite(nowMs)||
+     current.timestampMs>nowMs+100||nowMs-current.timestampMs>1200||
+     start.timestampMs>current.timestampMs) return null;
+  return displacementMetres(start,current);
+}
+
 export type WorldErrorSummary=Readonly<{
   attempts:number;
   medianAbsoluteErrorMetres:number|null;
