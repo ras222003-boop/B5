@@ -80,6 +80,7 @@ final class NativeMetricVisionController: UIViewController, ARSessionDelegate, W
         ])
         session.delegate = self
         session.delegateQueue = .main
+        NotificationCenter.default.addObserver(self, selector: #selector(pauseInBackground), name: UIApplication.didEnterBackgroundNotification, object: nil)
     }
 
     override func viewDidAppear(_ animated: Bool) {
@@ -114,6 +115,11 @@ final class NativeMetricVisionController: UIViewController, ARSessionDelegate, W
         running = true
     }
 
+    @objc private func pauseInBackground() {
+        running = false
+        session.pause()
+    }
+
     override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
         running = false
@@ -131,13 +137,33 @@ final class NativeMetricVisionController: UIViewController, ARSessionDelegate, W
         showFailure("تعذر الحصول على إطار ARKit متزامن. أوقف التجربة وأعد تشغيلها.")
     }
 
+    // The browser must not navigate to arbitrary pages while a camera-capable
+    // WebKit message handler exists. All linked resources still load normally.
+    func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction,
+                 decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
+        guard let url = navigationAction.request.url,
+              url.scheme == "https",
+              url.host?.lowercased() == allowedHost,
+              url.port == nil || url.port == 443 else {
+            decisionHandler(.cancel)
+            return
+        }
+        if navigationAction.targetFrame?.isMainFrame == false {
+            decisionHandler(.cancel)
+            return
+        }
+        decisionHandler(url.path == "/navigation/native-vision" ? .allow : .cancel)
+    }
+
     private func showFailure(_ message: String) {
         let alert = UIAlertController(title: "كاميرا بصيرة البحثية", message: message, preferredStyle: .alert)
         alert.addAction(UIAlertAction(title: "حسنًا", style: .default))
         if presentedViewController == nil { present(alert, animated: true) }
     }
 
-    @objc private func closeCamera() { dismiss(animated: true) }
+    @objc private func closeCamera() { running = false; session.pause(); dismiss(animated: true) }
+
+    deinit { NotificationCenter.default.removeObserver(self) }
 
     fileprivate func handle(_ message: WKScriptMessage, reply: @escaping (Any?, String?) -> Void) {
         guard !busy, running, message.name == "basiraNativeFrame",
