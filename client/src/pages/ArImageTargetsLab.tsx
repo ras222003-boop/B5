@@ -101,7 +101,12 @@ export default function ArImageTargetsLab() {
       setStarted(true);
     } catch (reason) {
       if (mounted.current && generation.current === key) {
-        setError(reason instanceof Error ? reason.message : 'ar_session_failed');
+        const detail = reason instanceof Error ? reason.message : 'ar_session_failed';
+        setError(detail === 'PROCESSED_MARKER_ASSETS_REQUIRED' ? s(
+          'لم تُجهَّز ملفات العلامة بواسطة أداة 8th Wall الرسمية بعد. أضف ملفات CLI إلى فرع المعاينة أولًا؛ لم تبدأ الكاميرا.',
+          'The 8th Wall CLI-processed marker assets are missing. Import them in the preview branch first; the camera has not started.',
+          '尚未提供由 8th Wall 官方工具处理的标记文件，相机尚未启动。',
+        ) : detail);
         setStatus(s('لم تبدأ التجربة؛ يمكنك استخدام بقية خدمات بصيرة.', 'Demo could not start; Basira remains available.', '实验无法启动；Basira 的其他功能仍可使用。'));
       }
     } finally {
