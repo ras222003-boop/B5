@@ -107,7 +107,9 @@ export interface BasiraImageTargetSession {
 export async function startBasiraImageTargetSession(
   canvas: HTMLCanvasElement,
   callbacks: BasiraImageTargetCallbacks,
+  signal?: AbortSignal,
 ): Promise<BasiraImageTargetSession> {
+  if (signal?.aborted) throw new Error('camera_start_cancelled');
   if (activeSession) throw new Error('camera_session_busy');
   if (typeof navigator === 'undefined' || !navigator.mediaDevices?.getUserMedia) {
     throw new Error('camera_unavailable');
@@ -120,7 +122,9 @@ export async function startBasiraImageTargetSession(
   try {
     // Mandatory preflight. A mock SVG manifest MUST NOT start the camera.
     const manifest = await fetchApprovedImageTarget(fetch);
+    if (signal?.aborted) throw new Error('camera_start_cancelled');
     xr8 = await loadBasiraImageTargetEngine();
+    if (signal?.aborted) throw new Error('camera_start_cancelled');
 
     const controller = xr8.XrController.pipelineModule();
     const renderer = xr8.GlTextureRenderer.pipelineModule();
@@ -148,7 +152,9 @@ export async function startBasiraImageTargetSession(
       disableWorldTracking: true,
       imageTargetData: [manifest],
     });
+    if (signal?.aborted) throw new Error('camera_start_cancelled');
     xr8.addCameraPipelineModules([controller, renderer, listener]);
+    if (signal?.aborted) throw new Error('camera_start_cancelled');
     xr8.run({canvas, cameraConfig:{direction:xr8.XrConfig.camera().BACK}});
     return {
       stop: () => {
