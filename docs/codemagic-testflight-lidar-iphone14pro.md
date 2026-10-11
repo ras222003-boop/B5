@@ -28,11 +28,24 @@
 2. اختر **Add application** ثم مستودع `ras222003-boop/B5` ونمط `codemagic.yaml`.
 3. من **Team settings → Integrations → Developer Portal** صِل App Store Connect بالمفتاح الذي أنشأته: `Issuer ID` و`Key ID` وملف `.p8`. سمِّ التكامل **`basira_apple` بالضبط**، كما ورد في `codemagic.yaml`.
 4. إذا طلبت الخدمة شهادة توزيع Apple أو provisioning profile فاستعمل إعدادات **Code signing identities**/التوقيع التلقائي المعتمدة؛ يجب أن يطابق ملف التوزيع Bundle ID وأن يكون للتوزيع على App Store/TestFlight. أبقها داخل Codemagic فقط.
-5. من صفحة المشروع في Codemagic اختر الفرع `codex/native-depth-calibration-lab` والتدفق `basira-iphone14pro-testflight` واضغط **Start new build** يدويًا.
+5. من صفحة المشروع في Codemagic اختر الفرع `main` بعد دمج طلب #28 (أو `codex/real-lidar-arkit-testflight` خلال اختبار البنية قبل الدمج) والتدفق `basira-iphone14pro-testflight` واضغط **Start new build** يدويًا.
 6. سيُنشأ مشروع Xcode باستخدام XcodeGen، ثم تُطبّق ملفات التوقيع، ثم يُنشأ `.ipa` موقّع ويرفع إلى App Store Connect/TestFlight إذا نجحت صلاحيات الحساب والتوقيع.
 7. بعد معالجة Apple للبناء، افتح **App Store Connect → TestFlight → Basira Internal Testers** وتأكد من إضافته للمجموعة. افتح رابط الدعوة على iPhone وثبّت التطبيق عبر TestFlight.
 
 **ملاحظة:** `codemagic.yaml` لا يشغل بناءً تلقائيًا عند كل تحديث ولا يرفع التطبيق إلى متجر App Store. الهدف TestFlight فقط. إن رُفض الرفع الأول بسبب نقص بيانات سجل التطبيق، أكمل الحقول المطلوبة في App Store Connect وأعد البناء.
+
+## (ج) تفعيل وضع أسماء الأجسام مع القياس على موقع بصيرة نفسه
+
+بعد دمج PR #28 في `main` ومزامنة الموقع الرسمي في Manus:
+
+1. تأكد أن الرابط `https://<نطاق-بصيرة>/navigation/native-vision` يعمل كصفحة React ويعرض رسالة عدم توفر ARKit عند فتحه في Safari العادي؛ هذه الرسالة متوقعة.
+2. داخل Codemagic → Environment Variables ضع `BASIRA_VISION_URL` بقيمة رابط صفحة بصيرة الفعلي من الخطوة السابقة. **ليس المفتاح ولا الرمز السري**؛ هو رابط علني. يتوقع ملف البناء صفحة HTTPS ومسار `/navigation/native-vision` بالضبط.
+3. اضبط تكامل `basira_apple` وBundle ID، ثم ابنِ `basira-iphone14pro-testflight`.
+4. عند وصول نسخة TestFlight إلى جهاز iPhone 14 Pro شغّل «الكاميرا مع أسماء الأجسام ومسافاتها». يحصل التطبيق على صورة الكاميرا وعمق LiDAR من نفس `ARFrame` مباشرة، ولا يستخدم كاميرا Safari.
+5. قِس باستخدام شريط عند 0.5 و1 و2 و3 و5 أمتار في مكان ثابت، ثم جرب وضع الكرسي والباب على خلفيات مختلفة. إذا رفض البرنامج العمق المختلط فلا تُجبِر الأمتار على الظهور.
+6. لا توجد أي تصاريح تمنح Safari قدرة LiDAR الخام؛ هذه الميزة مخصصة للتطبيق الأصلي فقط، بينما يظل موقع بصيرة يعمل دونها.
+
+> **تنبيه هندسي:** نجاح بناء المحاكي ورفع تطبيق TestFlight لا يثبت نجاح LiDAR أو دقة ربط اسم الجسم بمسافة الرقعة. تجارب الجهاز الحقيقي وحصر الخطأ وإظهار الثقة شرط قبل الاعتماد. لا تشغّل الإنذارات الحركية تلقائيًا من هذا المختبر.
 
 ## (ج) تجربة العمق على الآيفون
 
