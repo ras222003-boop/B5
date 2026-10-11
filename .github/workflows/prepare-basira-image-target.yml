@@ -5,6 +5,7 @@ on:
       - codex/8thwall-real-target-device-qa
     paths:
       - .github/workflows/prepare-basira-image-target.yml
+      - scripts/prepare-8thwall-target.mjs
   workflow_dispatch:
 
 permissions:
