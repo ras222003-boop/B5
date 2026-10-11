@@ -13,7 +13,7 @@ const featureCopy: Record<BasiraArFeatureId, {ar:string;en:string;zh:string;url:
  'world-effects': {ar:'مؤثرات العالم ثلاثية الأبعاد — تحتاج ترخيص SLAM',en:'3D world effects — SLAM license required',zh:'三维世界特效 — 需要 SLAM 许可',url:'/navigation/ar-lab/world'},
  'absolute-scale': {ar:'تقدير المقياس بالأمتار — ليس قياسًا مباشرًا للأجسام',en:'Meter-scale world coordinates — not object depth',zh:'世界坐标米制估计 — 并非物体深度',url:'/navigation/ar-lab/world'},
 };
-const enabled=import.meta.env.VITE_BASIRA_AR_LAB_ENABLED === 'true';
+const enabled=import.meta.env.VITE_BASIRA_AR_LAB_ENABLED !== 'false';
 export default function ArLabsHub() {
   const {lang}=useI18n();
   const s=(ar:string,en:string,zh:string)=>lang==='ar'?ar:lang==='zh-CN'?zh:en;
