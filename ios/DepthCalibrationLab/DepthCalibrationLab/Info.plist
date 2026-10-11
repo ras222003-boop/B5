@@ -17,6 +17,7 @@
   <array><string>arkit</string></array>
   <key>UISupportedInterfaceOrientations</key>
   <array><string>UIInterfaceOrientationPortrait</string></array>
+  <key>BasiraVisionURL</key><string>https://YOUR-BASIRA-DOMAIN.example/navigation/native-vision</string>
   <key>BasiraLabURL</key><string>https://YOUR-BASIRA-DOMAIN.example/navigation/depth-lab</string>
 </dict>
 </plist>
