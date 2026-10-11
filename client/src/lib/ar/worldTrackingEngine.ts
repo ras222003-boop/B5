@@ -50,6 +50,8 @@ interface WorldXRRuntime{
 export interface WorldLabCallbacks{
   onStatus:(message:string)=>void;
   onPose:(pose:WorldPose)=>void;
+  /** Called when tracking no longer yields fresh SLAM poses; clear any prior baseline. */
+  onTrackingLost?:()=>void;
   onError:(message:string)=>void;
 }
 export interface WorldLabSession{stop:()=>void}
@@ -111,9 +113,14 @@ export async function startWorldScaleResearchSession(
   let runtime:WorldXRRuntime|null=null;
   let names:string[]=[];
   let stopped=false;
+  let poseWasTracked=false;
+  const loseTracking=()=>{
+    if(poseWasTracked){poseWasTracked=false;callbacks.onTrackingLost?.();}
+  };
   const stop=()=>{
     if(stopped)return;
     stopped=true;
+    poseWasTracked=false;
     releaseBasiraArCamera(owner);
     try{runtime?.stop()}catch{/* best effort */}
     if(names.length)try{runtime?.removeCameraPipelineModules(names)}catch{/* best effort */}
@@ -127,14 +134,18 @@ export async function startWorldScaleResearchSession(
     const listener:PipelineModule={
       name:owner+'-listener',
       listeners:[{event:'reality.trackingstatus',process:event=>{
-        if(!stopped&&!signal?.aborted)callbacks.onStatus(String((event.detail as {status?:unknown}|undefined)?.status??'TRACKING_STATUS_UNKNOWN'));
+        if(stopped||signal?.aborted)return;
+        const status=String((event.detail as {status?:unknown}|undefined)?.status??'TRACKING_STATUS_UNKNOWN');
+        callbacks.onStatus(status);
+        if(status!=='NORMAL')loseTracking();
       }}],
       onCameraStatusChange:({status})=>{if(!stopped&&!signal?.aborted)callbacks.onStatus(status)},
       onException:()=>{if(!stopped&&!signal?.aborted)callbacks.onError('WORLD_TRACKING_RUNTIME_ERROR')},
       onUpdate:({processCpuResult})=>{
         if(stopped||signal?.aborted)return;
         const pose=parseTrustedWorldPose(processCpuResult?.reality,Date.now());
-        if(pose)callbacks.onPose(pose);
+        if(pose){poseWasTracked=true;callbacks.onPose(pose);}
+        else loseTracking();
       },
     };
     names=[renderer.name,controller.name,listener.name];
