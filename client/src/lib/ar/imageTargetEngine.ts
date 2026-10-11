@@ -1,4 +1,5 @@
-import { BASIRA_IMAGE_TARGET_NAME, parseLandmarkEvent, type LandmarkDetection } from './imageTargetLandmarks';
+import {parseLandmarkEvent, type LandmarkDetection} from './imageTargetLandmarks';
+import {fetchApprovedImageTarget, isProcessedBasiraImageTarget} from './processedImageTarget';
 import { reserveBasiraArCamera, releaseBasiraArCamera } from './cameraOwnership';
 
 /**
@@ -13,7 +14,7 @@ import { reserveBasiraArCamera, releaseBasiraArCamera } from './cameraOwnership'
  */
 export const BASIRA_8THWALL_MIT_CDN =
   'https://cdn.jsdelivr.net/npm/@8thwall/engine@0.1.0/dist/xr.js';
-export const BASIRA_MARKER_JSON_URL = '/ar/targets/basira-lab.json';
+export const BASIRA_MARKER_JSON_URL = '/ar/targets/basira-lab-entrance.json';
 
 interface XrPipelineListenerEvent {
   name: string;
@@ -57,7 +58,6 @@ export function loadBasiraImageTargetEngine(): Promise<XrRuntime> {
     script.src = BASIRA_8THWALL_MIT_CDN;
     script.async = true;
     script.crossOrigin = 'anonymous';
-    script.setAttribute('data-preload-chunks', 'slam'); // MIT engine's compatibility label for image-target processing
     let finished = false;
     const clear = () => {
       window.removeEventListener('xrloaded', ready);
@@ -88,28 +88,8 @@ export function loadBasiraImageTargetEngine(): Promise<XrRuntime> {
   return sdkLoading;
 }
 
-interface ImageTargetManifest {
-  name: string;
-  type: string;
-  imagePath: string;
-  properties: {
-    width: number;
-    height: number;
-    originalWidth: number;
-    originalHeight: number;
-  };
-}
-
-export function validateLabImageTargetManifest(input: unknown): input is ImageTargetManifest {
-  if (!input || typeof input !== 'object') return false;
-  const manifest = input as Partial<ImageTargetManifest>;
-  const p = manifest.properties;
-  return manifest.name === BASIRA_IMAGE_TARGET_NAME &&
-    manifest.type === 'PLANAR' &&
-    manifest.imagePath === '/ar/targets/basira-lab-marker.svg' &&
-    Boolean(p && p.width === 480 && p.height === 640 &&
-      p.originalWidth === 480 && p.originalHeight === 640);
-}
+/** Compatibility export: only Image Target CLI output may pass validation. */
+export const validateLabImageTargetManifest = isProcessedBasiraImageTarget;
 
 export interface BasiraImageTargetCallbacks {
   onStatus: (status: 'requesting' | 'hasVideo' | 'scanning' | 'failed') => void;
@@ -135,10 +115,8 @@ export async function startBasiraImageTargetSession(
   let xr8: XrRuntime | null = null;
   let names: string[] = [];
   try {
-    const response = await fetch(BASIRA_MARKER_JSON_URL, {cache:'no-store'});
-    if (!response.ok) throw new Error('marker_manifest_unavailable');
-    const manifest: unknown = await response.json();
-    if (!validateLabImageTargetManifest(manifest)) throw new Error('marker_manifest_invalid');
+    // Mandatory preflight. A mock SVG manifest MUST NOT start the camera.
+    const manifest = await fetchApprovedImageTarget(fetch);
     xr8 = await loadBasiraImageTargetEngine();
 
     const controller = xr8.XrController.pipelineModule();
