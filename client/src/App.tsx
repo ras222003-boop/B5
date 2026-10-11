@@ -37,6 +37,13 @@ const Guidance=lazy(()=>import('./pages/Guidance'));
 const SharedMap=lazy(()=>import('./pages/SharedMap'));
 const IndoorManager=lazy(()=>import('./pages/IndoorManager'));
 const NavigationCapabilities=lazy(()=>import('./pages/NavigationCapabilities'));
+const ArLabsHub=lazy(()=>import('./pages/ArLabsHub'));
+const ArImageTargetsLab=lazy(()=>import('./pages/ArImageTargetsLab'));
+const ArFaceLab=lazy(()=>import('./pages/ArEffectsLab').then(p=>({default:p.ArFaceLab})));
+const ArSkyLab=lazy(()=>import('./pages/ArEffectsLab').then(p=>({default:p.ArSkyLab})));
+const ArVenueEnrollmentPlanner=lazy(()=>import('./pages/ArVenueEnrollmentPlanner'));
+const ArWorldReadiness=lazy(()=>import('./pages/ArWorldReadiness'));
+const ArWorldScaleSandbox=lazy(()=>import('./pages/ArWorldScaleSandbox'));
 
 function Router() {
   const {lang}=useI18n();
@@ -60,6 +67,13 @@ function Router() {
       <Route path="/navigation/shared-map" component={SharedMap} />
       <Route path="/navigation/indoor-manager" component={IndoorManager} />
       <Route path="/navigation/capabilities" component={NavigationCapabilities} />
+      <Route path="/navigation/ar-lab" component={ArLabsHub} />
+      <Route path="/navigation/ar-lab/image-targets" component={ArImageTargetsLab} />
+      <Route path="/navigation/ar-lab/face" component={ArFaceLab} />
+      <Route path="/navigation/ar-lab/sky" component={ArSkyLab} />
+      <Route path="/navigation/ar-lab/venues" component={ArVenueEnrollmentPlanner} />
+      <Route path="/navigation/ar-lab/world" component={ArWorldReadiness} />
+      <Route path="/navigation/ar-lab/world-scale-sandbox" component={ArWorldScaleSandbox} />
       <Route path="/settings/privacy-permissions" component={NavigationPermissions} />
       <Route path="/settings/voice" component={VoiceSettings} />
       <Route path="/settings/voice-validation" component={VoiceValidation} />
