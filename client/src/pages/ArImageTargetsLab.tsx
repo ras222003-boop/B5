@@ -24,6 +24,7 @@ export default function ArImageTargetsLab() {
   const lastSpoken = useRef(0);
   const [consented, setConsented] = useState(false);
   const [voiceEnabled, setVoiceEnabled] = useState(true);
+  const voiceEnabledRef = useRef(true);
   const [working, setWorking] = useState(false);
   const [started, setStarted] = useState(false);
   const [status, setStatus] = useState('');
@@ -63,7 +64,7 @@ export default function ArImageTargetsLab() {
   const handleDetection = (event: LandmarkDetection) => {
     if (!mounted.current) return;
     setDetection(event);
-    if (event.state === 'found' && voiceEnabled && Date.now() - lastSpoken.current > 7000) {
+    if (event.state === 'found' && voiceEnabledRef.current && Date.now() - lastSpoken.current > 7000) {
       lastSpoken.current = Date.now();
       if (typeof window.speechSynthesis !== 'undefined' && typeof SpeechSynthesisUtterance !== 'undefined') {
         const announcement = new SpeechSynthesisUtterance(s(
@@ -143,7 +144,7 @@ export default function ArImageTargetsLab() {
             <span>{s('أوافق على تشغيل الكاميرا وتحميل محرك 8th Wall التجريبي من CDN عند الضغط على البدء.', 'I consent to camera access and loading the experimental 8th Wall engine from a CDN when I press Start.', '我同意在点击开始后访问相机并从 CDN 加载实验性引擎。')}</span>
           </label>
           <label className="flex min-h-12 items-center gap-3">
-            <input type="checkbox" className="h-5 w-5" checked={voiceEnabled} onChange={event => setVoiceEnabled(event.target.checked)} disabled={working}/>
+            <input type="checkbox" className="h-5 w-5" checked={voiceEnabled} onChange={event => { voiceEnabledRef.current = event.target.checked; setVoiceEnabled(event.target.checked); }} disabled={working}/>
             <span>{s('الإعلان الصوتي المحلي عند اكتشاف العلامة', 'Local voice announcement when marker is found', '识别标记时本地语音播报')}</span>
           </label>
           <div className="flex flex-wrap gap-3">
