@@ -6,11 +6,11 @@ import { visionMessages } from '@/i18n/locales/vision';
 import { useTextToSpeech } from '@/hooks/useSpeech';
 import { DEFAULT_VISION_CONFIG, getVisionAlertDistance } from '@/lib/vision/config';
 import { MediaPipeVisionProvider } from '@/lib/vision/providers';
-import { metricDepthForDetection } from '@/lib/vision/fusion';
+import { estimateNativeObjectDepth } from '@/lib/vision/nativeObjectDepth';
 import { checkAtomicFrame, rotateNativeDepthClockwise } from '@/lib/vision/nativeFramePair';
 import type { VisionDetection } from '@shared/vision';
 
-type MeasuredObject = VisionDetection;
+type MeasuredObject = VisionDetection & { depthReason?: string | null; depthValid?: number; depthSpread?: number | null };
 const button='rounded-xl border border-amber-300/60 px-5 py-3 font-bold text-amber-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-300 disabled:opacity-50';
 
 function localized(lang:'ar'|'en'|'zh-CN',ar:string,en:string,zh:string) {
@@ -27,6 +27,7 @@ export default function NativeMetricVision() {
   const {speak,stop:stopSpeech}=useTextToSpeech();
   const canvasRef=useRef<HTMLCanvasElement|null>(null);
   const cancelRef=useRef<(()=>void)|null>(null);
+  const lastFrameRef=useRef('');
   const [active,setActive]=useState(false);
   const [status,setStatus]=useState('');
   const [objects,setObjects]=useState<MeasuredObject[]>([]);
@@ -54,6 +55,7 @@ export default function NativeMetricVision() {
       setStatus(localized(lang,'هذا المتصفح لا يوفّر مصدر ARKit أصليًا. افتح التطبيق التجريبي على iPhone 14 Pro.','Native ARKit is unavailable in this browser. Open the iPhone test app.','浏览器不支持原生 ARKit。请打开 iPhone 测试应用。'));
       return;
     }
+    lastFrameRef.current='';
     setActive(true);setStatus(localized(lang,'تهيئة الكشف المحلي…','Preparing on-device detection…','正在准备设备端检测…'));
     let cancelled=false;
     let timer:ReturnType<typeof setTimeout>|undefined;
@@ -71,7 +73,11 @@ export default function NativeMetricVision() {
           if(reject||!sample) {
             setObjects([]);setCoverage(null);setFrameId('');
             setStatus(localized(lang,'العمق غير متاح أو الإطار غير موثوق. لا يوجد قياس بالأمتار.','No trustworthy paired frame; metres unavailable.','图像与深度帧不可靠，无法测量米数。'));
+          } else if(lastFrameRef.current===sample.frameId) {
+            setObjects([]);setCoverage(null);
+            setStatus(localized(lang,'لم تصل صورة جديدة من ARKit؛ أُخفيت قياسات الإطار القديم.','Waiting for a new ARKit frame; previous measurements hidden.','等待新的 ARKit 帧，已隐藏旧测量结果。'));
           } else {
+            lastFrameRef.current=sample.frameId;
             const canvas=canvasRef.current;
             const context=canvas?.getContext('2d');
             if(!canvas||!context)throw new Error('preview_unavailable');
@@ -90,7 +96,10 @@ export default function NativeMetricVision() {
             const depth=rotateNativeDepthClockwise(sample,captured);
             const detections=await detector!.detect(canvas,captured);
             if(cancelled)return;
-            const mapped=detections.map(d=>({...d,approximateDistance:metricDepthForDetection(d,depth)}));
+            const mapped:MeasuredObject[]=detections.map(d=>{
+              const evidence=estimateNativeObjectDepth(d,depth);
+              return {...d,approximateDistance:evidence.reading,depthReason:evidence.reason,depthValid:evidence.valid,depthSpread:evidence.spreadMeters};
+            });
             setObjects(mapped);setFrameId(sample.frameId);
             setCoverage(sample.validCoverage);setLastUpdated(Date.now());
             setStatus(localized(lang,'كاميرا LiDAR ومجسمات المشهد من إطار واحد. القياسات بحثية.','LiDAR and camera paired from one frame. Research measurements only.','LiDAR 深度与相机图像来自同一帧，仅供研究。'));
@@ -113,6 +122,10 @@ export default function NativeMetricVision() {
   };
 
   const speakReading=()=>{
+    if(Date.now()-lastUpdated>2500){
+      speak(localized(lang,'قراءات الأجسام قديمة. لا توجد مسافات حديثة مؤكدة.','Object measurements are stale. No recent confirmed distances.','物体读数已过期，没有可信的最新距离。'),0.9,lang);
+      return;
+    }
     const named=objects.filter(o=>o.approximateDistance?.source==='ARKIT_DEPTH'&&(o.approximateDistance?.confidence??0)>=0.7);
     const words=named.length
       ? named.slice(0,3).map(item=>{
@@ -156,7 +169,8 @@ export default function NativeMetricVision() {
     <section className="space-y-2 rounded-xl border border-amber-300/40 p-4" aria-label={t.recognizedObjects}>
       <h2 className="text-lg font-bold">{t.recognizedObjects}</h2>
       {objects.length===0?<p>{localized(lang,'لا توجد أجسام موثوقة في الإطار الحالي.','No objects found in the current frame.','当前画面未识别到物体。')}</p>:
-        <ul className="space-y-1">{objects.slice(0,8).map((o,i)=><li key={i}>{t.object[o.type]??o.type}، {t.direction[o.horizontalDirection]}: {o.approximateDistance?.source==='ARKIT_DEPTH'&&(o.approximateDistance?.confidence??0)>=.7?t.distance(o.approximateDistance!.distanceMeters):localized(lang,'المسافة غير مؤكدة','Distance unavailable','距离不可用')}</li>)}</ul>}
+        <ul className="space-y-1">{objects.slice(0,8).map((o,i)=><li key={i}>{t.object[o.type]??o.type}، {t.direction[o.horizontalDirection]}: {o.approximateDistance?.source==='ARKIT_DEPTH'&&(o.approximateDistance?.confidence??0)>=.7?t.distance(o.approximateDistance!.distanceMeters):localized(lang,'المسافة غير مؤكدة','Distance unavailable','距离不可用')}{o.depthReason?` · ${o.depthReason}`:''}</li>)}</ul>}
+      <p className="text-xs text-amber-200">{localized(lang,'قد تخطئ مطابقة مسافة الجسم إذا ظهرت خلفيته داخل مربع الكشف؛ تُحجب القراءات المختلطة ولا تُعتبر البيانات اعتمادًا للسلامة.','Bounding boxes may contain background surfaces; mixed depths are withheld and measurements are not safety certification.','检测框可能包含背景表面；混合深度将被隐藏，这并非安全认证。')}</p>
       <p className="text-sm text-stone-300">{localized(lang,'مدى التحذير المحفوظ','Saved alert threshold','已保存的警告阈值')}: {distanceLimit} {localized(lang,'متر، غير مفعّل للملاحة في هذه التجربة.','metres — NOT enabled for navigation.','米（此实验不用于导航）。')}</p>
       <p className="text-xs text-stone-400">{frameId? `ARKit frame: ${frameId} · High-confidence depth coverage: ${Math.round((coverage??0)*100)}% · ${new Date(lastUpdated).toLocaleTimeString()}`:''}</p>
     </section>
