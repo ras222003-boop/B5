@@ -86,7 +86,8 @@ export interface WalkableAreaResult {
 export interface SegmentationGrid { width: number; height: number; labels: Uint8Array; timestamp: number }
 /** Relative monocular values have no metre scale and cannot be used as metric distance. */
 export interface RelativeDepthMap { width: number; height: number; values: Float32Array; confidence: number; source: 'MONOCULAR_ESTIMATE'; timestamp: number }
-export interface MetricDepthMap { width: number; height: number; values: Float32Array; confidence: number; source: 'ARKIT_DEPTH' | 'LIDAR' | 'ARCORE_DEPTH' | 'DEPTH_SENSOR'; timestamp: number }
+/** Camera-space metric pixels; alignmentVerified is set only by a trusted RGB+depth adapter. */
+export interface MetricDepthMap { width: number; height: number; values: Float32Array; confidence: number; source: 'ARKIT_DEPTH' | 'LIDAR' | 'ARCORE_DEPTH' | 'DEPTH_SENSOR'; timestamp: number; alignmentVerified?: boolean }
 
 /** Frame input is ephemeral; providers must never retain or upload it implicitly. */
 export interface VisionProvider { detect(frame: HTMLVideoElement | HTMLCanvasElement, timestamp: number): Promise<VisionDetection[]>; close(): Promise<void> }
