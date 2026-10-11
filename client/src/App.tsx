@@ -32,6 +32,7 @@ const MyPlaces=lazy(()=>import('./pages/Navigation').then(page=>({default:page.M
 const NavigationAdmin=lazy(()=>import('./pages/NavigationAdmin'));
 const NavigationPermissions=lazy(()=>import('./pages/NavigationPermissions'));
 const Vision=lazy(()=>import('./pages/Vision'));
+const NativeMetricVision=lazy(()=>import('./pages/NativeMetricVision'));
 const Mapping=lazy(()=>import('./pages/Mapping'));
 const Guidance=lazy(()=>import('./pages/Guidance'));
 const SharedMap=lazy(()=>import('./pages/SharedMap'));
@@ -62,6 +63,7 @@ function Router() {
       <Route path="/navigation/places" component={MyPlaces} />
       <Route path="/navigation/permissions" component={NavigationPermissions} />
       <Route path="/navigation/vision" component={Vision} />
+      <Route path="/navigation/native-vision" component={NativeMetricVision} />
       <Route path="/navigation/mapping" component={Mapping} />
       <Route path="/navigation/guidance" component={Guidance} />
       <Route path="/navigation/shared-map" component={SharedMap} />
