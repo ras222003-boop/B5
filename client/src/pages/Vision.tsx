@@ -193,9 +193,9 @@ export default function Vision() {
         )}</ul>
       </section>}
     {import.meta.env.VITE_BASIRA_AR_LAB_ENABLED !== 'false' &&
-      <Link href="/navigation/ar-lab/world-scale-sandbox" className="inline-flex min-h-12 items-center rounded-lg border border-amber-300/60 px-4 py-3 text-amber-200 underline">
+      <a href="/navigation/ar-lab/world-scale-sandbox" className="inline-flex min-h-12 items-center rounded-lg border border-amber-300/60 px-4 py-3 text-amber-200 underline">
         {lang==='ar'?'جرّب تقدير حركة الهاتف بالأمتار داخل المتصفح (8th Wall — ليس بُعد الأجسام)':lang==='zh-CN'?'8th Wall 位移研究（非物体距离）':'8th Wall camera-displacement research (not object distance)'}
-      </Link>}
+      </a>}
     {scene?.walkableArea&&<p role="status" className="text-amber-100">{scene.walkableArea.pathAhead==='BLOCKED'?t.pathBlocked:scene.walkableArea.pathAhead==='CLEAR'?t.pathClearObserved:t.pathUnknown}</p>}
     {scene?.surfaceAnalysis&&<p role="status" className="text-amber-100">{t.surfaceStatus(scene.surfaceAnalysis.surface??'UNKNOWN',scene.surfaceAnalysis.surfaceCoverage??0)}</p>}
     {scene?.objects.some(object=>object.type==='STAIRS_UNCERTAIN'||object.type==='STAIRS_UP'||object.type==='STAIRS_DOWN')&&<p role="alert" className="text-amber-100">{t.stairsObserved}</p>}
