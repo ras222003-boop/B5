@@ -58,6 +58,9 @@ export function loadBasiraImageTargetEngine(): Promise<XrRuntime> {
     script.src = BASIRA_8THWALL_MIT_CDN;
     script.async = true;
     script.crossOrigin = 'anonymous';
+    // Official MIT engine retains the 'slam' chunk name for Image Target tracking;
+    // this resolves to MIT image tracking, NOT the restricted SLAM binary.
+    script.setAttribute('data-preload-chunks', 'slam');
     let finished = false;
     const clear = () => {
       window.removeEventListener('xrloaded', ready);
