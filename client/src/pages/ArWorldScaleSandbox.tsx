@@ -142,6 +142,12 @@ export default function ArWorldScaleSandbox(){
       'محرك SLAM المقيّد غير مفعّل. يلزم تأكيد مراجعة الترخيص وإعداد متغيري VITE_BASIRA_AR_BINARY_LAB_ENABLED وVITE_BASIRA_AR_BINARY_LICENSE_APPROVED في بيئة اختبار خاصة فقط.',
       'Restricted SLAM disabled. License review and both VITE_BASIRA_AR_BINARY_LAB_ENABLED and VITE_BASIRA_AR_BINARY_LICENSE_APPROVED must be explicitly set in a private test environment.',
       '受限 SLAM 已禁用，需经过许可审查并在私人测试环境显式启用。')}</p>}
+    <p className="text-xs text-stone-300">
+      {s('محرك الواقع المعزز المكاني: © 2026 Niantic Spatial, Inc. يعمل بترخيص XR Engine Binary محدود الاستخدام. استخدمه فقط بعد مراجعة شروط الترخيص.',
+         'Spatial XR Engine: © 2026 Niantic Spatial, Inc. Licensed under the limited-use XR Engine Binary agreement. Review the license before use.',
+         '空间 XR 引擎 © 2026 Niantic Spatial, Inc. 受限许可。')}
+      {' '}<a className="text-amber-200 underline" href="https://github.com/8thwall/engine/blob/main/LICENSE" target="_blank" rel="noopener noreferrer">{s('الترخيص وإخلاء المسؤولية','License and warranty disclaimer','许可及免责声明')}</a>
+    </p>
     <div className="grid gap-4 md:grid-cols-2">
       <section className="space-y-3 rounded-2xl border border-amber-200/30 bg-stone-900 p-4">
         <h2 className="text-xl font-bold">{s('الكاميرا والموضع','Camera and pose','摄像头和位姿')}</h2>
