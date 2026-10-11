@@ -97,7 +97,7 @@ final class NativeMetricVisionController: UIViewController, ARSessionDelegate, W
             AVCaptureDevice.requestAccess(for: .video) { [weak self] allowed in
                 DispatchQueue.main.async {
                     if allowed { self?.startSession() }
-                    else { self?.showFailure("ارفضت صلاحية الكاميرا؛ يجب تفعيلها لإجراء القياس.") }
+                    else { self?.showFailure("رُفضت صلاحية الكاميرا؛ يجب تفعيلها لإجراء القياس.") }
                 }
             }
         case .denied, .restricted:
@@ -169,6 +169,8 @@ final class NativeMetricVisionController: UIViewController, ARSessionDelegate, W
         guard !busy, running, message.name == "basiraNativeFrame",
               message.frameInfo.isMainFrame,
               message.frameInfo.securityOrigin.host.lowercased() == allowedHost,
+              message.frameInfo.securityOrigin.protocol == "https",
+              message.frameInfo.securityOrigin.port == 443,
               let page = webView?.url,
               page.scheme == "https", page.host?.lowercased() == allowedHost,
               page.path == "/navigation/native-vision",
