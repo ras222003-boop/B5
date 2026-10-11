@@ -5,7 +5,7 @@ import { useI18n } from '@/i18n';
 import { startBasiraEffectsSession, type BasiraEffectsSession } from '@/lib/ar/effectsEngine';
 import { effectHint, type EffectKind, type EffectState } from '@/lib/ar/effectEvents';
 
-const ENABLED = import.meta.env.VITE_BASIRA_AR_LAB_ENABLED === 'true';
+const ENABLED = import.meta.env.VITE_BASIRA_AR_LAB_ENABLED !== 'false';
 const buttonClass = 'min-h-12 rounded-xl border border-amber-300 px-5 py-3 text-amber-100 font-bold focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-300 disabled:opacity-40';
 
 function EffectsLab({kind}:{kind: EffectKind}) {
