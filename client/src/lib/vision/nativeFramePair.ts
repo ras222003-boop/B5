@@ -29,6 +29,11 @@ export function checkAtomicFrame(frame: AtomicNativeFrame | null): string | null
       !frame.alignedToCameraFrame || !frame.rawDepthFresh) return 'unverified_source';
   if (!/^arkit-[\d.]+$/.test(frame.frameId) ||
       !Number.isFinite(frame.nativeTimestampMs) || frame.nativeTimestampMs <= 0) return 'unverified_frame';
+  // Frame identity is derived from the native ARFrame timestamp; reject tampered or
+  // accidentally joined camera/depth frames even when both carry plausible metadata.
+  const labelledFrameTimeMs=Number(frame.frameId.slice('arkit-'.length))*1000;
+  if(!Number.isFinite(labelledFrameTimeMs) ||
+      Math.abs(labelledFrameTimeMs-frame.nativeTimestampMs)>2) return 'unverified_frame';
   if (!Number.isInteger(frame.cameraWidth) || !Number.isInteger(frame.cameraHeight) ||
       frame.cameraWidth < 300 || frame.cameraHeight < 200 ||
       Math.abs(frame.cameraWidth / frame.cameraHeight - 4 / 3) > 0.03) return 'invalid_camera_geometry';
