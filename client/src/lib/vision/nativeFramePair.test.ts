@@ -18,6 +18,7 @@ describe('single-frame ARKit RGB+depth bridge',()=>{
     expect(checkAtomicFrame({...fixture(),alignedToCameraFrame:false})).toBe('unverified_source');
     expect(checkAtomicFrame({...fixture(),rawDepthFresh:false})).toBe('unverified_source');
     expect(checkAtomicFrame({...fixture(),frameId:''})).toBe('unverified_frame');
+    expect(checkAtomicFrame({...fixture(),nativeTimestampMs:123333.45})).toBe('unverified_frame');
     expect(checkAtomicFrame({...fixture(),cameraWidth:1080})).toBe('invalid_camera_geometry');
     expect(checkAtomicFrame({...fixture(),values:[1,2,3]})).toBe('invalid_depth_geometry');
     expect(checkAtomicFrame({...fixture(),validCoverage:.4})).toBe('low_depth_coverage');
