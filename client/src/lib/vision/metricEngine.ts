@@ -22,6 +22,8 @@ export interface BasiraVerifiedMetricBridge {
   getAlignedDepth(videoFrameTimestampMs: number): Promise<AlignedMetricFrame | null>;
 }
 
+declare global { interface Window { BasiraNativeDepth?: BasiraVerifiedMetricBridge } }
+
 /** Never accept unchecked WebXR/SLAM scales as camera pixel-to-object depth. */
 export function validateAlignedMetricFrame(raw: unknown, requestedTimestampMs: number): MetricDepthMap | null {
   if (!raw || typeof raw !== 'object' || !Number.isFinite(requestedTimestampMs)) return null;
