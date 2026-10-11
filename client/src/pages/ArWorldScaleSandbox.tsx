@@ -7,7 +7,7 @@ import {
   type WorldLabSession,
 } from '@/lib/ar/worldTrackingEngine';
 import {
-  WORLD_REFERENCE_TARGETS,displacementMetres,summarizeWorldTrials,
+  WORLD_REFERENCE_TARGETS,recentCameraDisplacementMetres,summarizeWorldTrials,
   type WorldPose,type WorldReferenceTarget,type WorldResearchTrial,
 } from '@/lib/ar/worldScaleResearch';
 
@@ -42,6 +42,7 @@ export default function ArWorldScaleSandbox(){
     session.current=null;
     currentPose.current=null;
     startPose.current=null;
+    setCurrentDistance(null);
     lastSpokenAt.current=0;
     if(typeof window!=='undefined'&&window.speechSynthesis)window.speechSynthesis.cancel();
     if(live.current){
@@ -72,13 +73,23 @@ export default function ArWorldScaleSandbox(){
       const current=await startWorldScaleResearchSession(canvas.current,{
         onStatus:value=>{if(live.current&&!controller.signal.aborted)setStatus(value)},
         onError:value=>{if(live.current&&!controller.signal.aborted)setError(value)},
+        onTrackingLost:()=>{
+          currentPose.current=null;
+          startPose.current=null;
+          if(live.current&&!controller.signal.aborted){
+            setPoseAvailable(false);setCurrentDistance(null);
+            setStatus(s('انقطع تتبع 8th Wall. أُزيلت الأمتار القديمة؛ انتظر استقرار الكاميرا ثم ثبّت نقطة بداية جديدة.',
+              '8th Wall tracking lost. Stale metres cleared; wait for stable tracking then set a new baseline.',
+              '8th Wall 追踪中断，旧米数已清除。请等待稳定后重新设定起点。'));
+          }
+        },
         onPose:pose=>{
           if(!live.current||controller.signal.aborted)return;
           if(!currentPose.current)setPoseAvailable(true);
           currentPose.current=pose;
           if(startPose.current && Date.now()-lastDisplayAt.current>=250){
             lastDisplayAt.current=Date.now();
-            setCurrentDistance(displacementMetres(startPose.current,pose));
+            setCurrentDistance(recentCameraDisplacementMetres(startPose.current,pose,Date.now()));
           }
         },
       },consent,controller.signal);
@@ -90,13 +101,21 @@ export default function ArWorldScaleSandbox(){
   };
 
   const baseline=()=>{
-    startPose.current=currentPose.current;
+    const pose=currentPose.current;
+    if(!pose||Date.now()-pose.timestampMs>1200){
+      setPoseAvailable(false);setCurrentDistance(null);
+      setStatus(s('لا توجد قراءة موقع حديثة؛ انتظر استقرار تتبع الكاميرا.',
+        'No recent pose available. Wait for steady tracking.',
+        '没有新鲜的位姿读数，请等待跟踪稳定。'));
+      return;
+    }
+    startPose.current=pose;
     setCurrentDistance(null);
     setStatus(s('سُجل موضع البداية. ضع علامة أرضية مرجعية واجعل الاختبار تحت إشراف مبصر.','Baseline recorded. Use a physical reference and a sighted supervisor.','已设置起始点，请在安全监督下进行。'));
   };
   const record=()=>{
     if(!startPose.current||!currentPose.current)return;
-    const m=displacementMetres(startPose.current,currentPose.current);
+    const m=recentCameraDisplacementMetres(startPose.current,currentPose.current,Date.now());
     if(m===null)return;
     setTrials(prev=>[...prev,{referenceMeters:refMeters,cameraDisplacementMeters:m,observedAt:Date.now(),device:navigator.userAgent.slice(0,90)}]);
     startPose.current=null;
@@ -105,7 +124,7 @@ export default function ArWorldScaleSandbox(){
   };
   const speakDisplacement=()=>{
     const start=startPose.current,end=currentPose.current;
-    const distance=start&&end&&Date.now()-end.timestampMs<=1500?displacementMetres(start,end):null;
+    const distance=recentCameraDisplacementMetres(start,end,Date.now());
     const message=distance===null?s(
       'المقياس غير متاح الآن، أو فقد التتبع. لا توجد قراءة بالأمتار.',
       'World scale is unavailable or tracking was lost. No metre reading.',
@@ -132,8 +151,13 @@ export default function ArWorldScaleSandbox(){
     window.setTimeout(()=>URL.revokeObjectURL(url),1200);
   };
   return <Layout><main className="container max-w-4xl space-y-5 py-8 text-stone-100" dir={lang==='ar'?'rtl':'ltr'} lang={lang}>
-    <Link href="/navigation/ar-lab/world" className="text-amber-300 underline">{s('متطلبات الترخيص','License requirements','许可要求')}</Link>
+    <Link href="/navigation/vision" className="text-amber-300 underline">{s('العودة إلى رؤية بصيرة','Back to Basira Vision','返回 Basira Vision')}</Link>
+    <p><Link href="/navigation/ar-lab/world" className="text-amber-200 underline">{s('متطلبات المحرك والترخيص','Engine and license requirements','引擎与许可要求')}</Link></p>
     <h1 className="text-3xl font-black">{s('مختبر حركة الكاميرا بالمقياس المترّي','Meter-scale camera movement research','米制相机运动实验')}</h1>
+    <p className="rounded-xl border border-amber-200/30 bg-stone-900 p-4">
+      {s('تعمل هذه التجربة في متصفح الهاتف باستخدام كاميرا الخلفية و8th Wall مباشرة؛ لا تحتاج إلى تطبيق Apple Developer أو LiDAR. يجب استخدام HTTPS والسماح للكاميرا، والتحقق من ترخيص محرك SLAM. الأرقام تخص حركة الهاتف بين نقطتين فقط.',
+        'This browser experiment uses the rear camera and 8th Wall directly. No Apple Developer app or LiDAR is needed. HTTPS, camera access and SLAM license compliance are required. Numbers are only travel between two camera poses.',
+        '此实验直接在手机浏览器中使用后置摄像头和 8th Wall。需要 HTTPS、摄像头权限和 SLAM 许可。显示的数字仅为相机位移。')}</p>
     <p role="note" className="rounded-xl border border-amber-300 bg-stone-900 p-4">{s(
       'تجربة باحثين مع إشراف مبصر وقياس مرجعي فقط، وليست أداة لتجنب العوائق أو تحديد مسافة شخص أو كرسي. قياس انتقال الكاميرا لا يساوي المسافة إلى الأجسام. لا تتحرك مستقلًا أثناء الاختبار.',
       'Research-only supervised experiment with physical reference distances. Camera movement is NOT distance to a chair/person/obstacle. Do not walk independently during this test.',
@@ -172,7 +196,7 @@ export default function ArWorldScaleSandbox(){
           <button className={button} type="button" disabled={!started||currentDistance===null} onClick={record}>{s('تسجيل المسافة بعد التوقف','Record trial when stationary','静止后记录距离')}</button>
           <button className={button} type="button" disabled={!started||!startPose.current||currentDistance===null} onClick={speakDisplacement}>{s('انطق المسافة المكانية التجريبية','Speak experimental camera travel','播报实验性相机位移')}</button>
         </div>
-        <p role="status" aria-live="polite">{s('انتقال الكاميرا التقديري','Estimated camera travel','估计相机位移')}: {currentDistance===null?'—':currentDistance.toFixed(3)+' m'}</p>
+        <p role="status" aria-live="polite" className="text-2xl font-bold tabular-nums">{s('انتقال الكاميرا التقديري','Estimated camera travel','估计相机位移')}: {currentDistance===null?'—':currentDistance.toFixed(2)+' m'}</p>
         <p>{s('القراءات الصالحة','Valid trials','有效记录')}: {summary.attempts}</p>
         <p className="text-sm text-amber-100">{s(
           'ابدأ وأنت ثابت، انتظر استقرار التتبع، ثبّت البداية، ثم حرّك الهاتف لمسافة مرجعية مع إشراف مبصر وتوقف لتسجيل المحاولة. لا تستخدم المسافة للإرشاد أثناء الحركة.',
