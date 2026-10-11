@@ -29,6 +29,7 @@ export default function ArWorldScaleSandbox(){
   const [refMeters,setRefMeters]=useState<WorldReferenceTarget>(1);
   const [trials,setTrials]=useState<WorldResearchTrial[]>([]);
   const [currentDistance,setCurrentDistance]=useState<number|null>(null);
+  const [poseAvailable,setPoseAvailable]=useState(false);
   const summary=useMemo(()=>summarizeWorldTrials(trials),[trials]);
   const ready=BINARY_LAB_ENABLED&&BINARY_LICENSE_APPROVED;
 
@@ -40,7 +41,7 @@ export default function ArWorldScaleSandbox(){
     currentPose.current=null;
     startPose.current=null;
     if(live.current){
-      setStarted(false);setWorking(false);setCurrentDistance(null);
+      setStarted(false);setWorking(false);setCurrentDistance(null);setPoseAvailable(false);
       setStatus(s('تم إيقاف جلسة البحث.','Research session stopped.','研究会话已停止。'));
     }
   };
@@ -70,6 +71,7 @@ export default function ArWorldScaleSandbox(){
         onPose:pose=>{
           if(!live.current||controller.signal.aborted)return;
           currentPose.current=pose;
+          setPoseAvailable(true);
           if(startPose.current)setCurrentDistance(displacementMetres(startPose.current,pose));
         },
       },consent,controller.signal);
@@ -133,7 +135,7 @@ export default function ArWorldScaleSandbox(){
           </select>
         </label>
         <div className="flex flex-wrap gap-2">
-          <button className={button} type="button" disabled={!started||!currentPose.current} onClick={baseline}>{s('تثبيت نقطة البداية','Set baseline','设置起点')}</button>
+          <button className={button} type="button" disabled={!started||!poseAvailable} onClick={baseline}>{s('تثبيت نقطة البداية','Set baseline','设置起点')}</button>
           <button className={button} type="button" disabled={!started||currentDistance===null} onClick={record}>{s('تسجيل المسافة بعد التوقف','Record trial when stationary','静止后记录距离')}</button>
         </div>
         <p role="status" aria-live="polite">{s('انتقال الكاميرا التقديري','Estimated camera travel','估计相机位移')}: {currentDistance===null?'—':currentDistance.toFixed(3)+' m'}</p>
