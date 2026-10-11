@@ -12,6 +12,7 @@ import { MediaPipeVisionProvider, TesseractOCRProvider, UnavailableDepthProvider
 import { MonocularRelativeDepthProvider, NativeMetricDepthProvider, SegFormerSceneProvider } from '@/lib/vision/modelProviders';
 import { detectVisionCapabilities, type VisionCapabilities } from '@/lib/vision/capabilities';
 import { VisionPipeline } from '@/lib/vision/pipeline';
+import { metricDistanceMeters } from '@/lib/vision/safety';
 import type { MetricDiagnostic } from '@/lib/vision/metricEngine';
 import { BrowserHapticFeedbackProvider, VisionAnnouncementService } from '@/lib/vision/scene';
 import type { PlaceCandidate, RecognizedPlace, RiskLevel, SceneDescription } from '@shared/vision';
@@ -183,6 +184,18 @@ export default function Vision() {
       </p>
       <p className="mt-2 text-sm text-stone-300">{lang==='ar'?'وجود 8th Wall Absolute Scale لا يثبت مسافة الكرسي؛ يلزم عمق متزامن مع صورة الكاميرا. لا تعتمد على هذه التجربة لتجنب الاصطدام.':lang==='zh-CN'?'8th Wall Absolute Scale 并不证明到物体的距离；请勿用于防碰撞。':'8th Wall Absolute Scale does not establish distance to an object. Do not use this experiment for collision avoidance.'}</p>
     </section>
+    {scene?.objects.some(obj=>metricDistanceMeters(obj)!==null)&&
+      <section aria-label={lang==='ar'?'قراءات الأجسام بالأمتار':lang==='zh-CN'?'物体距离':'Measured object distances'}
+        className="rounded-xl border border-amber-200/30 bg-stone-900 p-4">
+        <h2 className="mb-2 font-bold">{lang==='ar'?'قياسات مرصودة (تجريبية)':lang==='zh-CN'?'检测到的距离（实验性）':'Observed distances (experimental)'}</h2>
+        <ul className="space-y-2">{scene.objects.filter(obj=>metricDistanceMeters(obj)!==null).slice(0,5).map(obj=>
+          <li key={obj.id}>{t.object[obj.type]} — {metricDistanceMeters(obj)!.toFixed(2)} {lang==='ar'?'متر':lang==='zh-CN'?'米':'m'} ({obj.approximateDistance?.source})</li>
+        )}</ul>
+      </section>}
+    {import.meta.env.VITE_BASIRA_AR_LAB_ENABLED === 'true' &&
+      <Link href="/navigation/ar-lab/world" className="inline-flex min-h-12 items-center text-amber-200 underline">
+        {lang==='ar'?'بحث 8th Wall لقياس انتقال الهاتف بالمتر (ليس بعد الأجسام)':lang==='zh-CN'?'8th Wall 位移研究（非物体距离）':'8th Wall camera-displacement research (not object distance)'}
+      </Link>}
     {scene?.walkableArea&&<p role="status" className="text-amber-100">{scene.walkableArea.pathAhead==='BLOCKED'?t.pathBlocked:scene.walkableArea.pathAhead==='CLEAR'?t.pathClearObserved:t.pathUnknown}</p>}
     {scene?.surfaceAnalysis&&<p role="status" className="text-amber-100">{t.surfaceStatus(scene.surfaceAnalysis.surface??'UNKNOWN',scene.surfaceAnalysis.surfaceCoverage??0)}</p>}
     {scene?.objects.some(object=>object.type==='STAIRS_UNCERTAIN'||object.type==='STAIRS_UP'||object.type==='STAIRS_DOWN')&&<p role="alert" className="text-amber-100">{t.stairsObserved}</p>}
