@@ -36,3 +36,31 @@ The app includes a second button on its offline iOS lab home screen, **الكا�
 - Only after passing device-specific studies may this experimental path be considered for merging into production vision; even then add an explicit reviewed safety gate.
 
 Apple reference: https://developer.apple.com/documentation/arkit/ardepthdata
+
+
+## Per-object depth rejection & controlled ground-truth workflow (revision)
+
+The old single 9-point median was sufficient for exploratory sampling but could attribute **background behind a chair's open legs** to the chair. The research overlay now uses a separate `estimateNativeObjectDepth` implementation:
+
+- Requires an object detection confidence of at least 0.75, an ARKit depth map confidence of at least 0.70, and a same-analysis timestamp within 100 ms.
+- Objects with very small depth-map bounding boxes are not given a number. A 5×5 grid within the interior of the detected box needs at least 20 of 25 valid depth samples, and a plausible central sample.
+- Rejects depth layers with central or P10–P90 disagreement beyond a conservative tolerance (max 0.18 m or 12% of the proposed distance).
+- Displays **distance unavailable** rather than a guessed number for mixed/low-coverage depths. Rejected readings are recorded as missing data in the ground-truth experiment, not silently discarded.
+- Not a proof that a bounding box represents one physical surface; **transparent/thin/open-structure objects still require field validation and may be misassociated**. There is no safety certification.
+
+On the experimental camera, the researcher can freeze a paired RGB+depth frame, select the detected object, verify its label and box visually, and enter a **tape-measured 0.5–5 m lens-to-object reference**. The trials are stored in the browser's local storage (maximum 500 records) and exported as CSV explicitly; no frame/image is stored in the trial file. Statistics include all attempted readings (including missing depth and human mismatches) and distinguish validated matching from rejected results.
+
+### Required release blockers
+
+1. Run at least 20 attempts at each target (0.5, 1, 2, 3 and 5 m) for a fixed, opaque target under multiple lighting conditions. Record signed and absolute differences and human label mismatches.
+2. Repeat for a chair with visible open gaps, partially occluded objects, glass/reflections, smaller objects and motion; evaluate **object-to-depth misassociation separately** from raw LiDAR calibration.
+3. Review raw ARKit landscape sensor orientation and 90° clockwise depth/image alignment against physical asymmetric markers in portrait. A software unit test alone cannot establish geometric correctness.
+4. Keep the iPhone stationary for these tests; existing frame rate and latency are not sufficient for automatic obstacle warnings while walking.
+5. No automatic spoken walking alerts, drop-off alarms or per-step stair chimes are enabled by this research path; those require an independent safety validation programme.
+6. The native host refuses navigation to untrusted URLs and pauses its ARSession when the app backgrounds. The researcher must reopen the screen for subsequent capture after backgrounding.
+
+### Cloud deployment prerequisites
+
+- Cloud signing remains configured but is not executed by GitHub checks; configure an Apple Developer/App Store Connect API integration in Codemagic yourself.
+- The `BASIRA_VISION_URL` environment variable must point to the **actually deployed route**, which must contain the new client bundle and its local vision model assets before running the signed app. Neither GitHub PR drafts nor bare branch URLs deploy that route automatically.
+- PR chain: #16 → #17 → #18. No direct changes to the main branch until the dependent changes have been reviewed.
