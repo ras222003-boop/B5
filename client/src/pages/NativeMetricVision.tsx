@@ -178,8 +178,8 @@ export default function NativeMetricVision() {
         }}><span className="absolute bottom-full right-0 min-w-max rounded bg-stone-950/90 px-1 text-xs text-white">{caption}</span></div>;
       })}
     </div>
-    <section className="space-y-2 rounded-xl border border-amber-300/40 p-4" aria-label={t.recognizedObjects}>
-      <h2 className="text-lg font-bold">{t.recognizedObjects}</h2>
+    <section className="space-y-2 rounded-xl border border-amber-300/40 p-4" aria-label={localized(lang,'الأجسام المكتشفة','Detected objects','检测到的物体')}>
+      <h2 className="text-lg font-bold">{localized(lang,'الأجسام المكتشفة','Detected objects','检测到的物体')}</h2>
       {objects.length===0?<p>{localized(lang,'لا توجد أجسام موثوقة في الإطار الحالي.','No objects found in the current frame.','当前画面未识别到物体。')}</p>:
         <ul className="space-y-1">{objects.slice(0,8).map((o,i)=><li key={i}>{t.object[o.type]??o.type}، {t.direction[o.horizontalDirection]}: {o.approximateDistance?.source==='ARKIT_DEPTH'&&(o.approximateDistance?.confidence??0)>=.7?t.distance(o.approximateDistance!.distanceMeters):localized(lang,'المسافة غير مؤكدة','Distance unavailable','距离不可用')}{o.depthReason?` · ${o.depthReason}`:''}</li>)}</ul>}
       <p className="text-xs text-amber-200">{localized(lang,'قد تخطئ مطابقة مسافة الجسم إذا ظهرت خلفيته داخل مربع الكشف؛ تُحجب القراءات المختلطة ولا تُعتبر البيانات اعتمادًا للسلامة.','Bounding boxes may contain background surfaces; mixed depths are withheld and measurements are not safety certification.','检测框可能包含背景表面；混合深度将被隐藏，这并非安全认证。')}</p>
