@@ -22,6 +22,13 @@ workflows:
           set -euo pipefail
           command -v xcodegen >/dev/null || brew install xcodegen
           python3 ios/DepthCalibrationLab/scripts/generate-lab-icon.py
+          # Required for the cloud-distributed app: use a deployed, trusted HTTPS Basira domain.
+          : "${BASIRA_VISION_URL:?Configure BASIRA_VISION_URL in Codemagic before signing}"
+          if ! [[ "$BASIRA_VISION_URL" =~ ^https://[a-zA-Z0-9.-]+/navigation/native-vision$ ]] || [[ "$BASIRA_VISION_URL" == *".example"* ]]; then
+            echo "Invalid BASIRA_VISION_URL; expected https://trusted-host/navigation/native-vision" >&2
+            exit 1
+          fi
+          /usr/libexec/PlistBuddy -c "Set :BasiraVisionURL $BASIRA_VISION_URL" ios/DepthCalibrationLab/DepthCalibrationLab/Info.plist
           /usr/libexec/PlistBuddy -c "Set :CFBundleVersion ${PROJECT_BUILD_NUMBER:?}" ios/DepthCalibrationLab/DepthCalibrationLab/Info.plist
           cd ios/DepthCalibrationLab
           xcodegen generate
