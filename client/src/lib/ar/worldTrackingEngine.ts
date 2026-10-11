@@ -60,10 +60,16 @@ let binarySdkLoading:Promise<WorldXRRuntime>|null=null;
 async function loadReviewedBinaryEngine():Promise<WorldXRRuntime>{
   if(!BINARY_LICENSE_APPROVED || !BINARY_LAB_ENABLED) throw new Error('BINARY_NOT_APPROVED');
   if(!window.isSecureContext) throw new Error('HTTPS_REQUIRED');
-  // The MIT labs may have loaded XR8 already. Reload to ensure a clean source
-  // instead of silently overwriting a running/previous engine in global scope.
+  // Reuse the SAME previously loaded licensed engine when the user stops and
+  // restarts the experiment on one browser page. Never mix it with MIT XR8.
+  if(binarySdkLoading){
+    const cached=await binarySdkLoading;
+    if(window.XR8 !== (cached as unknown as typeof window.XR8))
+      throw new Error('FRESH_PAGE_REQUIRED_AFTER_MIT_LAB');
+    return cached;
+  }
+  // MIT labs may have loaded a different XR8. Navigate with full-page reload.
   if(window.XR8) throw new Error('FRESH_PAGE_REQUIRED_AFTER_MIT_LAB');
-  if(binarySdkLoading) return binarySdkLoading;
   binarySdkLoading=new Promise<WorldXRRuntime>((resolve,reject)=>{
     const script=document.createElement('script');
     script.src=BASIRA_BINARY_SDK_CDN;
