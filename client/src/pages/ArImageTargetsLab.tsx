@@ -7,6 +7,7 @@ import {
   type BasiraImageTargetSession,
 } from '@/lib/ar/imageTargetEngine';
 import { BASIRA_LAB_LANDMARK, type LandmarkDetection } from '@/lib/ar/imageTargetLandmarks';
+import { imageTargetEventsCsv, summarizeImageTargetQa } from '@/lib/ar/imageTargetQa';
 
 const LAB_ENABLED = import.meta.env.VITE_BASIRA_AR_LAB_ENABLED === 'true';
 const markerUrl = '/ar/targets/basira-lab-marker.svg';
@@ -22,6 +23,9 @@ export default function ArImageTargetsLab() {
   const mounted = useRef(true);
   const generation = useRef(0);
   const lastSpoken = useRef(0);
+  const startEpoch = useRef<number | null>(null);
+  const [qaStartEpoch,setQaStartEpoch] = useState<number | null>(null);
+  const [qaEvents,setQaEvents] = useState<LandmarkDetection[]>([]);
   const [consented, setConsented] = useState(false);
   const [voiceEnabled, setVoiceEnabled] = useState(true);
   const voiceEnabledRef = useRef(true);
@@ -32,6 +36,14 @@ export default function ArImageTargetsLab() {
   const [error, setError] = useState('');
   const secure = typeof window !== 'undefined' && window.isSecureContext;
   const cameraSupported = typeof navigator !== 'undefined' && Boolean(navigator.mediaDevices?.getUserMedia);
+  const qa = summarizeImageTargetQa(qaStartEpoch,qaEvents);
+  const exportQa = () => {
+    if (!qaEvents.length) return;
+    const url = URL.createObjectURL(new Blob(['\uFEFF'+imageTargetEventsCsv(qaEvents)],{type:'text/csv;charset=utf-8'}));
+    const link = document.createElement('a');
+    link.href=url;link.download='basira-image-target-device-test.csv';link.click();
+    window.setTimeout(()=>URL.revokeObjectURL(url),1200);
+  };
 
   const stop = () => {
     generation.current++;
@@ -64,6 +76,7 @@ export default function ArImageTargetsLab() {
   const handleDetection = (event: LandmarkDetection) => {
     if (!mounted.current) return;
     setDetection(event);
+    setQaEvents(previous => [...previous,event].slice(-200));
     if (event.state === 'found' && voiceEnabledRef.current && Date.now() - lastSpoken.current > 7000) {
       lastSpoken.current = Date.now();
       if (typeof window.speechSynthesis !== 'undefined' && typeof SpeechSynthesisUtterance !== 'undefined') {
@@ -86,6 +99,10 @@ export default function ArImageTargetsLab() {
     setWorking(true);
     setError('');
     setDetection(null);
+    const startedAt=Date.now();
+    startEpoch.current=startedAt;
+    setQaStartEpoch(startedAt);
+    setQaEvents([]);
     setStatus(s('جارٍ تهيئة محرك التعرف على العلامات…', 'Loading image target engine…', '正在加载图像识别引擎…'));
     try {
       const session = await startBasiraImageTargetSession(canvas, {
@@ -160,6 +177,16 @@ export default function ArImageTargetsLab() {
           </div>
           <p role="status" aria-live="polite">{status || s('الكاميرا مغلقة.', 'Camera is off.', '相机已关闭。')}</p>
           {error && <p role="alert" className="text-red-300">{s('تعذر التشغيل: ', 'Unable to start: ', '无法启动：')}{error}</p>}
+          <section className="space-y-2 rounded-xl border border-amber-300/25 p-4" aria-label={s('فحص التعرف على العلامة','Image recognition QA','图像识别测试')}>
+            <h3 className="font-bold">{s('تقرير أحداث اكتشاف العلامة (على هذا الجهاز)','Marker recognition event report (this device)','当前设备图像识别事件报告')}</h3>
+            <p>{s('مرات الاكتشاف','Recognitions','识别次数')}: {qa.recognitions}</p>
+            <p>{s('مرات فقدان التتبع','Tracking losses','跟踪丢失次数')}: {qa.trackingLosses}</p>
+            <p>{s('زمن أول اكتشاف','First recognition latency','首次识别耗时')}: {qa.firstRecognitionMs === null ? '—' : (qa.firstRecognitionMs/1000).toFixed(2)+' s'}</p>
+            <button type="button" className={button} disabled={!qaEvents.length} onClick={exportQa}>
+              {s('تصدير أحداث الاختبار CSV','Export test events CSV','导出测试事件 CSV')}
+            </button>
+            <p className="text-xs text-stone-300">{s('هذا التقرير يسجل توقيتات اكتشاف العلامة وفقدانها محليًا فقط دون تخزين صور أو موقع. فحوص GitHub لا تعد اختبار هاتف حقيقي.','Only detection events and times are held locally; no photos or GPS. GitHub checks are not a substitute for physical phone testing.','仅在本地记录事件及时间，不存储相片或 GPS。')}</p>
+          </section>
           {detection && <div role="status" aria-live="polite" className="rounded-xl border border-amber-400 p-4">
             <strong>{detection.state === 'found' ? s('تم اكتشاف علامة الاختبار', 'Training marker found', '检测到训练标记') : s('فُقد تتبع العلامة', 'Marker tracking lost', '丢失标记跟踪')}</strong>
             <p>{s(BASIRA_LAB_LANDMARK.description, 'Test marker only, not verified building location.', '仅限测试标记，非真实建筑物定位。')}</p>
