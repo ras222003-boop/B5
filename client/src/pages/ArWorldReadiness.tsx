@@ -28,7 +28,7 @@ export default function ArWorldReadiness() {
       <li>{s('مقارنة أمتار المشهد مع مسافات مرجعية حقيقية عند 0.5 و1 و2 و3 و5 أمتار على كل جهاز.','Compare coordinates with 0.5, 1, 2, 3 and 5m physical measurements per device.','分别对每台设备校验真实距离。')}</li>
       <li>{s('تسجيل معدلات الفشل والخطأ الوسيط وP95، وتجنب التعامل مع المقياس العالمي كعمق جسم بعينه.','Record failures, median and P95 error; world-scale coordinates are not per-object depth.','记录误差；世界尺度并不等于物体深度。')}</li>
     </ol>
-    <p><Link href="/navigation/ar-lab/world-scale-sandbox" className="inline-flex min-h-12 items-center rounded-lg border border-amber-300 px-4 py-2 font-semibold text-amber-100">{s('فحص بيئة المختبر المقيّد','Restricted research lab readiness','受限实验准备')}</Link></p>
+    <p><a href="/navigation/ar-lab/world-scale-sandbox" className="inline-flex min-h-12 items-center rounded-lg border border-amber-300 px-4 py-2 font-semibold text-amber-100">{s('فحص بيئة المختبر المقيّد','Restricted research lab readiness','受限实验准备')}</a></p>
     <p>{s('يظل LiDAR وARKit الموجودان في تجربة بصيرة الأصلية منفصلين عن هذه التجربة.','The existing Basira ARKit/LiDAR pilot remains separate.','现有 ARKit/LiDAR 功能保持独立。')}</p>
   </main></Layout>;
 }
