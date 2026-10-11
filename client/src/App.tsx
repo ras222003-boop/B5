@@ -39,6 +39,7 @@ const IndoorManager=lazy(()=>import('./pages/IndoorManager'));
 const NavigationCapabilities=lazy(()=>import('./pages/NavigationCapabilities'));
 const AcademicDirectory=lazy(()=>import('./pages/AcademicDirectory'));
 const DepthCalibrationLab=lazy(()=>import('./pages/DepthCalibrationLab'));
+const NativeMetricVision=lazy(()=>import('./pages/NativeMetricVision'));
 
 function Router() {
   const {lang}=useI18n();
@@ -76,6 +77,7 @@ function Router() {
       <Route path="/online-exams" component={OnlineExams} />
       <Route path="/academics" component={AcademicDirectory} />
       <Route path="/navigation/depth-lab" component={DepthCalibrationLab} />
+      <Route path="/navigation/native-vision" component={NativeMetricVision} />
       <Route path="/teacher" component={TeacherPanel} />
       <Route path="/teacher-panel" component={TeacherPanel} />
       <Route path="/assistant-analytics" component={AssistantAnalytics} />
