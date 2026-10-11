@@ -34,7 +34,6 @@ function EffectsLab({kind}:{kind: EffectKind}) {
     pending.current = null;
     current.current?.stop();
     current.current = null;
-    if (typeof window !== 'undefined') window.speechSynthesis?.cancel();
     if (live.current) {
       setState('idle');
       setObservation(null);
@@ -53,7 +52,6 @@ function EffectsLab({kind}:{kind: EffectKind}) {
       pending.current?.abort();
       current.current?.stop();
       current.current = null;
-      window.speechSynthesis?.cancel();
       document.removeEventListener('visibilitychange', onVisibilityChange);
       window.removeEventListener('pagehide', onPageHide);
     };
