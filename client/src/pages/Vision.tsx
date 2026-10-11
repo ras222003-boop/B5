@@ -157,6 +157,7 @@ export default function Vision() {
   const cameraState=state==='STOPPED'?t.stopped:state==='STARTING'?t.starting:state==='WORKING'?t.working:t.analyzing;
   return <Layout><div className="container max-w-4xl space-y-4 py-6 text-stone-100">
     <Link href="/navigation" className="text-amber-300 underline">{nav.title}</Link>
+    <Link href="/navigation/native-vision" className="ml-3 inline-block rounded-lg border border-amber-300/60 p-3 text-amber-200 underline">{lang==="ar"?"كاميرا LiDAR مع قياس الأمتار (تجريبية)":lang==="en"?"LiDAR camera with metres (research)":"LiDAR 相机和米数（实验）"}</Link>
     <header><h1 className="text-3xl font-black">{t.title}</h1><p className="mt-3 text-lg text-stone-300">{t.description}</p></header>
     <p className="rounded-xl border border-amber-300/40 bg-amber-300/10 p-4 text-amber-100">{t.advisory}</p>
     <div className="flex flex-wrap gap-3">{state==='STOPPED'?<button type="button" className={button} onClick={start}>{t.start}</button>:<button type="button" className={button} onClick={()=>void stop()}>{t.stop}</button>}</div>
