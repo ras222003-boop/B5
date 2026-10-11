@@ -1,0 +1,70 @@
+name: "Generate 8th Wall image target for Basira (research branch)"
+on:
+  push:
+    branches:
+      - codex/8thwall-real-target-device-qa
+    paths:
+      - .github/workflows/prepare-basira-image-target.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  generate-image-target:
+    if: github.repository == 'ras222003-boop/B5' && github.ref == 'refs/heads/codex/8thwall-real-target-device-qa'
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: pnpm
+      - name: Install existing Basira dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Produce full-resolution PNG source from Basira marker
+        run: node scripts/prepare-8thwall-target.mjs source
+      - name: Run the official pinned 8th Wall Image Target CLI
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf '%s\n' \
+            'client/public/ar/targets/basira-lab-entrance_source.png' \
+            '1' \
+            'y' \
+            '.basira-image-targets' \
+            'basira-lab-entrance' \
+            | npx --yes @8thwall/image-target-cli@1.0.0
+      - name: Validate and import 8th Wall-generated resources
+        run: |
+          node scripts/prepare-8thwall-target.mjs import
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          import sharp from 'sharp';
+          const dir='client/public/ar/targets';
+          const name='basira-lab-entrance';
+          const data=JSON.parse(fs.readFileSync(`${dir}/${name}.json`,'utf8'));
+          if(data.type!=='PLANAR'||data.name!==name||data.imagePath!==`/ar/targets/${name}_luminance.png`)throw new Error('Invalid target JSON');
+          const meta=await sharp(`${dir}/${name}_luminance.png`).metadata();
+          if(meta.width!==480||meta.height!==640)throw new Error('Invalid luminance resolution');
+          console.log('Official CLI image target generated and dimensions verified');
+          NODE
+      - name: Commit only generated image target assets to the feature branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add client/public/ar/targets/basira-lab-entrance*.png client/public/ar/targets/basira-lab-entrance.json
+          if git diff --cached --quiet; then
+            echo 'Processed target files already tracked and unchanged'
+            exit 0
+          fi
+          git commit -m 'feat(ar): commit actual 8th Wall CLI processed Basira marker'
+          git push origin HEAD:refs/heads/codex/8thwall-real-target-device-qa
