@@ -40,6 +40,8 @@ const NavigationCapabilities=lazy(()=>import('./pages/NavigationCapabilities'));
 const AcademicDirectory=lazy(()=>import('./pages/AcademicDirectory'));
 const DepthCalibrationLab=lazy(()=>import('./pages/DepthCalibrationLab'));
 const NativeMetricVision=lazy(()=>import('./pages/NativeMetricVision'));
+const ArImageTargetsLab=lazy(()=>import('./pages/ArImageTargetsLab'));
+
 
 function Router() {
   const {lang}=useI18n();
@@ -78,6 +80,7 @@ function Router() {
       <Route path="/academics" component={AcademicDirectory} />
       <Route path="/navigation/depth-lab" component={DepthCalibrationLab} />
       <Route path="/navigation/native-vision" component={NativeMetricVision} />
+      <Route path="/navigation/ar-lab/image-targets" component={ArImageTargetsLab} />
       <Route path="/teacher" component={TeacherPanel} />
       <Route path="/teacher-panel" component={TeacherPanel} />
       <Route path="/assistant-analytics" component={AssistantAnalytics} />
