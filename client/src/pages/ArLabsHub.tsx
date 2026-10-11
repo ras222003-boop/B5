@@ -55,7 +55,7 @@ export default function ArLabsHub() {
         <article className="rounded-xl border border-amber-200/20 p-4 space-y-2">
           <h3 className="font-semibold">{s('حركة الهاتف بالأمتار — Absolute Scale','Camera movement in metres — Absolute Scale','相机位移（米）')}</h3>
           <p className="text-sm text-stone-200">{s('يقدّر المسافة بين موضعي الكاميرا بعد استقرار SLAM، وليس بُعد الأجسام. يتطلب ترخيص المحرك الثنائي واختبارًا خاصًا.','Estimates movement between camera poses after tracking. Does not measure objects. Requires restricted binary approval and a separate test.','估计相机的位移，不等于到物体的距离。')}</p>
-          <Link className="text-amber-200 underline" href="/navigation/ar-lab/world-scale-sandbox">{s('فتح معايرة الأمتار المكانية','Open spatial metre calibration','打开空间米数校准')}</Link>
+          <a className="text-amber-200 underline" href="/navigation/ar-lab/world-scale-sandbox">{s('فتح معايرة الأمتار المكانية','Open spatial metre calibration','打开空间米数校准')}</a>
         </article>
         <article className="rounded-xl border border-amber-200/20 p-4 space-y-2">
           <h3 className="font-semibold">{s('بعد الأسطح عن الكاميرا — LiDAR / ARCore','Surface depth — LiDAR / ARCore','物体表面深度')}</h3>
