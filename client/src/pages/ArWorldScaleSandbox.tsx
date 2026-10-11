@@ -100,6 +100,21 @@ export default function ArWorldScaleSandbox(){
     finally{if(live.current)setWorking(false);if(abort.current===controller)abort.current=null}
   };
 
+  // Some mobile browsers can suspend AR frame callbacks without a tracking-lost event.
+  // Clear the old number in that case instead of leaving a plausible but stale reading.
+  useEffect(()=>{
+    if(!started)return;
+    const timer=window.setInterval(()=>{
+      const pose=currentPose.current;
+      if(pose && Date.now()-pose.timestampMs<=1200)return;
+      currentPose.current=null;
+      startPose.current=null;
+      setPoseAvailable(false);
+      setCurrentDistance(null);
+    },600);
+    return()=>window.clearInterval(timer);
+  },[started]);
+
   const baseline=()=>{
     const pose=currentPose.current;
     if(!pose||Date.now()-pose.timestampMs>1200){
