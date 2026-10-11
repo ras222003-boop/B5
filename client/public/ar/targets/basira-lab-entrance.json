@@ -1,0 +1,23 @@
+{
+  "imagePath": "/ar/targets/basira-lab-entrance_luminance.png",
+  "metadata": null,
+  "name": "basira-lab-entrance",
+  "type": "PLANAR",
+  "properties": {
+    "left": 0,
+    "top": 0,
+    "width": 960,
+    "height": 1280,
+    "isRotated": false,
+    "originalWidth": 960,
+    "originalHeight": 1280
+  },
+  "resources": {
+    "originalImage": "basira-lab-entrance_original.png",
+    "croppedImage": "basira-lab-entrance_cropped.png",
+    "thumbnailImage": "basira-lab-entrance_thumbnail.png",
+    "luminanceImage": "basira-lab-entrance_luminance.png"
+  },
+  "created": 1791694371406,
+  "updated": 1791694371406
+}
