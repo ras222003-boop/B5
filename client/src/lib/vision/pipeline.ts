@@ -9,6 +9,7 @@ import { VisionFusionEngine } from './fusion';
 import { hazardRank } from '@/lib/guidance/safety';
 import { sampleFrameLight, type FrameLightStatus } from './frameQuality';
 import { SAFE_DEFAULT_FLAGS, type SafetyFlags } from '@shared/safetyFlags';
+import { metricDiagnostic, type MetricDiagnostic } from './metricEngine';
 
 interface Callbacks {
   scene:(description:SceneDescription)=>void;
@@ -18,6 +19,7 @@ interface Callbacks {
   OCRFailure:()=>void;
   segmentationFailure:()=>void;
   depthFailure:()=>void;
+  metricStatus?:(diagnostic:MetricDiagnostic)=>void;
   fatal:(error:unknown)=>void;
   quality?:(light:FrameLightStatus)=>void;
 }
@@ -66,6 +68,7 @@ export class VisionPipeline {
   private relativeDepthEnabled=true;
   private lastGeometry=Number.NEGATIVE_INFINITY;
   private lastDepth=Number.NEGATIVE_INFINITY;
+  private lastMetric=Number.NEGATIVE_INFINITY;
   private latestObjects:VisionDetection[]=[];
   private lastLightCheck=Number.NEGATIVE_INFINITY;
   private cameraLight:FrameLightStatus='UNKNOWN';
@@ -110,6 +113,15 @@ export class VisionPipeline {
       }
       const detections=await this.options.vision.detect(this.options.video,started);
       if(!this.running||generation!==this.generation)return;
+      // Depth must be captured independently of semantic segmentation. A
+      // segmentation model failure cannot disable a trusted metric sensor.
+      if(this.options.metricDepth && started-this.lastMetric>=500) {
+        this.lastMetric=started;
+        try { this.metricDepth=await this.options.metricDepth.capture(started); }
+        catch { this.metricDepth=null; this.options.callbacks.depthFailure(); }
+        if(!this.running||generation!==this.generation)return;
+      }
+      this.options.callbacks.metricStatus?.(metricDiagnostic(this.metricDepth,started,Boolean(this.options.metricDepth)));
       const enriched=await Promise.all(detections.map(async detection=>({ ...detection,approximateDistance:await this.readDepth(detection,started) })));
       if(!this.running||generation!==this.generation)return;
       this.latestObjects=enriched;
@@ -136,7 +148,7 @@ export class VisionPipeline {
     const signs=this.signDetections.filter(sign=>now-sign.timestamp<12_000);
     const segmentation=this.segmentation&&now-this.segmentation.timestamp<10_000?this.segmentation:null;
     const relativeDepth=this.relativeDepth&&now-this.relativeDepth.timestamp<2_000?this.relativeDepth:null;
-    const metricDepth=this.metricDepth&&now-this.metricDepth.timestamp<2_000?this.metricDepth:null;
+    const metricDepth=this.metricDepth&&this.metricDepth.alignmentVerified===true&&Math.abs(now-this.metricDepth.timestamp)<=500?this.metricDepth:null;
     const frame=this.fusion.fuse({objects:this.latestObjects,segmentation,relativeDepth,metricDepth,signs});
     const flags=this.options.safetyFlags??SAFE_DEFAULT_FLAGS;
     const allowed=frame.events.filter(event=>
@@ -151,7 +163,11 @@ export class VisionPipeline {
     this.options.callbacks.scene(this.latest);
     // Medium-information objects remain available for an on-demand scene summary.
     // Automatic audio is reserved for safety hazards and named objects within the configured metric range.
-    const alert=this.options.announcement.announce(events.filter(event=>event.riskLevel==='HIGH'||event.riskLevel==='CRITICAL'),Date.now());
+    // Experimental object-to-depth association is NOT a certified obstacle
+    // alarm. Keep spoken measurements in on-demand descriptions only.
+    const safetyOnlyEvents=events.map(event=>this.safety.classify({...event,approximateDistance:null}))
+      .filter(event=>event.riskLevel==='HIGH'||event.riskLevel==='CRITICAL');
+    const alert=this.options.announcement.announce(safetyOnlyEvents,Date.now());
     if(alert)this.options.callbacks.alert(alert.text,alert.event.riskLevel);
   }
   private async processGeometry(generation:number,timestamp:number){
@@ -162,17 +178,14 @@ export class VisionPipeline {
       const grid=await this.options.segmentation!.segment(frame.blob,timestamp);
       if(!this.running||generation!==this.generation)return;
       this.segmentation=grid;
-      if(this.options.metricDepth){
-        try{this.metricDepth=await this.options.metricDepth.capture(timestamp);}catch{this.metricDepth=null;this.options.callbacks.depthFailure();}
-      }
-      if(!this.metricDepth&&this.options.relativeDepth&&this.relativeDepthEnabled&&timestamp-this.lastDepth>=(this.options.depthIntervalMs??8000)){
+      if(this.options.relativeDepth&&this.relativeDepthEnabled&&timestamp-this.lastDepth>=(this.options.depthIntervalMs??8000)){
         this.lastDepth=timestamp;
         try{this.relativeDepth=await this.options.relativeDepth.estimate(frame.blob,timestamp);}
         catch{this.relativeDepthEnabled=false;this.relativeDepth=null;this.options.callbacks.depthFailure();}
       }
       if(this.running&&generation===this.generation)this.publish(performance.now());
     }catch{
-      if(this.running&&generation===this.generation){this.geometryEnabled=false;this.segmentation=null;this.metricDepth=null;this.relativeDepth=null;this.options.callbacks.segmentationFailure();}
+      if(this.running&&generation===this.generation){this.geometryEnabled=false;this.segmentation=null;this.relativeDepth=null;this.options.callbacks.segmentationFailure();}
     }finally{this.geometryBusy=false;}
   }
   private async readDepth(detection:VisionDetection,now:number):Promise<DepthReading|null>{
