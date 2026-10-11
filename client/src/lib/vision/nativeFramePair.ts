@@ -70,5 +70,6 @@ export function rotateNativeDepthClockwise(frame: AtomicNativeFrame, at: number)
     timestamp: at,
     confidence: frame.validCoverage,
     source: 'ARKIT_DEPTH',
+    alignmentVerified: true,
   };
 }
