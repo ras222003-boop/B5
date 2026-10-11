@@ -1,0 +1,23 @@
+{
+  "name": "basira-lab-entrance",
+  "type": "PLANAR",
+  "properties": {
+    "top": 0,
+    "left": 0,
+    "width": 480,
+    "height": 640,
+    "isRotated": false,
+    "originalWidth": 480,
+    "originalHeight": 640
+  },
+  "imagePath": "/ar/targets/basira-lab-marker.svg",
+  "metadata": {
+    "labOnly": true,
+    "publicLabel": "مدخل مختبر بصيرة"
+  },
+  "resources": {
+    "originalImage": "basira-lab-marker.svg",
+    "croppedImage": "basira-lab-marker.svg",
+    "luminanceImage": "basira-lab-marker.svg"
+  }
+}
