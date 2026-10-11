@@ -153,6 +153,10 @@ export default function Navigation() {
       <Link className={secondary} href="/navigation/places?filter=recent">{t.recent}</Link>
       <Link className={secondary} href="/navigation/permissions">{t.permissions}</Link>
       <Link className={button} href="/navigation/vision">{vision.open}</Link>
+      {import.meta.env.VITE_BASIRA_AR_LAB_ENABLED !== 'false' &&
+        <Link className={secondary} href="/navigation/ar-lab/world-scale-sandbox">
+          {lang==='ar'?'تجربة تقدير الأمتار بـ8th Wall':lang==='zh-CN'?'8th Wall 位移米数实验':'8th Wall camera metre experiment'}
+        </Link>}
       <Link className={secondary} href="/navigation/shared-map">خريطة بصيرة المشتركة</Link>
       <Link className={secondary} href="/navigation/indoor-manager">مدير الخرائط الداخلية</Link>
     </div>
