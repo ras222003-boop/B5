@@ -1,6 +1,7 @@
 import {useEffect,useMemo,useRef,useState} from 'react';
 import {Link} from 'wouter';
 import Layout from '@/components/Layout';
+import {readBasiraArPreflight,type ArBrowserPreflight} from '@/lib/ar/browserCapabilities';
 import {useI18n} from '@/i18n';
 import {
   BINARY_LAB_ENABLED,BINARY_LICENSE_APPROVED,startWorldScaleResearchSession,
@@ -24,6 +25,7 @@ export default function ArWorldScaleSandbox(){
   const startPose=useRef<WorldPose|null>(null);
   const live=useRef(true);
   const [consent,setConsent]=useState(false);
+  const [preflight,setPreflight]=useState<ArBrowserPreflight|null>(null);
   const [working,setWorking]=useState(false);
   const [started,setStarted]=useState(false);
   const [status,setStatus]=useState('');
@@ -34,6 +36,8 @@ export default function ArWorldScaleSandbox(){
   const [poseAvailable,setPoseAvailable]=useState(false);
   const summary=useMemo(()=>summarizeWorldTrials(trials),[trials]);
   const ready=BINARY_LAB_ENABLED&&BINARY_LICENSE_APPROVED;
+  useEffect(()=>setPreflight(readBasiraArPreflight()),[]);
+  const browserReady=preflight?.readyForPermissionRequest??false;
 
   const stop=()=>{
     abort.current?.abort();
@@ -66,7 +70,7 @@ export default function ArWorldScaleSandbox(){
   },[]);
 
   const begin=async()=>{
-    if(!ready||!consent||working||started||!canvas.current)return;
+    if(!ready||!browserReady||!consent||working||started||!canvas.current)return;
     setWorking(true);setError('');
     const controller=new AbortController();abort.current=controller;
     try{
@@ -187,6 +191,18 @@ export default function ArWorldScaleSandbox(){
          '空间 XR 引擎 © 2026 Niantic Spatial, Inc. 受限许可。')}
       {' '}<a className="text-amber-200 underline" href="https://github.com/8thwall/engine/blob/main/LICENSE" target="_blank" rel="noopener noreferrer">{s('الترخيص وإخلاء المسؤولية','License and warranty disclaimer','许可及免责声明')}</a>
     </p>
+    <section className="rounded-xl border border-amber-200/25 bg-stone-900 p-4 space-y-2">
+      <h2 className="font-bold">{s('فحص متصفح الهاتف قبل تشغيل الكاميرا','Browser readiness before camera use','开启相机前检查浏览器')}</h2>
+      <p className="text-sm">{s('HTTPS آمن','Secure HTTPS','安全 HTTPS')}: {preflight?.secureOrigin?'✓':'—'} · {s('إمكانية الكاميرا','Camera API','摄像头接口')}: {preflight?.cameraApi?'✓':'—'} · WebGL: {preflight?.webgl?'✓':'—'}</p>
+      {!browserReady && <p role="alert" className="text-amber-100">{s(
+        'يتطلب القياس متصفحًا يدعم الكاميرا وWebGL وصفحة HTTPS. الفحص لا يضمن دعم SLAM أو دقة المتر.',
+        'Requires camera, WebGL and HTTPS. Preflight does not guarantee SLAM support or metre accuracy.',
+        '需要摄像头、WebGL 和 HTTPS。此检查不能确保 SLAM 或米制精度。')}</p>}
+      <p className="text-sm text-stone-300">{s(
+        'لا تُفتح الكاميرا ولا يُحمَّل المحرك الخارجي حتى توافق وتضغط بدء المختبر.',
+        'No camera activation or external SDK is loaded before consent and Start.',
+        '在同意并点击启动之前，不会开启相机或加载外部引擎。')}</p>
+    </section>
     <div className="grid gap-4 md:grid-cols-2">
       <section className="space-y-3 rounded-2xl border border-amber-200/30 bg-stone-900 p-4">
         <h2 className="text-xl font-bold">{s('الكاميرا والموضع','Camera and pose','摄像头和位姿')}</h2>
@@ -195,7 +211,7 @@ export default function ArWorldScaleSandbox(){
         {error && <p role="alert" className="text-red-300">{error}</p>}
         <label className="flex items-start gap-3"><input type="checkbox" className="mt-1 h-5 w-5" checked={consent} disabled={working||started} onChange={e=>setConsent(e.target.checked)}/><span>{s('أوافق على فتح الكاميرا وتحميل المحرك الثنائي المرخص بعد مراجعة شروطه، ضمن اختبار بحثي فقط.','I consent to camera access and loading the separately licensed binary only for approved research.','我同意仅在获授权的研究环境中使用摄像头。')}</span></label>
         <div className="flex flex-wrap gap-2">
-          <button className={button} type="button" disabled={!ready||!consent||started||working} onClick={()=>void begin()}>{s('بدء المختبر','Start lab','启动实验')}</button>
+          <button className={button} type="button" disabled={!ready||!browserReady||!consent||started||working} onClick={()=>void begin()}>{s('بدء المختبر','Start lab','启动实验')}</button>
           <button className={button} type="button" disabled={!started&&!working} onClick={stop}>{s('إيقاف','Stop','停止')}</button>
         </div>
       </section>
