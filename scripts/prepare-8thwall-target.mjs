@@ -52,7 +52,8 @@ async function importCli(){
   }
   const lumPath=path.join(cliDir,targetName+'_luminance.png');
   const metadata=await sharp(lumPath).metadata();
-  // Official CLI may encode grayscale pixels in RGBA PNG (4 channels).\n  if(metadata.width!==480||metadata.height!==640||![1,2,3,4].includes(metadata.channels)) {
+  // Official CLI may encode grayscale pixels in RGBA PNG (4 channels).
+  if(metadata.width!==480||metadata.height!==640||![1,2,3,4].includes(metadata.channels)) {
     throw new Error('Expected official CLI 480x640 luminance PNG; got '+JSON.stringify({width:metadata.width,height:metadata.height,channels:metadata.channels}));
   }
   const imagePath='/ar/targets/'+targetName+'_luminance.png';
