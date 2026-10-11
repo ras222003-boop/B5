@@ -113,6 +113,7 @@ export async function startWorldScaleResearchSession(
   try{
     runtime=await loadReviewedBinaryEngine();
     if(signal?.aborted)throw new Error('CANCELLED');
+    runtime.XrController.configure({disableWorldTracking:false,scale:'absolute',enableWorldPoints:false});
     const controller=runtime.XrController.pipelineModule();
     const renderer=runtime.GlTextureRenderer.pipelineModule();
     const listener:PipelineModule={
@@ -129,7 +130,6 @@ export async function startWorldScaleResearchSession(
       },
     };
     names=[renderer.name,controller.name,listener.name];
-    runtime.XrController.configure({disableWorldTracking:false,scale:'absolute',enableWorldPoints:false});
     runtime.addCameraPipelineModules([renderer,controller,listener]);
     runtime.run({canvas,cameraConfig:{direction:runtime.XrConfig.camera().BACK}});
     if(signal?.aborted){stop();throw new Error('CANCELLED')}
