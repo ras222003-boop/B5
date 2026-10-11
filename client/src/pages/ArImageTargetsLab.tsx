@@ -20,6 +20,7 @@ export default function ArImageTargetsLab() {
   const s = (ar: string, en: string, zh: string) => isArabic ? ar : isChinese ? zh : en;
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const sessionRef = useRef<BasiraImageTargetSession | null>(null);
+  const pendingStart = useRef<AbortController | null>(null);
   const mounted = useRef(true);
   const generation = useRef(0);
   const lastSpoken = useRef(0);
@@ -47,6 +48,8 @@ export default function ArImageTargetsLab() {
 
   const stop = () => {
     generation.current++;
+    pendingStart.current?.abort();
+    pendingStart.current = null;
     sessionRef.current?.stop();
     sessionRef.current = null;
     if (mounted.current) {
@@ -66,6 +69,8 @@ export default function ArImageTargetsLab() {
     return () => {
       mounted.current = false;
       generation.current++;
+      pendingStart.current?.abort();
+      pendingStart.current = null;
       sessionRef.current?.stop();
       sessionRef.current = null;
       document.removeEventListener('visibilitychange', onHidden);
@@ -96,6 +101,8 @@ export default function ArImageTargetsLab() {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const key = ++generation.current;
+    const pending = new AbortController();
+    pendingStart.current = pending;
     setWorking(true);
     setError('');
     setDetection(null);
@@ -109,7 +116,7 @@ export default function ArImageTargetsLab() {
         onStatus: newStatus => { if (mounted.current && generation.current === key) setStatus(newStatus); },
         onDetection: event => { if (mounted.current && generation.current === key) handleDetection(event); },
         onError: () => { if (mounted.current && generation.current === key) setError('AR camera pipeline error'); },
-      });
+      }, pending.signal);
       if (!mounted.current || generation.current !== key) {
         session.stop();
         return;
@@ -127,6 +134,7 @@ export default function ArImageTargetsLab() {
         setStatus(s('لم تبدأ التجربة؛ يمكنك استخدام بقية خدمات بصيرة.', 'Demo could not start; Basira remains available.', '实验无法启动；Basira 的其他功能仍可使用。'));
       }
     } finally {
+      if (pendingStart.current === pending) pendingStart.current = null;
       if (mounted.current && generation.current === key) setWorking(false);
     }
   };
