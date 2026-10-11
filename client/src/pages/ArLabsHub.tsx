@@ -49,6 +49,15 @@ export default function ArLabsHub() {
         </article>;
       })}
     </section>
+    <section className="space-y-3 rounded-2xl border border-amber-200/30 bg-stone-900 p-5">
+      <h2 className="text-xl font-bold">{s('إعداد معالم المؤسسات المعتمدة','Prepare verified institutional landmarks','准备已验证机构标记')}</h2>
+      <p>{s('اطلع على الغرف العامة المعتمدة في خرائط بصيرة، وجهز قائمة تسجيل للعلامات البصرية دون ادعاء تحديد موقع فعلي.',
+        'Read approved public rooms from existing Basira maps and prepare a draft marker-registration list without claiming physical localization.',
+        '查看官方验证的公共房间并准备标记登记草稿。')}</p>
+      <Link href="/navigation/ar-lab/venues" className="inline-flex min-h-12 items-center rounded-lg border border-amber-300 px-4 py-2 font-bold text-amber-100">
+        {s('فتح مخطط المعالم','Open landmark planner','打开标记规划')}
+      </Link>
+    </section>
     <section className="rounded-2xl border border-amber-200/20 p-5">
       <h2 className="text-xl font-bold">{s('توجيه المستخدم وبدائل الأجهزة غير المدعومة','Coaching and unsupported-device fallback','使用指导与不支持设备回退')}</h2>
       <p>{s('قبل كل تجربة: اجلس أو قف بثبات في مكان آمن، افتح الموقع عبر HTTPS، وافق على الكاميرا عند الحاجة، واستخدم جهازًا ثانيًا لعرض علامات الاختبار. يمكن إيقاف الجلسة في أي وقت.','Before experimenting: remain stationary in a safe location, open over HTTPS, opt in to camera use, and display test markers on a second device. Stop any time.','请在安全固定的位置测试，使用 HTTPS，并主动授权相机。')}</p>
