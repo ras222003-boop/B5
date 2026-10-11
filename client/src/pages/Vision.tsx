@@ -192,7 +192,7 @@ export default function Vision() {
           <li key={obj.id}>{t.object[obj.type]} — {metricDistanceMeters(obj)!.toFixed(2)} {lang==='ar'?'متر':lang==='zh-CN'?'米':'m'} ({obj.approximateDistance?.source})</li>
         )}</ul>
       </section>}
-    {import.meta.env.VITE_BASIRA_AR_LAB_ENABLED === 'true' &&
+    {import.meta.env.VITE_BASIRA_AR_LAB_ENABLED !== 'false' &&
       <Link href="/navigation/ar-lab/world" className="inline-flex min-h-12 items-center text-amber-200 underline">
         {lang==='ar'?'بحث 8th Wall لقياس انتقال الهاتف بالمتر (ليس بعد الأجسام)':lang==='zh-CN'?'8th Wall 位移研究（非物体距离）':'8th Wall camera-displacement research (not object distance)'}
       </Link>}

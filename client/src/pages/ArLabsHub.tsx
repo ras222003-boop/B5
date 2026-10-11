@@ -13,7 +13,7 @@ const featureCopy: Record<BasiraArFeatureId, {ar:string;en:string;zh:string;url:
  'world-effects': {ar:'مؤثرات العالم ثلاثية الأبعاد — تحتاج ترخيص SLAM',en:'3D world effects — SLAM license required',zh:'三维世界特效 — 需要 SLAM 许可',url:'/navigation/ar-lab/world'},
  'absolute-scale': {ar:'تقدير المقياس بالأمتار — ليس قياسًا مباشرًا للأجسام',en:'Meter-scale world coordinates — not object depth',zh:'世界坐标米制估计 — 并非物体深度',url:'/navigation/ar-lab/world'},
 };
-const enabled=import.meta.env.VITE_BASIRA_AR_LAB_ENABLED === 'true';
+const enabled=import.meta.env.VITE_BASIRA_AR_LAB_ENABLED !== 'false';
 export default function ArLabsHub() {
   const {lang}=useI18n();
   const s=(ar:string,en:string,zh:string)=>lang==='ar'?ar:lang==='zh-CN'?zh:en;
@@ -48,6 +48,22 @@ export default function ArLabsHub() {
           {copy.url && <Link href={copy.url} className="inline-flex min-h-12 items-center rounded-lg border border-amber-300 px-4 py-2 font-semibold text-amber-100">{state==='license-gated'?s('متطلبات الاختبار والترخيص','Review readiness','审核要求'):s('فتح المختبر','Open experiment','打开实验室')}</Link>}
         </article>;
       })}
+    </section>
+    <section className="space-y-4 rounded-2xl border border-amber-300/40 bg-stone-900 p-5" aria-label={s('طرق حساب المسافات بالأمتار','How metres are measured','米制测距方式')}>
+      <h2 className="text-xl font-bold">{s('الأمتار في بصيرة: اختر القياس الصحيح','Metres in Basira: choose the right measurement','Basira 米制测量')}</h2>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <article className="rounded-xl border border-amber-200/20 p-4 space-y-2">
+          <h3 className="font-semibold">{s('حركة الهاتف بالأمتار — Absolute Scale','Camera movement in metres — Absolute Scale','相机位移（米）')}</h3>
+          <p className="text-sm text-stone-200">{s('يقدّر المسافة بين موضعي الكاميرا بعد استقرار SLAM، وليس بُعد الأجسام. يتطلب ترخيص المحرك الثنائي واختبارًا خاصًا.','Estimates movement between camera poses after tracking. Does not measure objects. Requires restricted binary approval and a separate test.','估计相机的位移，不等于到物体的距离。')}</p>
+          <Link className="text-amber-200 underline" href="/navigation/ar-lab/world-scale-sandbox">{s('فتح معايرة الأمتار المكانية','Open spatial metre calibration','打开空间米数校准')}</Link>
+        </article>
+        <article className="rounded-xl border border-amber-200/20 p-4 space-y-2">
+          <h3 className="font-semibold">{s('بعد الأسطح عن الكاميرا — LiDAR / ARCore','Surface depth — LiDAR / ARCore','物体表面深度')}</h3>
+          <p className="text-sm text-stone-200">{s('يحتاج تطبيقًا أصليًا ومستشعر عمق متوافقًا للتحقق من المسافة إلى سطح الجسم. Safari وحده لا يقرأ LiDAR الخام.','Needs a native application and validated camera-depth sensor. Safari alone cannot read iPhone LiDAR depth.','需要原生应用和可信的深度数据。')}</p>
+          <Link className="text-amber-200 underline" href="/navigation/vision">{s('فتح رؤية بصيرة وحالة قياس العمق','Open Basira Vision depth status','打开 Basira Vision 深度状态')}</Link>
+        </article>
+      </div>
+      <p className="text-sm text-amber-100">{s('لا يُسمح لقياس حركة الكاميرا بإصدار تنبيه اقتراب كرسي أو درج. المختبرات ليست أدوات تنقل آمن.','Camera movement must never trigger chair or stair obstacle-distance alerts. Labs are not safe-navigation tools.','相机位移不可用于椅子或楼梯的避障警告。')}</p>
     </section>
     <section className="space-y-3 rounded-2xl border border-amber-200/30 bg-stone-900 p-5">
       <h2 className="text-xl font-bold">{s('إعداد معالم المؤسسات المعتمدة','Prepare verified institutional landmarks','准备已验证机构标记')}</h2>

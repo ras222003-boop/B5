@@ -2,8 +2,12 @@ import {reserveBasiraArCamera, releaseBasiraArCamera} from './cameraOwnership';
 import {parseTrustedWorldPose,type WorldPose} from './worldScaleResearch';
 
 /** Closed-source SLAM is separate from the 8th Wall MIT package. */
-export const BASIRA_BINARY_SDK_CDN = 'https://cdn.jsdelivr.net/npm/@8thwall/engine@0.1.0/dist/xr.js';
-export const BASIRA_SLAM_CHUNK_CDN = 'https://cdn.jsdelivr.net/npm/@8thwall/engine-binary@1/dist/xr-slam.js';
+/** Official SLAM-enabled engine binary: the MIT @8thwall/engine has NO SLAM.
+ * 8th Wall distributes the binary free under the separately restricted license.
+ * Use the documented "slam" chunk name; do not invent chunk URLs.
+ */
+export const BASIRA_BINARY_SDK_CDN = 'https://cdn.jsdelivr.net/npm/@8thwall/engine-binary@1/dist/xr.js';
+export const BASIRA_SLAM_PRELOAD = 'slam';
 
 /**
  * These env flags must be explicitly set in a dedicated non-production test
@@ -63,12 +67,16 @@ async function loadReviewedBinaryEngine():Promise<WorldXRRuntime>{
     script.src=BASIRA_BINARY_SDK_CDN;
     script.async=true;
     script.crossOrigin='anonymous';
-    script.setAttribute('data-preload-chunks','slam: '+BASIRA_SLAM_CHUNK_CDN);
+    script.setAttribute('data-preload-chunks',BASIRA_SLAM_PRELOAD);
     let done=false;
     const clear=()=>{window.removeEventListener('xrloaded',ready);window.clearTimeout(timer)};
     const ready=()=>{
       if(done||!window.XR8)return;
-      done=true;clear();resolve(window.XR8 as unknown as WorldXRRuntime);
+      const engine=window.XR8 as unknown as Partial<WorldXRRuntime>;
+      if(!engine.XrController?.configure||!engine.XrController?.pipelineModule||
+         !engine.GlTextureRenderer?.pipelineModule||!engine.addCameraPipelineModules||
+         !engine.run||!engine.stop) {fail();return;}
+      done=true;clear();resolve(engine as WorldXRRuntime);
     };
     const fail=()=>{
       if(done)return;

@@ -20,6 +20,7 @@ export default function ArWorldScaleSandbox(){
   const abort=useRef<AbortController|null>(null);
   const currentPose=useRef<WorldPose|null>(null);
   const lastDisplayAt=useRef(0);
+  const lastSpokenAt=useRef(0);
   const startPose=useRef<WorldPose|null>(null);
   const live=useRef(true);
   const [consent,setConsent]=useState(false);
@@ -41,6 +42,8 @@ export default function ArWorldScaleSandbox(){
     session.current=null;
     currentPose.current=null;
     startPose.current=null;
+    lastSpokenAt.current=0;
+    if(typeof window!=='undefined'&&window.speechSynthesis)window.speechSynthesis.cancel();
     if(live.current){
       setStarted(false);setWorking(false);setCurrentDistance(null);setPoseAvailable(false);
       setStatus(s('تم إيقاف جلسة البحث.','Research session stopped.','研究会话已停止。'));
@@ -100,6 +103,26 @@ export default function ArWorldScaleSandbox(){
     setCurrentDistance(null);
     setStatus(s('سُجلت محاولة معايرة بحثية؛ لم يتم اعتماد أمان المشي.','Research calibration trial saved; walking safety is not certified.','已记录研究数据，不代表可安全行走。'));
   };
+  const speakDisplacement=()=>{
+    const start=startPose.current,end=currentPose.current;
+    const distance=start&&end&&Date.now()-end.timestampMs<=1500?displacementMetres(start,end):null;
+    const message=distance===null?s(
+      'المقياس غير متاح الآن، أو فقد التتبع. لا توجد قراءة بالأمتار.',
+      'World scale is unavailable or tracking was lost. No metre reading.',
+      '世界尺度不可用或追踪中断。没有可信的米数。',
+    ):s(
+      `انتقلت الكاميرا تقديريًا ${distance.toFixed(2)} متر من موضع البداية. هذه ليست مسافة الجسم ولا تصريحًا بالمشي.`,
+      `Estimated camera displacement ${distance.toFixed(2)} metres from the starting pose. Not object distance or walking clearance.`,
+      `相机与起点的估算位移为 ${distance.toFixed(2)} 米。并非物体距离或步行许可。`,
+    );
+    setStatus(message);
+    if(typeof window.speechSynthesis==='undefined'||typeof SpeechSynthesisUtterance==='undefined')return;
+    if(Date.now()-lastSpokenAt.current<1500)return;
+    lastSpokenAt.current=Date.now();
+    const utterance=new SpeechSynthesisUtterance(message);
+    utterance.lang=lang==='ar'?'ar-SA':lang==='zh-CN'?'zh-CN':'en-US';
+    try{window.speechSynthesis.cancel();window.speechSynthesis.speak(utterance);}catch{/* optional output */}
+  };
   const csv=()=>{
     const columns=['reference_m','camera_displacement_m','absolute_error_m','observed_at_ms','device'];
     const rows=trials.map(x=>[x.referenceMeters,x.cameraDisplacementMeters,Math.abs(x.referenceMeters-x.cameraDisplacementMeters),x.observedAt,x.device]);
@@ -119,6 +142,12 @@ export default function ArWorldScaleSandbox(){
       'محرك SLAM المقيّد غير مفعّل. يلزم تأكيد مراجعة الترخيص وإعداد متغيري VITE_BASIRA_AR_BINARY_LAB_ENABLED وVITE_BASIRA_AR_BINARY_LICENSE_APPROVED في بيئة اختبار خاصة فقط.',
       'Restricted SLAM disabled. License review and both VITE_BASIRA_AR_BINARY_LAB_ENABLED and VITE_BASIRA_AR_BINARY_LICENSE_APPROVED must be explicitly set in a private test environment.',
       '受限 SLAM 已禁用，需经过许可审查并在私人测试环境显式启用。')}</p>}
+    <p className="text-xs text-stone-300">
+      {s('محرك الواقع المعزز المكاني: © 2026 Niantic Spatial, Inc. يعمل بترخيص XR Engine Binary محدود الاستخدام. استخدمه فقط بعد مراجعة شروط الترخيص.',
+         'Spatial XR Engine: © 2026 Niantic Spatial, Inc. Licensed under the limited-use XR Engine Binary agreement. Review the license before use.',
+         '空间 XR 引擎 © 2026 Niantic Spatial, Inc. 受限许可。')}
+      {' '}<a className="text-amber-200 underline" href="https://github.com/8thwall/engine/blob/main/LICENSE" target="_blank" rel="noopener noreferrer">{s('الترخيص وإخلاء المسؤولية','License and warranty disclaimer','许可及免责声明')}</a>
+    </p>
     <div className="grid gap-4 md:grid-cols-2">
       <section className="space-y-3 rounded-2xl border border-amber-200/30 bg-stone-900 p-4">
         <h2 className="text-xl font-bold">{s('الكاميرا والموضع','Camera and pose','摄像头和位姿')}</h2>
@@ -141,13 +170,24 @@ export default function ArWorldScaleSandbox(){
         <div className="flex flex-wrap gap-2">
           <button className={button} type="button" disabled={!started||!poseAvailable} onClick={baseline}>{s('تثبيت نقطة البداية','Set baseline','设置起点')}</button>
           <button className={button} type="button" disabled={!started||currentDistance===null} onClick={record}>{s('تسجيل المسافة بعد التوقف','Record trial when stationary','静止后记录距离')}</button>
+          <button className={button} type="button" disabled={!started||!startPose.current||currentDistance===null} onClick={speakDisplacement}>{s('انطق المسافة المكانية التجريبية','Speak experimental camera travel','播报实验性相机位移')}</button>
         </div>
         <p role="status" aria-live="polite">{s('انتقال الكاميرا التقديري','Estimated camera travel','估计相机位移')}: {currentDistance===null?'—':currentDistance.toFixed(3)+' m'}</p>
         <p>{s('القراءات الصالحة','Valid trials','有效记录')}: {summary.attempts}</p>
+        <p className="text-sm text-amber-100">{s(
+          'ابدأ وأنت ثابت، انتظر استقرار التتبع، ثبّت البداية، ثم حرّك الهاتف لمسافة مرجعية مع إشراف مبصر وتوقف لتسجيل المحاولة. لا تستخدم المسافة للإرشاد أثناء الحركة.',
+          'Start stationary, wait for tracking, set baseline and carefully move the phone over a tape-measured reference with sighted supervision. Stop before recording.',
+          '静止启动并等待追踪稳定，设置起点，然后在监督下与卷尺比较并停下记录。',
+        )}</p>
         <p>{s('وسيط الخطأ المطلق','Median absolute error','绝对误差中位数')}: {summary.medianAbsoluteErrorMetres===null?'—':summary.medianAbsoluteErrorMetres.toFixed(3)+' m'}</p>
         <p>{s('الخطأ P95','P95 absolute error','P95 误差')}: {summary.p95AbsoluteErrorMetres===null?'—':summary.p95AbsoluteErrorMetres.toFixed(3)+' m'}</p>
         <button className={button} type="button" onClick={csv} disabled={!trials.length}>{s('تصدير CSV','Export CSV','导出 CSV')}</button>
         <p className="text-amber-200">{s('حالة السلامة: غير معتمد للمشي','Walking safety: NOT APPROVED','步行安全：未经认证')}</p>
+        <p className="text-xs text-stone-300">{s(
+          'أمتار Absolute Scale تُقدّر تغيّر موضع الكاميرا فقط. لقياس كرسي أو حافة درج نحتاج خريطة عمق ARKit أو ARCore متزامنة واختبارًا مستقلًا.',
+          'Absolute Scale estimates camera pose displacement only. Chair or stair-edge distance requires independently validated ARKit/ARCore depth and frame alignment.',
+          '绝对比例仅估计相机位移。物体距离需要经过验证的 ARKit/ARCore 深度。',
+        )}</p>
       </section>
     </div>
   </main></Layout>;

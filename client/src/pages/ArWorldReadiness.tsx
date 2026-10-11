@@ -11,6 +11,16 @@ export default function ArWorldReadiness() {
       'هذه صفحة توضيحية وليست محرك SLAM قيد التشغيل. لا يتم تحميل المحرك الثنائي المقيّد أو قياس أي مسافات أو تفعيل أي تنبيه ملاحة.',
       'This is an information page, not a running SLAM engine. No restricted binary is fetched, no metres are measured, and no mobility alerts are enabled.',
       '这是信息页面，并非 SLAM 实时功能。不会加载受限引擎或测量距离。')}</p>
+    <section className="rounded-xl border border-amber-300/40 bg-stone-900 p-4 space-y-2" aria-label={s('ترخيص 8th Wall','8th Wall license','8th Wall 许可')}>
+      <h2 className="font-bold">{s('تقنية مجانية وليست بلا شروط','Free technology with license restrictions','免费但受许可限制')}</h2>
+      <p>{s(
+        'المحرك المفتوح المصدر MIT يدعم العلامات والوجه والسماء. لكن Absolute Scale وتتبع العالم يحتاجان محرك XR Engine Binary المنفصل. يسمح الترخيص بالاستخدام التجاري ضمن شروطه، ويقيّد الخدمات المدفوعة التي تستمد معظم قيمتها من هذا المحرك؛ لذلك نبقي التشغيل خلف اعتماد واضح.',
+        'MIT covers image targets, face and sky; Absolute Scale and world tracking need XR Engine Binary. Its limited license permits certain commercial uses but restricts paid services whose value is substantially derived from the engine. An explicit approval gate is retained.',
+        '图像标记、人脸和天空采用 MIT。世界尺度需单独许可的 XR 二进制，并限制某些主要依赖其功能的收费服务。',
+      )}</p>
+      <p><a href="https://github.com/8thwall/engine/blob/main/LICENSE" target="_blank" rel="noopener noreferrer" className="text-amber-200 underline">{s('اطلع على ترخيص المحرك الثنائي ونسب الحقوق','Read binary license and attribution requirements','查看二进制许可条款')}</a></p>
+      <p className="text-sm text-stone-300">© 2026 Niantic Spatial, Inc. — XR Engine Binary · <a className="underline" href="https://8thwall.org/docs/open-source" target="_blank" rel="noopener noreferrer">8th Wall open-source documentation</a></p>
+    </section>
     <h2 className="text-xl font-bold">{s('قبل التفعيل التجريبي','Before an experiment may be enabled','启用实验前')}</h2>
     <ol className="list-inside list-decimal space-y-3 rounded-xl border border-amber-200/20 bg-stone-900 p-5">
       <li>{s('مراجعة قانونية لترخيص XR Engine Binary والاستخدام التجاري في اشتراكات بصيرة.','Review the XR Engine Binary license for Basira subscriptions.','审查商业许可。')}</li>
