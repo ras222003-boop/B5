@@ -19,6 +19,7 @@ export default function ArWorldScaleSandbox(){
   const session=useRef<WorldLabSession|null>(null);
   const abort=useRef<AbortController|null>(null);
   const currentPose=useRef<WorldPose|null>(null);
+  const lastDisplayAt=useRef(0);
   const startPose=useRef<WorldPose|null>(null);
   const live=useRef(true);
   const [consent,setConsent]=useState(false);
@@ -70,9 +71,12 @@ export default function ArWorldScaleSandbox(){
         onError:value=>{if(live.current&&!controller.signal.aborted)setError(value)},
         onPose:pose=>{
           if(!live.current||controller.signal.aborted)return;
+          if(!currentPose.current)setPoseAvailable(true);
           currentPose.current=pose;
-          setPoseAvailable(true);
-          if(startPose.current)setCurrentDistance(displacementMetres(startPose.current,pose));
+          if(startPose.current && Date.now()-lastDisplayAt.current>=250){
+            lastDisplayAt.current=Date.now();
+            setCurrentDistance(displacementMetres(startPose.current,pose));
+          }
         },
       },consent,controller.signal);
       if(!live.current||controller.signal.aborted){current.stop();return}
