@@ -184,7 +184,7 @@ final class NativeMetricVisionController: UIViewController, ARSessionDelegate, W
         let source = CIImage(cvPixelBuffer: cameraBuffer)
         let scaled = source.transformed(by: CGAffineTransform(scaleX: scale, y: scale))
         guard let jpeg = context.jpegRepresentation(of: scaled, colorSpace: CGColorSpaceCreateDeviceRGB(),
-                                                    options: [.lossyCompressionQuality: 0.68]) else { return nil }
+                                                    options: [:]) else { return nil }
 
         guard CVPixelBufferLockBaseAddress(map, .readOnly) == kCVReturnSuccess else { return nil }
         defer { CVPixelBufferUnlockBaseAddress(map, .readOnly) }
