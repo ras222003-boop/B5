@@ -8,18 +8,45 @@ const overlap=(a:VisionDetection,b:VisionDetection)=>{
   const intersection=x*y;
   return intersection/(a.boundingBox.width*a.boundingBox.height+b.boundingBox.width*b.boundingBox.height-intersection||1);
 };
-export function metricDepthForDetection(d:VisionDetection,map:MetricDepthMap):VisionDetection['approximateDistance'] {
-  if(map.confidence<.7)return null;
-  const cx=d.boundingBox.x+d.boundingBox.width/2,cy=d.boundingBox.y+d.boundingBox.height/2;
+/**
+ * Conservative association of a detected object with a SAME-VIDEO-FRAME
+ * metric depth surface. Detection rectangles are not object masks: reject
+ * mixed or hollow areas instead of assuming background is the object.
+ *
+ * The resulting reading is EXPERIMENTAL and never validates stair/drop-off
+ * safety. Absolute Scale (world-pose displacement) cannot feed this path.
+ */
+export function metricDepthForDetection(d: VisionDetection, map: MetricDepthMap): VisionDetection['approximateDistance'] {
+  if (map.alignmentVerified !== true || map.confidence < .75 || d.source !== 'OBJECT_DETECTOR' ||
+      d.confidence < .75 || Math.abs(d.timestamp-map.timestamp) > 100 ||
+      !Number.isFinite(d.timestamp) || !Number.isFinite(map.timestamp) ||
+      !['ARKIT_DEPTH','LIDAR','ARCORE_DEPTH','DEPTH_SENSOR'].includes(map.source) ||
+      !Number.isInteger(map.width) || !Number.isInteger(map.height) ||
+      map.values.length !== map.width*map.height) return null;
+  const box=d.boundingBox;
+  if (![box.x,box.y,box.width,box.height].every(Number.isFinite) ||
+      box.x<0 || box.y<0 || box.width<=0 || box.height<=0 ||
+      box.x+box.width>1 || box.y+box.height>1 ||
+      box.width*map.width<7 || box.height*map.height<7) return null;
   const samples:number[]=[];
-  for(const dx of [-.08,0,.08])for(const dy of [-.08,0,.08]){
-    const x=Math.max(0,Math.min(map.width-1,Math.floor((cx+dx*d.boundingBox.width)*map.width)));
-    const y=Math.max(0,Math.min(map.height-1,Math.floor((cy+dy*d.boundingBox.height)*map.height)));
-    const value=map.values[y*map.width+x];if(Number.isFinite(value)&&value>0)samples.push(value);
+  let center:number|null=null;
+  for (let y=0;y<5;y++)for(let x=0;x<5;x++){
+    const px=Math.max(0,Math.min(map.width-1,Math.floor((box.x+(.26+x*.12)*box.width)*map.width)));
+    const py=Math.max(0,Math.min(map.height-1,Math.floor((box.y+(.26+y*.12)*box.height)*map.height)));
+    const value=map.values[py*map.width+px];
+    if(Number.isFinite(value)&&value>=.2&&value<=10) {
+      samples.push(value);
+      if(x===2&&y===2)center=value;
+    }
   }
-  if(samples.length<5)return null;
+  if (samples.length<20||center===null)return null;
   samples.sort((a,b)=>a-b);
-  return {distanceMeters:samples[Math.floor(samples.length/2)],confidence:map.confidence,source:map.source};
+  const mid=samples[Math.floor(samples.length/2)];
+  const spread=samples[Math.ceil((samples.length-1)*.9)]-samples[Math.floor((samples.length-1)*.1)];
+  const allowed=Math.max(.15,mid*.12);
+  if(spread>allowed||Math.abs(center-mid)>allowed)return null;
+  return {distanceMeters:Math.round(mid*100)/100,
+    confidence:Math.min(map.confidence,d.confidence,samples.length/25),source:map.source};
 }
 export interface FusionInput {
   objects:VisionDetection[];segmentation:SegmentationGrid|null;

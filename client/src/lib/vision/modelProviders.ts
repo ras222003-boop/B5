@@ -1,4 +1,4 @@
-import type { MetricDepthMap, MetricDepthProvider, RelativeDepthMap, RelativeDepthProvider, SceneSegmentationProvider, SegmentationGrid } from '@shared/vision';
+import type { RelativeDepthMap, RelativeDepthProvider, SceneSegmentationProvider, SegmentationGrid } from '@shared/vision';
 import { semanticCode } from './segmentation';
 
 async function localTransformers() {
@@ -61,21 +61,14 @@ export class MonocularRelativeDepthProvider implements RelativeDepthProvider {
   close(){return this.dispose();}
 }
 
-/** A native wrapper must provide a camera-aligned metric map; all values are validated. */
-export interface BasiraNativeDepthBridge {
-  getAlignedDepth():Promise<{width:number;height:number;values:number[];confidence:number;source:'ARKIT_DEPTH'|'LIDAR'|'ARCORE_DEPTH'|'DEPTH_SENSOR'}|null>;
-}
-declare global { interface Window { BasiraNativeDepth?:BasiraNativeDepthBridge } }
-export class NativeMetricDepthProvider implements MetricDepthProvider {
-  constructor(private readonly bridge:BasiraNativeDepthBridge) {}
-  async capture(timestamp:number):Promise<MetricDepthMap|null> {
-    const result=await this.bridge.getAlignedDepth();
-    if(!result)return null;
-    const {width,height,confidence,source,values}=result;
-    if(!Number.isInteger(width)||!Number.isInteger(height)||width<4||height<4||width*height>2_000_000||values.length!==width*height||
-      !Number.isFinite(confidence)||confidence<0||confidence>1||!['ARKIT_DEPTH','LIDAR','ARCORE_DEPTH','DEPTH_SENSOR'].includes(source))return null;
-    const map=new Float32Array(values.map(n=>Number.isFinite(n)&&n>0?n:NaN));
-    return {width,height,values:map,confidence,source,timestamp};
-  }
-  async close(){/* Owned by the native bridge. */}
-}
+/**
+ * Keep the historical import stable for the existing Vision page.
+ * Trusted native wrappers must now provide an attested same-video-frame
+ * depth capture. An unverified getAlignedDepth() response is rejected.
+ */
+export {
+  VerifiedMetricDepthProvider as NativeMetricDepthProvider,
+} from './metricEngine';
+export type {
+  BasiraVerifiedMetricBridge as BasiraNativeDepthBridge,
+} from './metricEngine';

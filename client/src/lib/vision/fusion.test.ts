@@ -50,9 +50,9 @@ describe('local semantic vision and fusion',()=>{
   it('fuses segmentation, COCO and measured native depth without making monocular metres',()=>{
     const g=grid();paint(g,SEG.FLOOR,0,16,30,27);paint(g,SEG.DOOR,20,6,26,21);
     const values=new Float32Array(30*30).fill(1.2);
-    const metric:MetricDepthMap={width:30,height:30,values,confidence:.9,source:'LIDAR',timestamp:100};
+    const metric:MetricDepthMap={width:30,height:30,values,confidence:.9,source:'LIDAR',timestamp:100,alignmentVerified:true};
     const fusion=new VisionFusionEngine(new BasiraSafetyEngine(DEFAULT_VISION_CONFIG));
-    const frame=fusion.fuse({objects:[object('CHAIR')],segmentation:g,relativeDepth:null,metricDepth:metric,signs:[]});
+    const frame=fusion.fuse({objects:[{...object('CHAIR'),boundingBox:{x:.35,y:.5,width:.3,height:.35}}],segmentation:g,relativeDepth:null,metricDepth:metric,signs:[]});
     expect(frame.detections.some(d=>d.type==='DOOR')).toBe(true);
     expect(frame.detections.find(d=>d.type==='CHAIR')?.approximateDistance?.source).toBe('LIDAR');
     expect(frame.walkableArea?.pathAhead).toBe('BLOCKED');

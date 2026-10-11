@@ -12,6 +12,8 @@ import { MediaPipeVisionProvider, TesseractOCRProvider, UnavailableDepthProvider
 import { MonocularRelativeDepthProvider, NativeMetricDepthProvider, SegFormerSceneProvider } from '@/lib/vision/modelProviders';
 import { detectVisionCapabilities, type VisionCapabilities } from '@/lib/vision/capabilities';
 import { VisionPipeline } from '@/lib/vision/pipeline';
+import { metricDistanceMeters } from '@/lib/vision/safety';
+import type { MetricDiagnostic } from '@/lib/vision/metricEngine';
 import { BrowserHapticFeedbackProvider, VisionAnnouncementService } from '@/lib/vision/scene';
 import type { PlaceCandidate, RecognizedPlace, RiskLevel, SceneDescription } from '@shared/vision';
 import type { MapNode, Place } from '@shared/navigation';
@@ -42,6 +44,7 @@ export default function Vision() {
   const [OCRWarning,setOCRWarning]=useState('');
   const [modelWarning,setModelWarning]=useState('');
   const [depthWarning,setDepthWarning]=useState('');
+  const [metricInfo,setMetricInfo]=useState<MetricDiagnostic>({status:'UNAVAILABLE',source:null});
   const [capabilities,setCapabilities]=useState<VisionCapabilities|null>(null);
   const [lastAlert,setLastAlert]=useState('');
   const [risk,setRisk]=useState<RiskLevel|null>(null);
@@ -61,7 +64,7 @@ export default function Vision() {
     const pipeline=pipelineRef.current;pipelineRef.current=null;
     cameraRef.current.stop(videoRef.current??undefined);
     stopSpeaking();
-    setState('STOPPED');setScene(null);setCandidates([]);setRecognized(null);
+    setState('STOPPED');setMetricInfo({status:'UNAVAILABLE',source:null});setScene(null);setCandidates([]);setRecognized(null);
     localizationRef.current=new BasiraLocalizationEngine();setLocationEstimate(null);graphNodesRef.current=[];
     if(pipeline)await pipeline.stop();
   },[stopSpeaking]);
@@ -76,7 +79,7 @@ export default function Vision() {
   const start=async()=>{
     if(state!=='STOPPED'||!videoRef.current)return;
     const run=++generation.current;
-    setError('');setOCRWarning('');setModelWarning('');setDepthWarning('');setLastAlert('');setRisk(null);setSpokenSummary('');setState('STARTING');
+    setError('');setOCRWarning('');setModelWarning('');setDepthWarning('');setMetricInfo({status:'UNAVAILABLE',source:null});setLastAlert('');setRisk(null);setSpokenSummary('');setState('STARTING');
     try {
       const safetyFlags=await loadSafetyFlags();
       const detected=detectVisionCapabilities();setCapabilities(detected);
@@ -117,6 +120,7 @@ export default function Vision() {
           OCRFailure:()=>{if(run===generation.current)setOCRWarning(t.ocrFailure);},
           segmentationFailure:()=>{if(run===generation.current)setModelWarning(t.segmentationFailure);},
           depthFailure:()=>{if(run===generation.current)setDepthWarning(t.depthFailure);},
+          metricStatus:status=>{if(run===generation.current)setMetricInfo(status);},
           fatal:()=>{if(run===generation.current){setError(t.providerFailure);void stop();}},
         },
       });
@@ -169,7 +173,29 @@ export default function Vision() {
     {modelWarning&&<p role="status" aria-live="polite" className="text-amber-200">{modelWarning}</p>}
     {depthWarning&&<p role="status" aria-live="polite" className="text-amber-200">{depthWarning}</p>}
     {!online&&<p role="status" className="rounded-xl border border-amber-300/40 p-4 text-amber-100">{t.offline}</p>}
-    <p className="text-sm text-stone-300">{capabilities?.nativeDepth?t.nativeDepthAvailable:t.depthUnavailable}</p>
+    <section aria-label={lang==='ar'?'حالة قياس الأمتار':lang==='zh-CN'?'米制测量状态':'Metric depth status'}
+      role="status" aria-live="polite" className="rounded-xl border border-amber-300/35 bg-stone-900 p-4">
+      <p className="font-bold">{lang==='ar'?'قياس المسافات بالأمتار':lang==='zh-CN'?'距离（米）':'Distance in metres'}</p>
+      <p>{metricInfo.status==='LIVE'
+        ? (lang==='ar'? 'متصل بمصدر عمق متزامن: ':lang==='zh-CN'?'已连接到同步深度源：':'Aligned depth source: ')+(metricInfo.source??'')
+        : metricInfo.status==='WAITING' ? (lang==='ar'?'بانتظار قراءة عمق متزامنة.':lang==='zh-CN'?'等待同步深度数据。':'Waiting for aligned depth data.')
+        : metricInfo.status==='REJECTED' ? (lang==='ar'?'القياسات غير موثوقة أو قديمة؛ لا تُعرض أمتار.':lang==='zh-CN'?'深度无效或过期，不显示米数。':'Depth rejected as stale or unverified; no metres displayed.')
+        : (lang==='ar'?'القياس الحقيقي غير متاح في جلسة المتصفح هذه؛ يستمر التعرف على الأشياء.':lang==='zh-CN'?'此浏览器会话不支持真实米制测量。物体识别仍可用。':'Real metric depth is unavailable in this browser session; object detection continues.')}
+      </p>
+      <p className="mt-2 text-sm text-stone-300">{lang==='ar'?'وجود 8th Wall Absolute Scale لا يثبت مسافة الكرسي؛ يلزم عمق متزامن مع صورة الكاميرا. لا تعتمد على هذه التجربة لتجنب الاصطدام.':lang==='zh-CN'?'8th Wall Absolute Scale 并不证明到物体的距离；请勿用于防碰撞。':'8th Wall Absolute Scale does not establish distance to an object. Do not use this experiment for collision avoidance.'}</p>
+    </section>
+    {scene?.objects.some(obj=>metricDistanceMeters(obj)!==null)&&
+      <section aria-label={lang==='ar'?'قراءات الأجسام بالأمتار':lang==='zh-CN'?'物体距离':'Measured object distances'}
+        className="rounded-xl border border-amber-200/30 bg-stone-900 p-4">
+        <h2 className="mb-2 font-bold">{lang==='ar'?'قياسات مرصودة (تجريبية)':lang==='zh-CN'?'检测到的距离（实验性）':'Observed distances (experimental)'}</h2>
+        <ul className="space-y-2">{scene.objects.filter(obj=>metricDistanceMeters(obj)!==null).slice(0,5).map(obj=>
+          <li key={obj.id}>{t.object[obj.type]} — {metricDistanceMeters(obj)!.toFixed(2)} {lang==='ar'?'متر':lang==='zh-CN'?'米':'m'} ({obj.approximateDistance?.source})</li>
+        )}</ul>
+      </section>}
+    {import.meta.env.VITE_BASIRA_AR_LAB_ENABLED === 'true' &&
+      <Link href="/navigation/ar-lab/world" className="inline-flex min-h-12 items-center text-amber-200 underline">
+        {lang==='ar'?'بحث 8th Wall لقياس انتقال الهاتف بالمتر (ليس بعد الأجسام)':lang==='zh-CN'?'8th Wall 位移研究（非物体距离）':'8th Wall camera-displacement research (not object distance)'}
+      </Link>}
     {scene?.walkableArea&&<p role="status" className="text-amber-100">{scene.walkableArea.pathAhead==='BLOCKED'?t.pathBlocked:scene.walkableArea.pathAhead==='CLEAR'?t.pathClearObserved:t.pathUnknown}</p>}
     {scene?.surfaceAnalysis&&<p role="status" className="text-amber-100">{t.surfaceStatus(scene.surfaceAnalysis.surface??'UNKNOWN',scene.surfaceAnalysis.surfaceCoverage??0)}</p>}
     {scene?.objects.some(object=>object.type==='STAIRS_UNCERTAIN'||object.type==='STAIRS_UP'||object.type==='STAIRS_DOWN')&&<p role="alert" className="text-amber-100">{t.stairsObserved}</p>}
