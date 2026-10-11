@@ -9,7 +9,7 @@ import {
 import { BASIRA_LAB_LANDMARK, type LandmarkDetection } from '@/lib/ar/imageTargetLandmarks';
 import { imageTargetEventsCsv, summarizeImageTargetQa } from '@/lib/ar/imageTargetQa';
 
-const LAB_ENABLED = import.meta.env.VITE_BASIRA_AR_LAB_ENABLED === 'true';
+const LAB_ENABLED = import.meta.env.VITE_BASIRA_AR_LAB_ENABLED !== 'false';
 const markerUrl = '/ar/targets/basira-lab-marker.svg';
 const button = 'min-h-12 rounded-xl border border-amber-300 px-5 py-3 font-semibold text-amber-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-400 disabled:cursor-not-allowed disabled:opacity-40';
 
