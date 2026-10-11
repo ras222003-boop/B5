@@ -22,6 +22,7 @@ function useNotice() {
 }
 
 export default function Navigation() {
+  const {lang}=useI18n();
   const t = useMessages(navigationMessages);
   const vision = useMessages(visionMessages);
   const [, navigate] = useLocation();
