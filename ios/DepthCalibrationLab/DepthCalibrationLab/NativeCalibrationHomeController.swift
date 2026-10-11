@@ -71,6 +71,9 @@ final class NativeCalibrationHomeController: UIViewController {
         stack.addArrangedSubview(conditionPicker)
         stack.addArrangedSubview(label("4. ثبت الهاتف ووجّه علامة المنتصف نحو سطح ثابت ثم التقط قراءة.", style: .body))
 
+        let live = button("الكاميرا مع أسماء الأجسام ومسافاتها (تجريبية)", selector: #selector(openNativeVision))
+        stack.addArrangedSubview(live)
+
         let scan = button("التقاط قياس من LiDAR", selector: #selector(takeSample))
         stack.addArrangedSubview(scan)
 
@@ -122,6 +125,12 @@ final class NativeCalibrationHomeController: UIViewController {
         item.addTarget(self, action: selector, for: .touchUpInside)
         item.accessibilityLabel = title
         return item
+    }
+
+    @objc private func openNativeVision() {
+        let screen = NativeMetricVisionController()
+        screen.modalPresentationStyle = .fullScreen
+        present(screen, animated: true)
     }
 
     @objc private func takeSample() {
