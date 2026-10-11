@@ -45,6 +45,7 @@ const ArLabsHub=lazy(()=>import('./pages/ArLabsHub'));
 const ArFaceLab=lazy(()=>import('./pages/ArEffectsLab').then(page=>({default:page.ArFaceLab})));
 const ArSkyLab=lazy(()=>import('./pages/ArEffectsLab').then(page=>({default:page.ArSkyLab})));
 const ArWorldReadiness=lazy(()=>import('./pages/ArWorldReadiness'));
+const ArWorldScaleSandbox=lazy(()=>import('./pages/ArWorldScaleSandbox'));
 
 
 function Router() {
@@ -89,6 +90,7 @@ function Router() {
       <Route path="/navigation/ar-lab/face" component={ArFaceLab} />
       <Route path="/navigation/ar-lab/sky" component={ArSkyLab} />
       <Route path="/navigation/ar-lab/world" component={ArWorldReadiness} />
+      <Route path="/navigation/ar-lab/world-scale-sandbox" component={ArWorldScaleSandbox} />
       <Route path="/teacher" component={TeacherPanel} />
       <Route path="/teacher-panel" component={TeacherPanel} />
       <Route path="/assistant-analytics" component={AssistantAnalytics} />
