@@ -1,21 +1,27 @@
 import SwiftUI
 
-/// A completely offline native test laboratory. No website or cloud is required to measure
-/// after the app has been installed through TestFlight.
+/// The signed app opens Basira's existing vision page. The offline depth lab is
+/// retained as a fallback for local builds without a configured HTTPS host.
 @main
 struct BasiraDepthLabApp: App {
     var body: some Scene {
         WindowGroup {
-            NativeCalibrationScreen()
+            BasiraHomeScreen()
                 .ignoresSafeArea()
         }
     }
 }
 
-private struct NativeCalibrationScreen: UIViewControllerRepresentable {
-    func makeUIViewController(context: Context) -> NativeCalibrationHomeController {
-        NativeCalibrationHomeController()
+private struct BasiraHomeScreen: UIViewControllerRepresentable {
+    func makeUIViewController(context: Context) -> UIViewController {
+        if let raw = Bundle.main.object(forInfoDictionaryKey: "BasiraVisionURL") as? String,
+           let url = URL(string: raw), url.scheme == "https",
+           let host = url.host, !host.contains(".example"),
+           url.path == "/navigation/vision" {
+            return NativeMetricVisionController()
+        }
+        return NativeCalibrationHomeController()
     }
 
-    func updateUIViewController(_ uiViewController: NativeCalibrationHomeController, context: Context) {}
+    func updateUIViewController(_ uiViewController: UIViewController, context: Context) {}
 }

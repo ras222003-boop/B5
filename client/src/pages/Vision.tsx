@@ -6,16 +6,18 @@ import { visionMessages } from '@/i18n/locales/vision';
 import { navigationMessages } from '@/i18n/locales/navigation';
 import { useTextToSpeech } from '@/hooks/useSpeech';
 import { permissionService, type PermissionState } from '@/lib/permissionService';
-import { DEFAULT_VISION_CONFIG, VISION_ALERT_DISTANCE_OPTIONS, getVisionAlertDistance, saveVisionAlertDistance, visionConfigForAlertDistance } from '@/lib/vision/config';
+import { DEFAULT_VISION_CONFIG } from '@/lib/vision/config';
 import { CameraService, CameraServiceError } from '@/lib/vision/camera';
 import { MediaPipeVisionProvider, TesseractOCRProvider, UnavailableDepthProvider } from '@/lib/vision/providers';
-import { MonocularRelativeDepthProvider, NativeMetricDepthProvider, SegFormerSceneProvider } from '@/lib/vision/modelProviders';
+import { SegFormerSceneProvider } from '@/lib/vision/modelProviders';
+import { MonocularMetricDepthProvider } from '@/lib/vision/metricModel';
 import { detectVisionCapabilities, type VisionCapabilities } from '@/lib/vision/capabilities';
 import { VisionPipeline } from '@/lib/vision/pipeline';
-import { metricDistanceMeters } from '@/lib/vision/safety';
 import type { MetricDiagnostic } from '@/lib/vision/metricEngine';
+import { AutoMeterSpeechPacer, getAutoMeterEnabled, getAutoMeterSpeechEnabled, saveAutoMeterEnabled, saveAutoMeterSpeechEnabled, type AutoMeterSnapshot } from '@/lib/vision/autoMeter';
+import { AUTO_METER_REFERENCE_METERS, autoMeterTrialsJsonl, createAutoMeterTrial, type AutoMeterReferenceMeters, type AutoMeterTrial } from '@/lib/vision/autoMeterTrials';
 import { BrowserHapticFeedbackProvider, VisionAnnouncementService } from '@/lib/vision/scene';
-import type { PlaceCandidate, RecognizedPlace, RiskLevel, SceneDescription } from '@shared/vision';
+import type { PlaceCandidate, RecognizedPlace, RiskLevel, SceneDescription, VisionObjectType } from '@shared/vision';
 import type { MapNode, Place } from '@shared/navigation';
 import type { LocalizationEstimate } from '@shared/localization';
 import { BasiraLocalizationEngine } from '@/lib/localization/engine';
@@ -31,6 +33,7 @@ export default function Vision() {
   const {lang}=useI18n();
   const {speak,stop:stopSpeaking}=useTextToSpeech();
   const videoRef=useRef<HTMLVideoElement|null>(null);
+  const nativeCanvasRef=useRef<HTMLCanvasElement|null>(null);
   const cameraRef=useRef<CameraService>(new CameraService(DEFAULT_VISION_CONFIG));
   const pipelineRef=useRef<VisionPipeline|null>(null);
   const generation=useRef(0);
@@ -45,6 +48,23 @@ export default function Vision() {
   const [modelWarning,setModelWarning]=useState('');
   const [depthWarning,setDepthWarning]=useState('');
   const [metricInfo,setMetricInfo]=useState<MetricDiagnostic>({status:'UNAVAILABLE',source:null});
+  const [estimatedMetricStatus,setEstimatedMetricStatus]=useState<'UNAVAILABLE'|'WAITING'|'LIVE'|'LOW_LIGHT'>('UNAVAILABLE');
+  const [autoMeterEnabled,setAutoMeterEnabled]=useState(()=>getAutoMeterEnabled());
+  const autoMeterEnabledRef=useRef(autoMeterEnabled);
+  const [autoMeterSpeechEnabled,setAutoMeterSpeechEnabled]=useState(()=>getAutoMeterSpeechEnabled());
+  const autoMeterSpeechRef=useRef(autoMeterSpeechEnabled);
+  const speechPacerRef=useRef(new AutoMeterSpeechPacer());
+  const [meterSnapshot,setMeterSnapshot]=useState<AutoMeterSnapshot|null>(null);
+  const trialSessionId=useRef(`auto-meter-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+  const [trialDevice,setTrialDevice]=useState('');
+  const [trialOs,setTrialOs]=useState('');
+  const [trialCondition,setTrialCondition]=useState('indoor');
+  const [trialReference,setTrialReference]=useState<AutoMeterReferenceMeters>(1);
+  const [trialSource,setTrialSource]=useState<'ARKIT_DEPTH'|'LIDAR'|'ARCORE_DEPTH'|'DEPTH_SENSOR'|'MONOCULAR_METRIC'>('ARKIT_DEPTH');
+  const [trialObject,setTrialObject]=useState<VisionObjectType>('CHAIR');
+  const [trialTrack,setTrialTrack]=useState('');
+  const [trialRows,setTrialRows]=useState<AutoMeterTrial[]>([]);
+  const [trialNotice,setTrialNotice]=useState('');
   const [capabilities,setCapabilities]=useState<VisionCapabilities|null>(null);
   const [lastAlert,setLastAlert]=useState('');
   const [risk,setRisk]=useState<RiskLevel|null>(null);
@@ -55,16 +75,22 @@ export default function Vision() {
   const [cameraPermission,setCameraPermission]=useState<PermissionState>('not_requested');
   const [online,setOnline]=useState(typeof navigator==='undefined'?true:navigator.onLine);
   const [spokenSummary,setSpokenSummary]=useState('');
-  const [alertDistanceMeters,setAlertDistanceMeters]=useState(()=>getVisionAlertDistance());
   useEffect(()=>{permissionService.status('camera').then(setCameraPermission).catch(()=>{});const update=()=>setOnline(navigator.onLine);window.addEventListener('online',update);window.addEventListener('offline',update);return()=>{window.removeEventListener('online',update);window.removeEventListener('offline',update);};},[]);
   useEffect(()=>{if(!locationEstimate)return;const timer=window.setInterval(()=>setLocationEstimate(localizationRef.current.fusion.current(Date.now())),5000);return()=>window.clearInterval(timer);},[Boolean(locationEstimate)]);
+  useEffect(()=>{
+    if(!meterSnapshot)return;
+    const expiresIn=Math.max(0,6000-(Date.now()-meterSnapshot.capturedAt));
+    const timer=window.setTimeout(()=>setMeterSnapshot(current=>
+      current?.frameId===meterSnapshot.frameId&&current.capturedAt===meterSnapshot.capturedAt?null:current),expiresIn);
+    return()=>window.clearTimeout(timer);
+  },[meterSnapshot]);
 
   const stop=useCallback(async()=>{
     generation.current++;
     const pipeline=pipelineRef.current;pipelineRef.current=null;
     cameraRef.current.stop(videoRef.current??undefined);
     stopSpeaking();
-    setState('STOPPED');setMetricInfo({status:'UNAVAILABLE',source:null});setScene(null);setCandidates([]);setRecognized(null);
+    setState('STOPPED');setMetricInfo({status:'UNAVAILABLE',source:null});setEstimatedMetricStatus('UNAVAILABLE');setMeterSnapshot(null);speechPacerRef.current.reset();setScene(null);setCandidates([]);setRecognized(null);
     localizationRef.current=new BasiraLocalizationEngine();setLocationEstimate(null);graphNodesRef.current=[];
     if(pipeline)await pipeline.stop();
   },[stopSpeaking]);
@@ -77,36 +103,31 @@ export default function Vision() {
   useEffect(()=>{const onHidden=()=>{if(document.hidden)void stop();};document.addEventListener('visibilitychange',onHidden);return()=>document.removeEventListener('visibilitychange',onHidden);},[stop]);
 
   const start=async()=>{
-    if(state!=='STOPPED'||!videoRef.current)return;
+    if(state!=='STOPPED'||!videoRef.current||!nativeCanvasRef.current)return;
     const run=++generation.current;
-    setError('');setOCRWarning('');setModelWarning('');setDepthWarning('');setMetricInfo({status:'UNAVAILABLE',source:null});setLastAlert('');setRisk(null);setSpokenSummary('');setState('STARTING');
+    setError('');setOCRWarning('');setModelWarning('');setDepthWarning('');setMetricInfo({status:'UNAVAILABLE',source:null});setMeterSnapshot(null);setLastAlert('');setRisk(null);setSpokenSummary('');setState('STARTING');
     try {
       const safetyFlags=await loadSafetyFlags();
       const detected=detectVisionCapabilities();setCapabilities(detected);
-      const visionConfig=visionConfigForAlertDistance(alertDistanceMeters);
-      await cameraRef.current.start(videoRef.current);
+      const visionConfig=DEFAULT_VISION_CONFIG;
+      const nativeFrames=window.BasiraNativeFrames;
+      if(!nativeFrames)await cameraRef.current.start(videoRef.current);
       if(run!==generation.current){cameraRef.current.stop(videoRef.current);return;}
-      setCameraPermission('allowed');
+      if(!nativeFrames)setCameraPermission('allowed');
       const provider=await MediaPipeVisionProvider.open(visionConfig);
       if(run!==generation.current){await provider.close();cameraRef.current.stop(videoRef.current);return;}
       let segmentation:SegFormerSceneProvider|undefined;
       try{segmentation=await SegFormerSceneProvider.open();}
       catch{setModelWarning(t.segmentationFailure);}
       if(run!==generation.current){await Promise.allSettled([provider.close(),segmentation?.close()]);cameraRef.current.stop(videoRef.current);return;}
-      let metricDepth:NativeMetricDepthProvider|undefined;
-      let relativeDepth:MonocularRelativeDepthProvider|undefined;
-      if(safetyFlags.metricDepth&&detected.nativeDepth&&window.BasiraNativeDepth)metricDepth=new NativeMetricDepthProvider(window.BasiraNativeDepth);
-      else if(detected.performanceTier==='HIGH'&&segmentation){
-        try{relativeDepth=await MonocularRelativeDepthProvider.open();}
-        catch{setDepthWarning(t.depthFailure);}
-      }
-      if(run!==generation.current){await Promise.allSettled([provider.close(),segmentation?.close(),relativeDepth?.close()]);cameraRef.current.stop(videoRef.current);return;}
       const currentBuildingId=sessionStorage.getItem('basira-current-building');
       graphNodesRef.current=currentBuildingId?(await navApi.graph(currentBuildingId).then(result=>result.nodes).catch(()=>[])):[];
-      if(run!==generation.current){await Promise.allSettled([provider.close(),segmentation?.close(),relativeDepth?.close()]);cameraRef.current.stop(videoRef.current);return;}
+      if(run!==generation.current){await Promise.allSettled([provider.close(),segmentation?.close()]);cameraRef.current.stop(videoRef.current);return;}
       const announcement=new VisionAnnouncementService(t,text=>speak(text,0.9,lang),new BrowserHapticFeedbackProvider(),visionConfig.alertCooldownMs);
-      const pipeline=new VisionPipeline({video:videoRef.current,vision:provider,ocr:new TesseractOCRProvider(),depth:new UnavailableDepthProvider(),
-        segmentation,relativeDepth,metricDepth,segmentationIntervalMs:detected.segmentationIntervalMs,depthIntervalMs:detected.depthIntervalMs,
+      const pipeline=new VisionPipeline({video:videoRef.current,nativeCanvas:nativeCanvasRef.current,nativeFrames,
+        autoMeterEnabled:autoMeterEnabledRef.current,vision:provider,ocr:new TesseractOCRProvider(),depth:new UnavailableDepthProvider(),
+        estimatedMetricModel:nativeFrames?undefined:()=>MonocularMetricDepthProvider.open(),
+        segmentation,segmentationIntervalMs:detected.segmentationIntervalMs,depthIntervalMs:detected.depthIntervalMs,
         config:visionConfig,copy:t,mode:'EXPLORATION',buildingId:currentBuildingId,floorId:null,announcement,safetyFlags,
         callbacks:{
           scene:description=>{if(run===generation.current){setScene(description);setState('ANALYZING');}},
@@ -120,19 +141,38 @@ export default function Vision() {
           OCRFailure:()=>{if(run===generation.current)setOCRWarning(t.ocrFailure);},
           segmentationFailure:()=>{if(run===generation.current)setModelWarning(t.segmentationFailure);},
           depthFailure:()=>{if(run===generation.current)setDepthWarning(t.depthFailure);},
-          metricStatus:status=>{if(run===generation.current)setMetricInfo(status);},
+          metricStatus:status=>{if(run===generation.current){setMetricInfo(status);if(status.source)setTrialSource(status.source);}},
+          estimatedMetricStatus:status=>{if(run===generation.current)setEstimatedMetricStatus(status);},
+          metricModelFailure:()=>{if(run===generation.current)setDepthWarning(t.metricModelFailure);},
+          autoMeterSnapshot:snapshot=>{if(run===generation.current){
+            setMeterSnapshot(snapshot);
+            if(snapshot&&autoMeterSpeechRef.current){
+              const item=speechPacerRef.current.choose(snapshot);
+              if(item?.distanceMeters!==null&&item?.distanceMeters!==undefined){
+                const phrase=`${snapshot.nativeSource==='MONOCULAR_METRIC'?t.autoMeterAiSpeechPrefix:t.autoMeterNativeSpeechPrefix} ${t.autoMeterSpeech(t.object[item.type],t.direction[item.direction],item.distanceMeters)}`;
+                speak(phrase,0.9,lang);
+              }
+            }
+          }},
+          autoMeterRejected:()=>{if(run===generation.current){
+            autoMeterEnabledRef.current=false;
+            setAutoMeterEnabled(saveAutoMeterEnabled(false));
+            setMeterSnapshot(null);
+          }},
           fatal:()=>{if(run===generation.current){setError(t.providerFailure);void stop();}},
         },
       });
       pipelineRef.current=pipeline;
       await pipeline.start();
-      if(run===generation.current)setState('WORKING');
+      if(run===generation.current){setState('WORKING');if(nativeFrames)setCameraPermission('allowed');}
     } catch(caught) {
       cameraRef.current.stop(videoRef.current??undefined);
+      await pipelineRef.current?.stop();pipelineRef.current=null;
       if(run!==generation.current)return;
       const key=caught instanceof CameraServiceError?caught.code:'MODEL';
       console.warn('Basira vision startup failed',{code:key});
-      setError(key==='NO_CAMERA'?t.noCamera:key==='DENIED'?t.denied:key==='DEVICE_SETTINGS'?t.settings:key==='UNAVAILABLE'?t.unavailable:key==='IN_USE'?t.inUse:key==='MODEL'?t.modelFailure:t.cameraFailure);
+      const nativePermission=caught instanceof Error&&caught.message.includes('camera_permission_required');
+      setError(nativePermission?t.nativePermissionRetry:key==='NO_CAMERA'?t.noCamera:key==='DENIED'?t.denied:key==='DEVICE_SETTINGS'?t.settings:key==='UNAVAILABLE'?t.unavailable:key==='IN_USE'?t.inUse:key==='MODEL'?t.modelFailure:t.cameraFailure);
       setState('STOPPED');
       permissionService.status('camera').then(setCameraPermission).catch(()=>{});
     }
@@ -153,13 +193,61 @@ export default function Vision() {
     const proposal=emptyProposal(estimate.floorId);proposal.name=candidate.detectedText;proposal.placeType=candidate.suggestedType;proposal.x=estimate.x;proposal.y=estimate.y;
     try{const result=await sharedMapApi.submit({buildingId:estimate.buildingId,type:'PLACE',source:'OCR',proposal,evidence:observedEvidence(estimate.floorId,estimate.x,estimate.y,estimate.confidence,candidate.confidence),idempotencyKey:crypto.randomUUID(),consent:true});setShareNotice('queued'in result?'حُفظت المساهمة المصرح بها حتى عودة الاتصال.':'أُرسلت قراءة اللوحة والموقع فقط للمراجعة، دون صورة أو سجل حركة.');setShareCandidate(false);}catch{setShareNotice('تعذر إرسال المساهمة. تحقق من الدخول وبيانات الموقع.');}
   };
+  const toggleAutoMeter=()=>{
+    const enabled=!autoMeterEnabledRef.current;
+    if(enabled)setDepthWarning('');
+    autoMeterEnabledRef.current=enabled;
+    setAutoMeterEnabled(saveAutoMeterEnabled(enabled));
+    setMeterSnapshot(null);speechPacerRef.current.reset();
+    void pipelineRef.current?.setAutoMeterEnabled(enabled);
+  };
+  const toggleAutoMeterSpeech=()=>{
+    const enabled=!autoMeterSpeechRef.current;
+    autoMeterSpeechRef.current=enabled;
+    setAutoMeterSpeechEnabled(saveAutoMeterSpeechEnabled(enabled));
+    speechPacerRef.current.reset();
+  };
+  const speakMetersNow=()=>{
+    const measured=meterSnapshot&&Date.now()-meterSnapshot.capturedAt<6000
+      ?meterSnapshot.measurements.filter(item=>item.distanceMeters!==null).slice(0,3):[];
+    if(!measured.length){speak(t.autoMeterNoDistance,0.9,lang);return;}
+    const prefix=meterSnapshot?.nativeSource==='MONOCULAR_METRIC'?t.autoMeterAiSpeechPrefix:t.autoMeterNativeSpeechPrefix;
+    speak(`${prefix} ${measured.map(item=>t.autoMeterSpeech(t.object[item.type],t.direction[item.direction],item.distanceMeters!)).join(' ')}`,0.9,lang);
+  };
+  const recordTrial=()=>{
+    const measurement=trialTrack==='__missed__'?null:(meterSnapshot?.measurements.find(item=>item.trackId===trialTrack)??meterSnapshot?.measurements[0]??null);
+    const row=createAutoMeterTrial({sessionId:trialSessionId.current,deviceModel:trialDevice,osVersion:trialOs,
+      source:measurement?.source??(hasNativeFrames?trialSource:'MONOCULAR_METRIC'),
+      snapshot:meterSnapshot,measurement,missedObjectType:trialObject,referenceMeters:trialReference,
+      condition:trialCondition,now:Date.now()});
+    if(!row){setTrialNotice(t.autoMeterTrialMissing);return;}
+    if(trialRows.some(previous=>previous.frameId===row.frameId&&previous.objectType===row.objectType&&previous.referenceMeters===row.referenceMeters)){
+      setTrialNotice(t.autoMeterTrialDuplicate);return;
+    }
+    setTrialRows(previous=>[...previous,row]);setTrialNotice(t.autoMeterTrialSaved);
+  };
+  const downloadTrials=()=>{
+    if(!trialRows.length)return;
+    const url=URL.createObjectURL(new Blob([autoMeterTrialsJsonl(trialRows)],{type:'application/x-ndjson;charset=utf-8'}));
+    const link=document.createElement('a');link.href=url;link.download=`basira-auto-meter-${trialSessionId.current}.jsonl`;
+    link.click();window.setTimeout(()=>URL.revokeObjectURL(url),1000);
+  };
   const cameraState=state==='STOPPED'?t.stopped:state==='STARTING'?t.starting:state==='WORKING'?t.working:t.analyzing;
+  const hasNativeFrames=typeof window!=='undefined'&&Boolean(window.BasiraNativeFrames);
   return <Layout><div className="container max-w-4xl space-y-4 py-6 text-stone-100">
     <Link href="/navigation" className="text-amber-300 underline">{nav.title}</Link>
     <header><h1 className="text-3xl font-black">{t.title}</h1><p className="mt-3 text-lg text-stone-300">{t.description}</p></header>
     <p className="rounded-xl border border-amber-300/40 bg-amber-300/10 p-4 text-amber-100">{t.advisory}</p>
     <div className="flex flex-wrap gap-3">{state==='STOPPED'?<button type="button" className={button} onClick={start}>{t.start}</button>:<button type="button" className={button} onClick={()=>void stop()}>{t.stop}</button>}</div>
-    <section className="rounded-2xl border border-amber-200/20 bg-stone-900 p-5"><label className="block font-bold">{t.alertDistanceLabel}<select className="mt-2 min-h-14 w-full rounded-xl border border-amber-200/40 bg-stone-950 px-4 text-white" value={alertDistanceMeters} onChange={event=>{const value=saveVisionAlertDistance(Number(event.target.value));setAlertDistanceMeters(value);pipelineRef.current?.setAlertDistanceMeters(value);}}>{VISION_ALERT_DISTANCE_OPTIONS.map(value=><option key={value} value={value}>{value} {lang==='en'?'metres':lang==='zh-CN'?'米':'متر'}</option>)}</select></label><p className="mt-2 text-sm text-stone-300">{t.alertDistanceNote}</p></section>
+    <section className="rounded-2xl border border-amber-200/30 bg-stone-900 p-5" aria-label={t.autoMeterTitle}>
+      <h2 className="text-xl font-bold">{t.autoMeterTitle}</h2>
+      <p className="mt-2 text-sm text-stone-300">{t.autoMeterRangeNote}</p>
+      <button type="button" className={`${secondary} mt-4 w-full sm:w-auto`} aria-pressed={autoMeterEnabled} onClick={toggleAutoMeter}>
+        {autoMeterEnabled?t.autoMeterStop:t.autoMeterStart}
+      </button>
+      <label className="mt-4 flex min-h-12 items-center gap-3"><input type="checkbox" className="size-5" checked={autoMeterSpeechEnabled} onChange={toggleAutoMeterSpeech}/>{t.autoMeterSpeechLabel}</label>
+      <p role="status" aria-live="polite" className="mt-2">{!autoMeterEnabled?t.autoMeterOffStatus:hasNativeFrames?(metricInfo.status==='LIVE'?t.autoMeterLive:metricInfo.status==='WAITING'?t.autoMeterWaiting:t.autoMeterUnavailable):(estimatedMetricStatus==='LIVE'?t.autoMeterAiLive:estimatedMetricStatus==='WAITING'?t.autoMeterAiWaiting:estimatedMetricStatus==='LOW_LIGHT'?t.autoMeterLowLight:t.autoMeterUnavailable)}</p>
+    </section>
     <div className="flex flex-wrap gap-3"><button className={secondary} type="button" disabled={state==='STOPPED'||state==='STARTING'} onClick={()=>report(false)}>{t.whatAhead}</button><button className={secondary} type="button" disabled={state==='STOPPED'||state==='STARTING'} onClick={()=>report(true)}>{t.describe}</button></div>
     <p aria-live="polite" role="status" className="min-h-6">{spokenSummary}</p>
     <section aria-label={t.status} className="rounded-2xl border border-amber-200/20 bg-stone-900 p-5">
@@ -173,25 +261,32 @@ export default function Vision() {
     {modelWarning&&<p role="status" aria-live="polite" className="text-amber-200">{modelWarning}</p>}
     {depthWarning&&<p role="status" aria-live="polite" className="text-amber-200">{depthWarning}</p>}
     {!online&&<p role="status" className="rounded-xl border border-amber-300/40 p-4 text-amber-100">{t.offline}</p>}
-    <section aria-label={lang==='ar'?'حالة قياس الأمتار':lang==='zh-CN'?'米制测量状态':'Metric depth status'}
-      role="status" aria-live="polite" className="rounded-xl border border-amber-300/35 bg-stone-900 p-4">
-      <p className="font-bold">{lang==='ar'?'قياس المسافات بالأمتار':lang==='zh-CN'?'距离（米）':'Distance in metres'}</p>
-      <p>{metricInfo.status==='LIVE'
-        ? (lang==='ar'? 'متصل بمصدر عمق متزامن: ':lang==='zh-CN'?'已连接到同步深度源：':'Aligned depth source: ')+(metricInfo.source??'')
-        : metricInfo.status==='WAITING' ? (lang==='ar'?'بانتظار قراءة عمق متزامنة.':lang==='zh-CN'?'等待同步深度数据。':'Waiting for aligned depth data.')
-        : metricInfo.status==='REJECTED' ? (lang==='ar'?'القياسات غير موثوقة أو قديمة؛ لا تُعرض أمتار.':lang==='zh-CN'?'深度无效或过期，不显示米数。':'Depth rejected as stale or unverified; no metres displayed.')
-        : (lang==='ar'?'القياس الحقيقي غير متاح في جلسة المتصفح هذه؛ يستمر التعرف على الأشياء.':lang==='zh-CN'?'此浏览器会话不支持真实米制测量。物体识别仍可用。':'Real metric depth is unavailable in this browser session; object detection continues.')}
-      </p>
-      <p className="mt-2 text-sm text-stone-300">{lang==='ar'?'وجود 8th Wall Absolute Scale لا يثبت مسافة الكرسي؛ يلزم عمق متزامن مع صورة الكاميرا. لا تعتمد على هذه التجربة لتجنب الاصطدام.':lang==='zh-CN'?'8th Wall Absolute Scale 并不证明到物体的距离；请勿用于防碰撞。':'8th Wall Absolute Scale does not establish distance to an object. Do not use this experiment for collision avoidance.'}</p>
-    </section>
-    {scene?.objects.some(obj=>metricDistanceMeters(obj)!==null)&&
-      <section aria-label={lang==='ar'?'قراءات الأجسام بالأمتار':lang==='zh-CN'?'物体距离':'Measured object distances'}
-        className="rounded-xl border border-amber-200/30 bg-stone-900 p-4">
-        <h2 className="mb-2 font-bold">{lang==='ar'?'قياسات مرصودة (تجريبية)':lang==='zh-CN'?'检测到的距离（实验性）':'Observed distances (experimental)'}</h2>
-        <ul className="space-y-2">{scene.objects.filter(obj=>metricDistanceMeters(obj)!==null).slice(0,5).map(obj=>
-          <li key={obj.id}>{t.object[obj.type]} — {metricDistanceMeters(obj)!.toFixed(2)} {lang==='ar'?'متر':lang==='zh-CN'?'米':'m'} ({obj.approximateDistance?.source})</li>
-        )}</ul>
-      </section>}
+    {autoMeterEnabled&&state!=='STOPPED'&&<section aria-label={t.autoMeterObjectsTitle}
+      className="rounded-xl border border-amber-200/30 bg-stone-900 p-4">
+      <h2 className="mb-2 font-bold">{t.autoMeterObjectsTitle}</h2>
+      <button type="button" className={`${secondary} mb-3`} onClick={speakMetersNow}>{t.autoMeterSpeakNow}</button>
+      {!meterSnapshot?.measurements.length?<p>{t.autoMeterNoObjects}</p>:
+        <ul className="space-y-3">{meterSnapshot.measurements.slice(0,5).map(item=><li key={item.id} className="border-b border-amber-200/20 pb-2">
+          <span className="font-semibold">{t.object[item.type]} {t.direction[item.direction]}</span>
+          <span className="block">{item.distanceMeters===null?t.autoMeterNoDistance:`${item.distanceMeters.toFixed(2)} ${t.autoMeterMeters}`}</span>
+          <span className="block text-sm text-stone-300">{t.autoMeterSource}: {item.source==='MONOCULAR_METRIC'?t.autoMeterAiSource:item.source??t.autoMeterNoSource} · {t.autoMeterReliability}: {item.reliability==='EXPERIMENTAL'?t.autoMeterExperimental:t.autoMeterUnavailableLabel}</span>
+        </li>)}</ul>}
+    </section>}
+    <details className="rounded-xl border border-amber-200/30 bg-stone-900 p-4">
+      <summary className="cursor-pointer font-bold">{t.autoMeterValidationTitle}</summary>
+      <p className="mt-2 text-sm text-stone-300">{t.autoMeterValidationNote}</p>
+      <div className="mt-3 grid gap-3 sm:grid-cols-2">
+        <label>{t.autoMeterDeviceModel}<input className="mt-1 min-h-12 w-full rounded-lg bg-stone-950 px-3" value={trialDevice} onChange={event=>setTrialDevice(event.target.value)} /></label>
+        <label>{t.autoMeterOsVersion}<input className="mt-1 min-h-12 w-full rounded-lg bg-stone-950 px-3" value={trialOs} onChange={event=>setTrialOs(event.target.value)} /></label>
+        <label>{t.autoMeterReference}<select className="mt-1 min-h-12 w-full rounded-lg bg-stone-950 px-3" value={trialReference} onChange={event=>setTrialReference(Number(event.target.value) as AutoMeterReferenceMeters)}>{AUTO_METER_REFERENCE_METERS.map(value=><option key={value} value={value}>{value} {t.autoMeterMeters}</option>)}</select></label>
+        <label>{t.autoMeterTrialSource}<select className="mt-1 min-h-12 w-full rounded-lg bg-stone-950 px-3" value={hasNativeFrames?trialSource:'MONOCULAR_METRIC'} onChange={event=>setTrialSource(event.target.value as typeof trialSource)}>{hasNativeFrames?<><option value="ARKIT_DEPTH">ARKit / LiDAR</option><option value="LIDAR">LiDAR</option><option value="ARCORE_DEPTH">ARCore Depth</option><option value="DEPTH_SENSOR">Depth sensor</option></>:<option value="MONOCULAR_METRIC">{t.autoMeterAiSource}</option>}</select></label>
+        <label>{t.autoMeterCondition}<input className="mt-1 min-h-12 w-full rounded-lg bg-stone-950 px-3" value={trialCondition} onChange={event=>setTrialCondition(event.target.value)} /></label>
+        <label>{t.autoMeterTrialObject}<select className="mt-1 min-h-12 w-full rounded-lg bg-stone-950 px-3" value={trialTrack} onChange={event=>setTrialTrack(event.target.value)}><option value="">{t.autoMeterFirstObject}</option>{meterSnapshot?.measurements.map(item=><option key={item.trackId} value={item.trackId}>{t.object[item.type]} {t.direction[item.direction]}</option>)}<option value="__missed__">{t.autoMeterMissedObject}</option></select></label>
+        {trialTrack==='__missed__'&&<label>{t.autoMeterExpectedObject}<select className="mt-1 min-h-12 w-full rounded-lg bg-stone-950 px-3" value={trialObject} onChange={event=>setTrialObject(event.target.value as VisionObjectType)}>{(['CHAIR','PERSON','TABLE','BOX','DOOR','UNKNOWN_OBSTACLE'] as const).map(type=><option key={type} value={type}>{t.object[type]}</option>)}</select></label>}
+      </div>
+      <div className="mt-4 flex flex-wrap gap-2"><button type="button" className={secondary} disabled={state==='STOPPED'||!autoMeterEnabled} onClick={recordTrial}>{t.autoMeterRecordTrial}</button><button type="button" className={secondary} disabled={!trialRows.length} onClick={downloadTrials}>{t.autoMeterDownloadTrials} ({trialRows.length})</button></div>
+      <p role="status" aria-live="polite" className="mt-2">{trialNotice}</p>
+    </details>
     {import.meta.env.VITE_BASIRA_AR_LAB_ENABLED !== 'false' &&
       <a href="/navigation/ar-lab/world-scale-sandbox" className="inline-flex min-h-12 items-center rounded-lg border border-amber-300/60 px-4 py-3 text-amber-200 underline">
         {lang==='ar'?'جرّب تقدير حركة الهاتف بالأمتار داخل المتصفح (8th Wall — ليس بُعد الأجسام)':lang==='zh-CN'?'8th Wall 位移研究（非物体距离）':'8th Wall camera-displacement research (not object distance)'}
@@ -203,6 +298,7 @@ export default function Vision() {
     {locationEstimate?.state==='TRACKING'&&<section className="space-y-3 rounded-xl border border-amber-300/40 p-4"><p>موقعك الحالي: بالقرب من {recognized?.name??'مكان معروف'} · الثقة {Math.round(locationEstimate.confidence*100)}٪. التقدير مرتبط بلوحة معروفة وليس قياسًا ميدانيًا للدقة.</p><div className="flex flex-wrap gap-2"><input className="min-h-12 rounded-xl border border-amber-200/40 bg-stone-950 px-3" value={savedName} onChange={e=>setSavedName(e.target.value)} placeholder="اسم مكانك الخاص" aria-label="اسم مكانك الخاص"/><button className={secondary} disabled={!savedName.trim()} onClick={savePersonal}>احفظ هذا المكان</button></div><p role="status" aria-live="polite">{saveNotice}</p></section>}
     {locationEstimate?.state==='LOCALIZATION_LOST'&&<p role="alert" className="rounded-xl border border-amber-300/40 p-4">تعذر تحديد موقعك بدقة داخل المبنى. وجّه الكاميرا نحو لوحة مكان معروف لإعادة التثبيت.</p>}
     {candidates.length>0&&<section className="space-y-3 rounded-xl border border-amber-200/30 p-4"><h2 className="font-bold">معلومات جديدة محتملة للخريطة</h2><label className="flex gap-2"><input type="checkbox" checked={shareCandidate} onChange={e=>setShareCandidate(e.target.checked)}/>أوافق على مشاركة نص اللوحة وموقع تقريبي فقط، دون صورة، للمراجعة العامة</label>{candidates.slice(0,2).map(candidate=><p key={candidate.id}>{candidate.lookupStatus==='UNAVAILABLE'?t.candidateOffline(candidate.detectedText):t.candidate(candidate.detectedText)} <button className={secondary} disabled={!shareCandidate||locationEstimate?.state!=='TRACKING'} onClick={()=>void contributeCandidate(candidate)}>أرسل كمساهمة</button></p>)}<p role="status" aria-live="polite">{shareNotice}</p></section>}
-    <video ref={videoRef} muted playsInline aria-hidden="true" aria-label={t.preview} className="aspect-video w-full max-w-md rounded-xl bg-stone-950 object-cover" />
+    <video ref={videoRef} muted playsInline aria-hidden="true" aria-label={t.preview} className={`aspect-video w-full max-w-md rounded-xl bg-stone-950 object-cover ${hasNativeFrames?'hidden':''}`} />
+    <canvas ref={nativeCanvasRef} width={480} height={640} aria-hidden="true" className={`aspect-[3/4] w-full max-w-sm rounded-xl bg-stone-950 object-contain ${hasNativeFrames?'':'hidden'}`} />
   </div></Layout>;
 }

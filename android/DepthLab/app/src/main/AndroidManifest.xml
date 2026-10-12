@@ -1,14 +1,19 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
   <uses-permission android:name="android.permission.CAMERA"/>
+  <uses-permission android:name="android.permission.INTERNET"/>
   <uses-feature android:name="android.hardware.camera.ar" android:required="true"/>
-  <uses-feature android:name="com.google.ar.core.depth" android:required="true"/>
+  <uses-feature android:name="com.google.ar.core.depth" android:required="false"/>
   <application
       android:theme="@android:style/Theme.Material.Light.NoActionBar"
-      android:label="بصيرة — مختبر عمق ARCore"
-      android:allowBackup="false">
+      android:label="بصيرة — الرؤية والقياس"
+      android:allowBackup="false"
+      android:usesCleartextTraffic="false">
     <meta-data android:name="com.google.ar.core" android:value="required"/>
     <activity android:name=".MainActivity"
+              android:exported="false"
+              android:screenOrientation="portrait"/>
+    <activity android:name=".NativeVisionActivity"
               android:exported="true"
               android:screenOrientation="portrait">
       <intent-filter>

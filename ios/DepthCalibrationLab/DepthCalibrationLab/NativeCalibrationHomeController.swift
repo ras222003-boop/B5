@@ -14,10 +14,10 @@ private struct DepthLabRecord: Codable {
 /// Standalone offline data collection for the iPhone 14 Pro camera's CENTER depth.
 /// Does not compute object clearance or instruct anyone to walk.
 final class NativeCalibrationHomeController: UIViewController {
-    private let targets = [0.5, 1.0, 2.0, 3.0, 5.0]
+    private let targets = [0.5, 1.0, 2.0, 3.0, 4.0, 5.0]
     private let conditions = ["INDOOR_BRIGHT", "INDOOR_DIM", "OUTDOOR"]
     private let storageKey = "basira-lidar-lab-records-v1"
-    private let targetPicker = UISegmentedControl(items: ["0.5", "1", "2", "3", "5"])
+    private let targetPicker = UISegmentedControl(items: ["0.5", "1", "2", "3", "4", "5"])
     private let conditionPicker = UISegmentedControl(items: ["إضاءة جيدة", "إضاءة خافتة", "خارج المبنى"])
     private let status = UILabel()
     private let report = UILabel()
@@ -71,7 +71,7 @@ final class NativeCalibrationHomeController: UIViewController {
         stack.addArrangedSubview(conditionPicker)
         stack.addArrangedSubview(label("4. ثبت الهاتف ووجّه علامة المنتصف نحو سطح ثابت ثم التقط قراءة.", style: .body))
 
-        let live = button("الكاميرا مع أسماء الأجسام ومسافاتها (تجريبية)", selector: #selector(openNativeVision))
+        let live = button("فتح رؤية بصيرة والقياس التلقائي", selector: #selector(openNativeVision))
         stack.addArrangedSubview(live)
 
         let scan = button("التقاط قياس من LiDAR", selector: #selector(takeSample))

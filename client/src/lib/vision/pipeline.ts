@@ -1,4 +1,4 @@
-import type { DepthProvider, DepthReading, MetricDepthMap, MetricDepthProvider, OCRDetection, OCRProvider, PlaceCandidate, RecognizedPlace, RelativeDepthMap, RelativeDepthProvider, SceneDescription, SceneSegmentationProvider, SegmentationGrid, VisionDetection, VisionMode, VisionProvider, WalkableAreaResult } from '@shared/vision';
+import type { DepthProvider, DepthReading, EstimatedMetricDepthProvider, MetricDepthMap, MetricDepthProvider, OCRDetection, OCRProvider, PlaceCandidate, RecognizedPlace, RelativeDepthMap, RelativeDepthProvider, SceneDescription, SceneSegmentationProvider, SegmentationGrid, VisionDetection, VisionMode, VisionProvider, WalkableAreaResult } from '@shared/vision';
 import type { VisionConfig } from './config';
 import type { Place } from '@shared/navigation';
 import { captureFrame } from './camera';
@@ -10,6 +10,8 @@ import { hazardRank } from '@/lib/guidance/safety';
 import { sampleFrameLight, type FrameLightStatus } from './frameQuality';
 import { SAFE_DEFAULT_FLAGS, type SafetyFlags } from '@shared/safetyFlags';
 import { metricDiagnostic, type MetricDiagnostic } from './metricEngine';
+import { checkAtomicFrame, checkAtomicRgbFrame, rotateNativeDepthClockwise } from './nativeFramePair';
+import { measureAutoMeterObjects, measureEstimatedObjects, type AutoMeterSnapshot } from './autoMeter';
 
 interface Callbacks {
   scene:(description:SceneDescription)=>void;
@@ -20,11 +22,20 @@ interface Callbacks {
   segmentationFailure:()=>void;
   depthFailure:()=>void;
   metricStatus?:(diagnostic:MetricDiagnostic)=>void;
+  autoMeterSnapshot?:(snapshot:AutoMeterSnapshot|null)=>void;
+  autoMeterRejected?:()=>void;
+  estimatedMetricStatus?:(status:'UNAVAILABLE'|'WAITING'|'LIVE'|'LOW_LIGHT')=>void;
+  metricModelFailure?:()=>void;
   fatal:(error:unknown)=>void;
   quality?:(light:FrameLightStatus)=>void;
 }
 export interface VisionPipelineOptions {
   video:HTMLVideoElement; vision:VisionProvider; ocr:OCRProvider; depth:DepthProvider;
+  /** Native RGB is the sole detector input when present; its optional depth is paired atomically. */
+  nativeFrames?:NonNullable<Window['BasiraNativeFrames']>;
+  nativeCanvas?:HTMLCanvasElement;
+  autoMeterEnabled?:boolean;
+  estimatedMetricModel?:()=>Promise<EstimatedMetricDepthProvider>;
   segmentation?:SceneSegmentationProvider;relativeDepth?:RelativeDepthProvider;metricDepth?:MetricDepthProvider;
   segmentationIntervalMs?:number;depthIntervalMs?:number;
   config:VisionConfig; copy:VisionCopy; mode:VisionMode;
@@ -69,6 +80,13 @@ export class VisionPipeline {
   private lastGeometry=Number.NEGATIVE_INFINITY;
   private lastDepth=Number.NEGATIVE_INFINITY;
   private lastMetric=Number.NEGATIVE_INFINITY;
+  private autoMeterEnabled:boolean;
+  private autoMeterGeneration=0;
+  private lastNativeFrameId='';
+  private estimatedModel:EstimatedMetricDepthProvider|null=null;
+  private modelOpening:Promise<void>|null=null;
+  private modelBusy=false;
+  private lastModel=Number.NEGATIVE_INFINITY;
   private latestObjects:VisionDetection[]=[];
   private lastLightCheck=Number.NEGATIVE_INFINITY;
   private cameraLight:FrameLightStatus='UNKNOWN';
@@ -80,6 +98,7 @@ export class VisionPipeline {
   private inferenceMs=0;
   private detections=0;
   constructor(private readonly options:VisionPipelineOptions) {
+    this.autoMeterEnabled=options.autoMeterEnabled===true;
     this.safety=new BasiraSafetyEngine(options.config);
     this.fusion=new VisionFusionEngine(this.safety);
     this.scene=new SceneUnderstandingService(options.copy);
@@ -89,39 +108,169 @@ export class VisionPipeline {
   get active(){return this.running;}
   setFindingDestination(active:boolean){this.findingDestination=active;}
   setAlertDistanceMeters(value:number){this.safety.setAlertDistanceMeters(value);}
+  async setAutoMeterEnabled(enabled:boolean):Promise<boolean>{
+    this.autoMeterEnabled=enabled;
+    this.autoMeterGeneration++;
+    this.metricDepth=null;
+    this.options.callbacks.autoMeterSnapshot?.(null);
+    this.options.callbacks.metricStatus?.({status:enabled&&this.options.nativeFrames?'WAITING':'UNAVAILABLE',source:null});
+    if(!this.options.nativeFrames){
+      this.options.callbacks.estimatedMetricStatus?.(enabled&&this.options.estimatedMetricModel?'WAITING':'UNAVAILABLE');
+      if(enabled&&this.running)void this.startMetricModel();
+      if(!enabled&&this.estimatedModel){const model=this.estimatedModel;this.estimatedModel=null;void model.close();}
+    }
+    if(this.running&&this.options.nativeFrames){
+      try{await this.options.nativeFrames.setMeterEnabled(enabled);}
+      catch{
+        this.autoMeterEnabled=false;this.autoMeterGeneration++;
+        this.options.callbacks.autoMeterRejected?.();
+        this.options.callbacks.metricStatus?.({status:'UNAVAILABLE',source:null});
+        return false;
+      }
+    }
+    return true;
+  }
   async start(){
     if(this.running)return;
     this.running=true;
     this.generation++;
+    if(this.options.nativeFrames){
+      try{await this.options.nativeFrames.start();}
+      catch(error){await this.stop();throw error;}
+      if(this.autoMeterEnabled)await this.setAutoMeterEnabled(true);
+    }else if(this.autoMeterEnabled)void this.startMetricModel();
     console.info('Basira vision session started',{mode:this.options.mode});
     this.watchBattery();
     this.schedule(0);
   }
   private schedule(ms:number){ if(this.running)this.timer=window.setTimeout(()=>void this.tick(),ms); }
+  private async startMetricModel(){
+    if(this.modelOpening){
+      // A new opt-in may arrive while a previous, now stale load is finishing.
+      await this.modelOpening;
+      if(this.running&&this.autoMeterEnabled&&!this.estimatedModel)void this.startMetricModel();
+      return;
+    }
+    if(this.estimatedModel||!this.options.estimatedMetricModel||!this.running||!this.autoMeterEnabled)return;
+    const token=this.autoMeterGeneration;
+    const opening=this.options.estimatedMetricModel().then(async model=>{
+      if(!this.running||!this.autoMeterEnabled||token!==this.autoMeterGeneration){await model.close();return;}
+      this.estimatedModel=model;
+      this.options.callbacks.estimatedMetricStatus?.('WAITING');
+    }).catch(()=>{
+      if(this.running&&this.autoMeterEnabled&&token===this.autoMeterGeneration){
+        this.options.callbacks.estimatedMetricStatus?.('UNAVAILABLE');
+        this.options.callbacks.metricModelFailure?.();
+      }
+    });
+    this.modelOpening=opening;
+    await opening;
+    if(this.modelOpening===opening)this.modelOpening=null;
+  }
+  private async processEstimatedMetric(frame:HTMLCanvasElement,detections:VisionDetection[],timestamp:number,generation:number,meterGeneration:number){
+    this.modelBusy=true;
+    try{
+      const map=await this.estimatedModel!.estimate(frame,timestamp);
+      if(!this.running||generation!==this.generation||meterGeneration!==this.autoMeterGeneration||!this.autoMeterEnabled)return;
+      if(performance.now()-timestamp>6000){
+        this.options.callbacks.autoMeterSnapshot?.(null);
+        this.options.callbacks.estimatedMetricStatus?.('UNAVAILABLE');
+        return;
+      }
+      this.options.callbacks.autoMeterSnapshot?.(measureEstimatedObjects(detections,map,`web-${timestamp}`,Date.now()));
+      this.options.callbacks.estimatedMetricStatus?.('LIVE');
+    }catch{
+      if(this.running&&generation===this.generation&&meterGeneration===this.autoMeterGeneration){
+        const model=this.estimatedModel;this.estimatedModel=null;
+        this.options.callbacks.autoMeterSnapshot?.(null);
+        this.options.callbacks.estimatedMetricStatus?.('UNAVAILABLE');
+        this.options.callbacks.metricModelFailure?.();
+        if(model)void model.close();
+      }
+    }finally{frame.width=frame.height=0;this.modelBusy=false;}
+  }
   private async tick(){
     this.timer=null;
     if(!this.running)return;
     const generation=this.generation;
     const started=performance.now();
     try {
-      if(this.options.video.readyState<HTMLMediaElement.HAVE_CURRENT_DATA){this.schedule(250);return;}
-      if(started-this.lastLightCheck>=3000){
+      let detectionFrame:HTMLVideoElement|HTMLCanvasElement=this.options.video;
+      let detectorTimestamp=started;
+      let nativeFrameId='';
+      let nativeMap:MetricDepthMap|null=null;
+      let metricFrame:HTMLCanvasElement|null=null;
+      const meterGeneration=this.autoMeterGeneration;
+      if(this.options.nativeFrames&&this.options.nativeCanvas){
+        const sample=await this.options.nativeFrames.nextFrame();
+        if(!this.running||generation!==this.generation)return;
+        if(checkAtomicRgbFrame(sample)||!sample||sample.frameId===this.lastNativeFrameId){
+          this.options.callbacks.autoMeterSnapshot?.(null);
+          this.options.callbacks.metricStatus?.({status:this.autoMeterEnabled?'WAITING':'UNAVAILABLE',source:null});
+          this.schedule(500);return;
+        }
+        this.lastNativeFrameId=sample.frameId;
+        const image=new Image();
+        image.src='data:image/jpeg;base64,'+sample.imageBase64;
+        await image.decode();
+        if(!this.running||generation!==this.generation)return;
+        const canvas=this.options.nativeCanvas;
+        const context=canvas.getContext('2d');
+        if(!context)throw new Error('native_canvas_unavailable');
+        canvas.width=480;canvas.height=640;
+        context.clearRect(0,0,480,640);
+        context.save();context.translate(480,0);context.rotate(Math.PI/2);
+        context.drawImage(image,0,0,640,480);context.restore();
+        detectorTimestamp=performance.now();
+        detectionFrame=canvas;
+        nativeFrameId=sample.frameId;
+        if(this.autoMeterEnabled&&meterGeneration===this.autoMeterGeneration&&checkAtomicFrame(sample)===null){
+          nativeMap=rotateNativeDepthClockwise(sample,detectorTimestamp);
+        }
+        this.options.callbacks.metricStatus?.(nativeMap?{status:'LIVE',source:nativeMap.source}:{status:this.autoMeterEnabled?'WAITING':'UNAVAILABLE',source:null});
+      }else if(this.options.video.readyState<HTMLMediaElement.HAVE_CURRENT_DATA){this.schedule(250);return;}
+      if(!this.options.nativeFrames&&started-this.lastLightCheck>=3000){
         this.lastLightCheck=started;
         const previous=this.cameraLight;
         this.cameraLight=sampleFrameLight(this.options.video);
         if(previous!==this.cameraLight)this.options.callbacks.quality?.(this.cameraLight);
       }
-      const detections=await this.options.vision.detect(this.options.video,started);
+      if(!this.options.nativeFrames&&this.autoMeterEnabled&&this.cameraLight!=='NOT_LOW_LIGHT'){
+        this.options.callbacks.autoMeterSnapshot?.(null);
+        this.options.callbacks.estimatedMetricStatus?.(this.cameraLight==='LOW_LIGHT'?'LOW_LIGHT':'UNAVAILABLE');
+      }
+      if(!this.options.nativeFrames&&this.autoMeterEnabled&&this.estimatedModel&&!this.modelBusy&&
+        this.cameraLight==='NOT_LOW_LIGHT'&&started-this.lastModel>=1500){
+        const video=this.options.video;
+        metricFrame=document.createElement('canvas');
+        const scale=Math.min(1,this.options.config.inputResolution.width/video.videoWidth,
+          this.options.config.inputResolution.height/video.videoHeight);
+        metricFrame.width=Math.max(1,Math.round(video.videoWidth*scale));
+        metricFrame.height=Math.max(1,Math.round(video.videoHeight*scale));
+        const context=metricFrame.getContext('2d');
+        if(context){
+          context.drawImage(video,0,0,metricFrame.width,metricFrame.height);
+          detectionFrame=metricFrame;detectorTimestamp=started;this.lastModel=started;
+          this.options.callbacks.autoMeterSnapshot?.(null);
+          this.options.callbacks.estimatedMetricStatus?.('WAITING');
+        }
+        else metricFrame=null;
+      }
+      const detections=await this.options.vision.detect(detectionFrame,detectorTimestamp);
       if(!this.running||generation!==this.generation)return;
+      if(metricFrame)void this.processEstimatedMetric(metricFrame,detections,detectorTimestamp,generation,meterGeneration);
       // Depth must be captured independently of semantic segmentation. A
       // segmentation model failure cannot disable a trusted metric sensor.
-      if(this.options.metricDepth && started-this.lastMetric>=500) {
+      if(!this.options.nativeFrames&&this.options.metricDepth && started-this.lastMetric>=500) {
         this.lastMetric=started;
         try { this.metricDepth=await this.options.metricDepth.capture(started); }
         catch { this.metricDepth=null; this.options.callbacks.depthFailure(); }
         if(!this.running||generation!==this.generation)return;
       }
-      this.options.callbacks.metricStatus?.(metricDiagnostic(this.metricDepth,started,Boolean(this.options.metricDepth)));
+      if(!this.options.nativeFrames)this.options.callbacks.metricStatus?.(metricDiagnostic(this.metricDepth,started,Boolean(this.options.metricDepth)));
+      if(this.options.nativeFrames&&meterGeneration===this.autoMeterGeneration&&this.autoMeterEnabled){
+        this.options.callbacks.autoMeterSnapshot?.(measureAutoMeterObjects(detections,nativeMap,nativeFrameId,Date.now(),nativeMap?.source));
+      }
       const enriched=await Promise.all(detections.map(async detection=>({ ...detection,approximateDistance:await this.readDepth(detection,started) })));
       if(!this.running||generation!==this.generation)return;
       this.latestObjects=enriched;
@@ -148,7 +297,7 @@ export class VisionPipeline {
     const signs=this.signDetections.filter(sign=>now-sign.timestamp<12_000);
     const segmentation=this.segmentation&&now-this.segmentation.timestamp<10_000?this.segmentation:null;
     const relativeDepth=this.relativeDepth&&now-this.relativeDepth.timestamp<2_000?this.relativeDepth:null;
-    const metricDepth=this.metricDepth&&this.metricDepth.alignmentVerified===true&&Math.abs(now-this.metricDepth.timestamp)<=500?this.metricDepth:null;
+    const metricDepth=!this.options.nativeFrames&&this.metricDepth&&this.metricDepth.alignmentVerified===true&&Math.abs(now-this.metricDepth.timestamp)<=500?this.metricDepth:null;
     const frame=this.fusion.fuse({objects:this.latestObjects,segmentation,relativeDepth,metricDepth,signs});
     const flags=this.options.safetyFlags??SAFE_DEFAULT_FLAGS;
     const allowed=frame.events.filter(event=>
@@ -173,7 +322,7 @@ export class VisionPipeline {
   private async processGeometry(generation:number,timestamp:number){
     this.geometryBusy=true;
     try{
-      const frame=await captureFrame(this.options.video,this.options.config);
+      const frame=await this.captureCurrentFrame();
       if(!frame||!this.running||generation!==this.generation)return;
       const grid=await this.options.segmentation!.segment(frame.blob,timestamp);
       if(!this.running||generation!==this.generation)return;
@@ -196,10 +345,23 @@ export class VisionPipeline {
     if(this.depthCache.size>100)this.depthCache.forEach((item,id)=>{if(now-item.at>this.options.config.depthRefreshRate*3)this.depthCache.delete(id);});
     return reading;
   }
+  private async captureCurrentFrame():Promise<{blob:Blob;width:number;height:number}|null>{
+    const native=this.options.nativeCanvas;
+    if(!this.options.nativeFrames||!native)return captureFrame(this.options.video,this.options.config);
+    if(!native.width||!native.height)return null;
+    // Copy synchronously so the next native RGB frame cannot change this OCR/segmentation sample.
+    const copy=document.createElement('canvas');copy.width=native.width;copy.height=native.height;
+    const context=copy.getContext('2d');if(!context)return null;
+    context.drawImage(native,0,0);
+    const blob=await new Promise<Blob|null>(resolve=>copy.toBlob(resolve,'image/png'));
+    const width=copy.width,height=copy.height;
+    copy.width=copy.height=0;
+    return blob?{blob,width,height}:null;
+  }
   private async processOCR(generation:number,timestamp:number){
     this.ocrBusy=true;
     try {
-      const frame=await captureFrame(this.options.video,this.options.config);
+      const frame=await this.captureCurrentFrame();
       if(!frame||!this.running||generation!==this.generation)return;
       const readings=await this.options.ocr.recognize(frame,timestamp);
       if(!this.running||generation!==this.generation)return;
@@ -248,11 +410,20 @@ export class VisionPipeline {
   async stop(){
     if(!this.running)return;
     this.running=false;this.generation++;
+    this.autoMeterEnabled=false;this.autoMeterGeneration++;
+    const model=this.estimatedModel;this.estimatedModel=null;
+    this.options.callbacks.estimatedMetricStatus?.('UNAVAILABLE');
+    this.options.callbacks.autoMeterSnapshot?.(null);
+    this.options.callbacks.metricStatus?.({status:'UNAVAILABLE',source:null});
     if(this.timer!==null){window.clearTimeout(this.timer);this.timer=null;}
     this.batteryCleanup?.();this.batteryCleanup=null;
     this.options.announcement.reset();
+    if(this.options.nativeFrames){
+      await this.options.nativeFrames.setMeterEnabled(false).catch(()=>{});
+      await this.options.nativeFrames.stop().catch(()=>{});
+    }
     await Promise.allSettled([this.options.vision.close(),this.options.ocr.close(),this.options.depth.close(),
-      this.options.segmentation?.close(),this.options.relativeDepth?.close(),this.options.metricDepth?.close()]);
+      this.options.segmentation?.close(),this.options.relativeDepth?.close(),this.options.metricDepth?.close(),model?.close(),this.modelOpening]);
     console.info('Basira vision session stopped',{frames:this.frames,detections:this.detections,averageInferenceMs:this.frames?Math.round(this.inferenceMs/this.frames):0});
     this.latest=null;this.signDetections=[];this.recognizedPlace=null;this.seenCandidates.clear();
     this.depthCache.clear();
