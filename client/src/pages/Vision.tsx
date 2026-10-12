@@ -15,6 +15,7 @@ import { detectVisionCapabilities, type VisionCapabilities } from '@/lib/vision/
 import { VisionPipeline } from '@/lib/vision/pipeline';
 import type { MetricDiagnostic } from '@/lib/vision/metricEngine';
 import { AutoMeterSpeechPacer, getAutoMeterEnabled, getAutoMeterSpeechEnabled, saveAutoMeterEnabled, saveAutoMeterSpeechEnabled, type AutoMeterSnapshot } from '@/lib/vision/autoMeter';
+import {centerSurfaceLabel,meterDiagnosticText,type MeterDiagnostic} from '@/lib/vision/meterDiagnostics';
 import { AUTO_METER_REFERENCE_METERS, autoMeterTrialsJsonl, createAutoMeterTrial, type AutoMeterReferenceMeters, type AutoMeterTrial } from '@/lib/vision/autoMeterTrials';
 import { BrowserHapticFeedbackProvider, VisionAnnouncementService } from '@/lib/vision/scene';
 import type { PlaceCandidate, RecognizedPlace, RiskLevel, SceneDescription, VisionObjectType } from '@shared/vision';
@@ -48,7 +49,7 @@ export default function Vision() {
   const [modelWarning,setModelWarning]=useState('');
   const [depthWarning,setDepthWarning]=useState('');
   const [metricInfo,setMetricInfo]=useState<MetricDiagnostic>({status:'UNAVAILABLE',source:null});
-  const [estimatedMetricStatus,setEstimatedMetricStatus]=useState<'UNAVAILABLE'|'WAITING'|'LIVE'|'LOW_LIGHT'>('UNAVAILABLE');
+  const [meterDiagnostic,setMeterDiagnostic]=useState<MeterDiagnostic>('OFF');
   const [autoMeterEnabled,setAutoMeterEnabled]=useState(()=>getAutoMeterEnabled());
   const autoMeterEnabledRef=useRef(autoMeterEnabled);
   const [autoMeterSpeechEnabled,setAutoMeterSpeechEnabled]=useState(()=>getAutoMeterSpeechEnabled());
@@ -90,7 +91,7 @@ export default function Vision() {
     const pipeline=pipelineRef.current;pipelineRef.current=null;
     cameraRef.current.stop(videoRef.current??undefined);
     stopSpeaking();
-    setState('STOPPED');setMetricInfo({status:'UNAVAILABLE',source:null});setEstimatedMetricStatus('UNAVAILABLE');setMeterSnapshot(null);speechPacerRef.current.reset();setScene(null);setCandidates([]);setRecognized(null);
+    setState('STOPPED');setMetricInfo({status:'UNAVAILABLE',source:null});setMeterDiagnostic('OFF');setMeterSnapshot(null);speechPacerRef.current.reset();setScene(null);setCandidates([]);setRecognized(null);
     localizationRef.current=new BasiraLocalizationEngine();setLocationEstimate(null);graphNodesRef.current=[];
     if(pipeline)await pipeline.stop();
   },[stopSpeaking]);
@@ -105,7 +106,7 @@ export default function Vision() {
   const start=async()=>{
     if(state!=='STOPPED'||!videoRef.current||!nativeCanvasRef.current)return;
     const run=++generation.current;
-    setError('');setOCRWarning('');setModelWarning('');setDepthWarning('');setMetricInfo({status:'UNAVAILABLE',source:null});setMeterSnapshot(null);setLastAlert('');setRisk(null);setSpokenSummary('');setState('STARTING');
+    setError('');setOCRWarning('');setModelWarning('');setDepthWarning('');setMetricInfo({status:'UNAVAILABLE',source:null});setMeterDiagnostic(autoMeterEnabledRef.current?'MODEL_LOADING':'OFF');setMeterSnapshot(null);setLastAlert('');setRisk(null);setSpokenSummary('');setState('STARTING');
     try {
       const safetyFlags=await loadSafetyFlags();
       const detected=detectVisionCapabilities();setCapabilities(detected);
@@ -142,8 +143,7 @@ export default function Vision() {
           segmentationFailure:()=>{if(run===generation.current)setModelWarning(t.segmentationFailure);},
           depthFailure:()=>{if(run===generation.current)setDepthWarning(t.depthFailure);},
           metricStatus:status=>{if(run===generation.current){setMetricInfo(status);if(status.source)setTrialSource(status.source);}},
-          estimatedMetricStatus:status=>{if(run===generation.current)setEstimatedMetricStatus(status);},
-          metricModelFailure:()=>{if(run===generation.current)setDepthWarning(t.metricModelFailure);},
+          meterDiagnostic:diagnostic=>{if(run===generation.current)setMeterDiagnostic(diagnostic);},
           autoMeterSnapshot:snapshot=>{if(run===generation.current){
             setMeterSnapshot(snapshot);
             if(snapshot&&autoMeterSpeechRef.current){
@@ -198,7 +198,7 @@ export default function Vision() {
     if(enabled)setDepthWarning('');
     autoMeterEnabledRef.current=enabled;
     setAutoMeterEnabled(saveAutoMeterEnabled(enabled));
-    setMeterSnapshot(null);speechPacerRef.current.reset();
+    setMeterSnapshot(null);setMeterDiagnostic(enabled?(window.BasiraNativeFrames?'WAITING_CAMERA':'MODEL_LOADING'):'OFF');speechPacerRef.current.reset();
     void pipelineRef.current?.setAutoMeterEnabled(enabled);
   };
   const toggleAutoMeterSpeech=()=>{
@@ -208,9 +208,17 @@ export default function Vision() {
     speechPacerRef.current.reset();
   };
   const speakMetersNow=()=>{
-    const measured=meterSnapshot&&Date.now()-meterSnapshot.capturedAt<6000
-      ?meterSnapshot.measurements.filter(item=>item.distanceMeters!==null).slice(0,3):[];
-    if(!measured.length){speak(t.autoMeterNoDistance,0.9,lang);return;}
+    const current=meterSnapshot&&Date.now()-meterSnapshot.capturedAt<6000?meterSnapshot:null;
+    const measured=current?.measurements.filter(item=>item.distanceMeters!==null).slice(0,3)??[];
+    if(!measured.length){
+      if(current?.nativeSource==='MONOCULAR_METRIC'&&current.centerSurface?.distanceMeters!=null){
+        speak(`${t.autoMeterAiSpeechPrefix} ${centerSurfaceLabel(lang)}، ${current.centerSurface.distanceMeters.toFixed(2)} ${t.autoMeterMeters}.`,0.9,lang);
+        return;
+      }
+      const reason=current?.measurements[0]?.rejectionReason??current?.centerSurface?.rejectionReason??meterDiagnostic;
+      speak(meterDiagnosticText(reason??'WAITING_CAMERA',lang),0.9,lang);
+      return;
+    }
     const prefix=meterSnapshot?.nativeSource==='MONOCULAR_METRIC'?t.autoMeterAiSpeechPrefix:t.autoMeterNativeSpeechPrefix;
     speak(`${prefix} ${measured.map(item=>t.autoMeterSpeech(t.object[item.type],t.direction[item.direction],item.distanceMeters!)).join(' ')}`,0.9,lang);
   };
@@ -234,6 +242,7 @@ export default function Vision() {
   };
   const cameraState=state==='STOPPED'?t.stopped:state==='STARTING'?t.starting:state==='WORKING'?t.working:t.analyzing;
   const hasNativeFrames=typeof window!=='undefined'&&Boolean(window.BasiraNativeFrames);
+  const currentMeterSnapshot=meterSnapshot&&Date.now()-meterSnapshot.capturedAt<6000?meterSnapshot:null;
   return <Layout><div className="container max-w-4xl space-y-4 py-6 text-stone-100">
     <Link href="/navigation" className="text-amber-300 underline">{nav.title}</Link>
     <header><h1 className="text-3xl font-black">{t.title}</h1><p className="mt-3 text-lg text-stone-300">{t.description}</p></header>
@@ -246,7 +255,7 @@ export default function Vision() {
         {autoMeterEnabled?t.autoMeterStop:t.autoMeterStart}
       </button>
       <label className="mt-4 flex min-h-12 items-center gap-3"><input type="checkbox" className="size-5" checked={autoMeterSpeechEnabled} onChange={toggleAutoMeterSpeech}/>{t.autoMeterSpeechLabel}</label>
-      <p role="status" aria-live="polite" className="mt-2">{!autoMeterEnabled?t.autoMeterOffStatus:hasNativeFrames?(metricInfo.status==='LIVE'?t.autoMeterLive:metricInfo.status==='WAITING'?t.autoMeterWaiting:t.autoMeterUnavailable):(estimatedMetricStatus==='LIVE'?t.autoMeterAiLive:estimatedMetricStatus==='WAITING'?t.autoMeterAiWaiting:estimatedMetricStatus==='LOW_LIGHT'?t.autoMeterLowLight:t.autoMeterUnavailable)}</p>
+      <p role="status" aria-live={['FRAME_PROCESSING','READY_OBJECT','READY_CENTER'].includes(meterDiagnostic)?'off':'polite'} className="mt-2">{!autoMeterEnabled?t.autoMeterOffStatus:hasNativeFrames?(metricInfo.status==='LIVE'?t.autoMeterLive:metricInfo.status==='WAITING'?t.autoMeterWaiting:t.autoMeterUnavailable):meterDiagnosticText(meterDiagnostic,lang)}</p>
     </section>
     <div className="flex flex-wrap gap-3"><button className={secondary} type="button" disabled={state==='STOPPED'||state==='STARTING'} onClick={()=>report(false)}>{t.whatAhead}</button><button className={secondary} type="button" disabled={state==='STOPPED'||state==='STARTING'} onClick={()=>report(true)}>{t.describe}</button></div>
     <p aria-live="polite" role="status" className="min-h-6">{spokenSummary}</p>
@@ -265,12 +274,16 @@ export default function Vision() {
       className="rounded-xl border border-amber-200/30 bg-stone-900 p-4">
       <h2 className="mb-2 font-bold">{t.autoMeterObjectsTitle}</h2>
       <button type="button" className={`${secondary} mb-3`} onClick={speakMetersNow}>{t.autoMeterSpeakNow}</button>
-      {!meterSnapshot?.measurements.length?<p>{t.autoMeterNoObjects}</p>:
-        <ul className="space-y-3">{meterSnapshot.measurements.slice(0,5).map(item=><li key={item.id} className="border-b border-amber-200/20 pb-2">
+      {!currentMeterSnapshot?.measurements.length?<p>{t.autoMeterNoObjects}</p>:
+        <ul className="space-y-3">{currentMeterSnapshot.measurements.slice(0,5).map(item=><li key={item.id} className="border-b border-amber-200/20 pb-2">
           <span className="font-semibold">{t.object[item.type]} {t.direction[item.direction]}</span>
-          <span className="block">{item.distanceMeters===null?t.autoMeterNoDistance:`${item.distanceMeters.toFixed(2)} ${t.autoMeterMeters}`}</span>
+          <span className="block">{item.distanceMeters===null?meterDiagnosticText(item.rejectionReason??'INVALID_MODEL_DEPTH',lang):`${item.distanceMeters.toFixed(2)} ${t.autoMeterMeters}`}</span>
           <span className="block text-sm text-stone-300">{t.autoMeterSource}: {item.source==='MONOCULAR_METRIC'?t.autoMeterAiSource:item.source??t.autoMeterNoSource} · {t.autoMeterReliability}: {item.reliability==='EXPERIMENTAL'?t.autoMeterExperimental:t.autoMeterUnavailableLabel}</span>
         </li>)}</ul>}
+      {currentMeterSnapshot?.nativeSource==='MONOCULAR_METRIC'&&currentMeterSnapshot.centerSurface&&
+        <p className="mt-3 border-t border-amber-200/20 pt-3">{centerSurfaceLabel(lang)}: <strong>{currentMeterSnapshot.centerSurface.distanceMeters!=null
+          ?`${currentMeterSnapshot.centerSurface.distanceMeters.toFixed(2)} ${t.autoMeterMeters} — ${t.autoMeterExperimental}`
+          :meterDiagnosticText(currentMeterSnapshot.centerSurface.rejectionReason??'INVALID_MODEL_DEPTH',lang)}</strong></p>}
     </section>}
     <details className="rounded-xl border border-amber-200/30 bg-stone-900 p-4">
       <summary className="cursor-pointer font-bold">{t.autoMeterValidationTitle}</summary>
