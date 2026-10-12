@@ -1,4 +1,5 @@
 import type { HapticFeedbackProvider, ObstacleDetection, RecognizedPlace, SceneDescription, WalkableAreaResult } from '@shared/vision';
+import type { SpeechPriority } from '@shared/speech';
 import { visionMessages } from '@/i18n/locales/vision';
 import { AlertDeduplicator } from './safety';
 
@@ -33,7 +34,7 @@ export class BrowserHapticFeedbackProvider implements HapticFeedbackProvider {
 export class VisionAnnouncementService {
   private deduplicator:AlertDeduplicator;
   private hazardUntil=0;
-  constructor(private readonly copy:VisionCopy,private readonly speak:(text:string)=>void,private readonly haptic:HapticFeedbackProvider,cooldownMs:number) {
+  constructor(private readonly copy:VisionCopy,private readonly speak:(text:string,priority?:SpeechPriority)=>void,private readonly haptic:HapticFeedbackProvider,cooldownMs:number) {
     this.deduplicator=new AlertDeduplicator(cooldownMs);
   }
   announce(events:ObstacleDetection[],now:number):{text:string;event:ObstacleDetection}|null {
@@ -41,14 +42,14 @@ export class VisionAnnouncementService {
     if(top?.riskLevel==='INFORMATION'&&now<this.hazardUntil)return null;
     if(!top||!this.deduplicator.shouldAnnounce(top,now)) return null;
     if(top.riskLevel==='HIGH'||top.riskLevel==='CRITICAL')this.hazardUntil=now+4000;
-    const text=top.type==='DROP_OFF_UNCERTAIN'?this.copy.uncertainDropOff
+    const text=top.type==='DROP_OFF_UNCERTAIN'||top.type==='DROP_OFF'&&top.riskLevel!=='CRITICAL'?this.copy.uncertainDropOff
       :top.type==='DROP_OFF'?this.copy.dropOff
       :top.type==='STAIRS_DOWN'&&top.riskLevel==='CRITICAL'?this.copy.stairsDown
       :top.type==='STAIRS_UNCERTAIN'||top.type==='STAIRS_DOWN'&&top.reason==='UNCERTAIN'
       ? this.copy.uncertainStairs
       : `${top.riskLevel==='CRITICAL'||top.riskLevel==='HIGH'?`${this.copy.alertPrefix}، `:''}${objectPhrase(top,this.copy)}.`;
     if(top.riskLevel==='CRITICAL')this.haptic.critical();
-    this.speak(text);
+    this.speak(text,top.riskLevel==='CRITICAL'?'CRITICAL_SAFETY':top.riskLevel==='HIGH'?'HIGH_SAFETY':'INFORMATION');
     return {text,event:top};
   }
   reset(){this.deduplicator.reset();this.hazardUntil=0;}

@@ -13,11 +13,13 @@ import { metricDiagnostic, type MetricDiagnostic } from './metricEngine';
 import { checkAtomicFrame, checkAtomicRgbFrame, rotateNativeDepthClockwise } from './nativeFramePair';
 import { measureAutoMeterObjects, measureEstimatedObjects, type AutoMeterSnapshot } from './autoMeter';
 import {meterErrorCode,type MeterDiagnostic} from './meterDiagnostics';
+import {ObjectSpeechTracker} from './objectSpeech';
 
 interface Callbacks {
   scene:(description:SceneDescription)=>void;
   detectionFrame?:(frame:LiveDetectionFrame)=>void;
   alert:(text:string,risk:SceneDescription['riskLevel'])=>void;
+  objectSpeech?:(text:string)=>boolean;
   candidate:(candidate:PlaceCandidate)=>void;
   recognized:(place:RecognizedPlace)=>void;
   OCRFailure:()=>void;
@@ -56,7 +58,9 @@ export interface VisionPipelineOptions {
   nativeFrames?:NonNullable<Window['BasiraNativeFrames']>;
   nativeCanvas?:HTMLCanvasElement;
   autoMeterEnabled?:boolean;
-  estimatedMetricModel?:()=>Promise<EstimatedMetricDepthProvider>;
+  objectSpeechEnabled?:boolean;
+  approachPhrase?:(name:string,direction:string)=>string;
+  estimatedMetricModel?:(signal?:AbortSignal)=>Promise<EstimatedMetricDepthProvider>;
   segmentation?:SceneSegmentationProvider;relativeDepth?:RelativeDepthProvider;metricDepth?:MetricDepthProvider;
   segmentationIntervalMs?:number;depthIntervalMs?:number;
   config:VisionConfig; copy:VisionCopy; mode:VisionMode;
@@ -102,10 +106,13 @@ export class VisionPipeline {
   private lastDepth=Number.NEGATIVE_INFINITY;
   private lastMetric=Number.NEGATIVE_INFINITY;
   private autoMeterEnabled:boolean;
+  private objectSpeechEnabled:boolean;
+  private readonly objectSpeech:ObjectSpeechTracker;
   private autoMeterGeneration=0;
   private lastNativeFrameId='';
   private estimatedModel:EstimatedMetricDepthProvider|null=null;
   private modelOpening:Promise<void>|null=null;
+  private modelOpenAbort:AbortController|null=null;
   private modelBusy=false;
   private forceMeterCapture=false;
   private pendingMeterRequests:{requestedAt:number;resolve:(result:MeterAttempt)=>void;timer:number}[]=[];
@@ -123,6 +130,8 @@ export class VisionPipeline {
   private detections=0;
   constructor(private readonly options:VisionPipelineOptions) {
     this.autoMeterEnabled=options.autoMeterEnabled===true;
+    this.objectSpeechEnabled=options.objectSpeechEnabled!==false;
+    this.objectSpeech=new ObjectSpeechTracker(options.copy,4500,options.approachPhrase);
     this.safety=new BasiraSafetyEngine(options.config);
     this.fusion=new VisionFusionEngine(this.safety);
     this.scene=new SceneUnderstandingService(options.copy);
@@ -132,6 +141,11 @@ export class VisionPipeline {
   get active(){return this.running;}
   setFindingDestination(active:boolean){this.findingDestination=active;}
   setAlertDistanceMeters(value:number){this.safety.setAlertDistanceMeters(value);}
+  setObjectSpeechEnabled(enabled:boolean){this.objectSpeechEnabled=enabled;this.objectSpeech.reset();}
+  setSegmentation(provider:SceneSegmentationProvider){
+    if(!this.running){void provider.close();return;}
+    this.options.segmentation=provider;this.geometryEnabled=true;this.lastGeometry=Number.NEGATIVE_INFINITY;
+  }
   /** A button press is satisfied only by a frame captured after the press. */
   requestMeterNow():Promise<MeterAttempt>{
     if(!this.running||!this.autoMeterEnabled)return Promise.resolve({snapshot:null,diagnostic:'OFF'});
@@ -168,6 +182,7 @@ export class VisionPipeline {
   async setAutoMeterEnabled(enabled:boolean):Promise<boolean>{
     this.autoMeterEnabled=enabled;
     this.autoMeterGeneration++;
+    if(!enabled)this.modelOpenAbort?.abort();
     if(!enabled)this.cancelMeterRequests('OFF');
     this.metricDepth=null;
     this.options.callbacks.autoMeterSnapshot?.(null);
@@ -199,10 +214,11 @@ export class VisionPipeline {
       try{await this.options.nativeFrames.start();}
       catch(error){await this.stop();throw error;}
       if(this.autoMeterEnabled)await this.setAutoMeterEnabled(true);
-    }else if(this.autoMeterEnabled)void this.startMetricModel();
+    }
     console.info('Basira vision session started',{mode:this.options.mode});
     this.watchBattery();
     this.schedule(0);
+    if(this.autoMeterEnabled&&!this.options.nativeFrames)void this.startMetricModel();
   }
   private schedule(ms:number){ if(this.running)this.timer=window.setTimeout(()=>void this.tick(),ms); }
   private async startMetricModel(){
@@ -214,9 +230,10 @@ export class VisionPipeline {
     }
     if(this.estimatedModel||!this.options.estimatedMetricModel||!this.running||!this.autoMeterEnabled)return;
     const token=this.autoMeterGeneration;
+    const controller=new AbortController();this.modelOpenAbort=controller;
     const openedAt=performance.now();
     this.reportMeterDiagnostic('MODEL_LOADING');
-    const opening=this.options.estimatedMetricModel().then(async model=>{
+    const opening=this.options.estimatedMetricModel(controller.signal).then(async model=>{
       if(!this.running||!this.autoMeterEnabled||token!==this.autoMeterGeneration){await model.close();return;}
       this.estimatedModel=model;
       this.options.callbacks.metricTiming?.('LOAD',Math.round(performance.now()-openedAt));
@@ -235,6 +252,7 @@ export class VisionPipeline {
     this.modelOpening=opening;
     await opening;
     if(this.modelOpening===opening)this.modelOpening=null;
+    if(this.modelOpenAbort===controller)this.modelOpenAbort=null;
   }
   private async processEstimatedMetric(frame:HTMLCanvasElement,detections:VisionDetection[],timestamp:number,capturedAt:number,generation:number,meterGeneration:number){
     this.modelBusy=true;
@@ -390,7 +408,7 @@ export class VisionPipeline {
       const enriched=await Promise.all(detections.map(async detection=>({ ...detection,approximateDistance:await this.readDepth(detection,started) })));
       if(!this.running||generation!==this.generation)return;
       this.latestObjects=enriched;
-      this.publish(started);
+      this.publish(started,true);
       this.frames++;
       this.inferenceMs+=performance.now()-started;
       this.detections+=detections.length;
@@ -409,7 +427,7 @@ export class VisionPipeline {
       await this.stop();
     }
   }
-  private publish(now:number){
+  private publish(now:number,fromDetection=false){
     const signs=this.signDetections.filter(sign=>now-sign.timestamp<12_000);
     const segmentation=this.segmentation&&now-this.segmentation.timestamp<10_000?this.segmentation:null;
     const relativeDepth=this.relativeDepth&&now-this.relativeDepth.timestamp<2_000?this.relativeDepth:null;
@@ -426,14 +444,14 @@ export class VisionPipeline {
     this.latest=this.scene.summarize(events,this.recognizedPlace,Date.now(),walkableAreaForLight(this.cameraLight,frame.walkableArea),frame.surfaceAnalysis);
     this.latest.cameraLight=this.cameraLight;
     this.options.callbacks.scene(this.latest);
-    // Medium-information objects remain available for an on-demand scene summary.
-    // Automatic audio is reserved for safety hazards and named objects within the configured metric range.
-    // Experimental object-to-depth association is NOT a certified obstacle
-    // alarm. Keep spoken measurements in on-demand descriptions only.
+    // Safety announcements keep priority. Ordinary object speech uses detector
+    // frames and remains available when metric and segmentation engines fail.
     const safetyOnlyEvents=events.map(event=>this.safety.classify({...event,approximateDistance:null}))
       .filter(event=>event.riskLevel==='HIGH'||event.riskLevel==='CRITICAL');
     const alert=this.options.announcement.announce(safetyOnlyEvents,Date.now());
     if(alert)this.options.callbacks.alert(alert.text,alert.event.riskLevel);
+    if(fromDetection&&this.objectSpeechEnabled&&!alert&&this.options.callbacks.objectSpeech)
+      this.objectSpeech.observe(this.latestObjects,Date.now(),this.options.callbacks.objectSpeech);
   }
   private async processGeometry(generation:number,timestamp:number){
     this.geometryBusy=true;
@@ -527,6 +545,7 @@ export class VisionPipeline {
     if(!this.running)return;
     this.running=false;this.generation++;
     this.autoMeterEnabled=false;this.autoMeterGeneration++;
+    this.modelOpenAbort?.abort();
     this.cancelMeterRequests('OFF');
     const model=this.estimatedModel;this.estimatedModel=null;
     this.options.callbacks.estimatedMetricStatus?.('UNAVAILABLE');
@@ -537,6 +556,7 @@ export class VisionPipeline {
     if(this.timer!==null){window.clearTimeout(this.timer);this.timer=null;}
     this.batteryCleanup?.();this.batteryCleanup=null;
     this.options.announcement.reset();
+    this.objectSpeech.reset();
     if(this.options.nativeFrames){
       await this.options.nativeFrames.setMeterEnabled(false).catch(()=>{});
       await this.options.nativeFrames.stop().catch(()=>{});

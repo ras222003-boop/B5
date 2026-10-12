@@ -5,6 +5,7 @@
 import type { Plugin, ViteDevServer } from "vite";
 import express, { type Request, type Response } from "express";
 import { registerOcrRoute } from "./ocr";
+import { registerVisionDescribeRoute } from "./visionDescribe";
 import { escapeHtml } from "./locale";
 
 const FORGE_API_URL = (process.env.BUILT_IN_FORGE_API_URL || "https://forge.manus.ai").replace(/\/+$/, "");
@@ -99,12 +100,13 @@ export function vitePluginApiProxy(): Plugin {
       // Use the same bounded parser, image pipeline and response contract as
       // production. The former development-only OCR implementation used an old
       // two-language schema and returned no quality report to the exam page.
-      const ocrApp = express();
-      ocrApp.use(express.json({ limit: "20mb" }));
-      registerOcrRoute(ocrApp, invokeLLM);
+      const imageApp = express();
+      imageApp.use(express.json({ limit: "20mb" }));
+      registerOcrRoute(imageApp, invokeLLM);
+      registerVisionDescribeRoute(imageApp, invokeLLM);
       server.middlewares.use((req, res, next) => {
-        if (req.url?.split("?")[0] !== "/api/ocr") return next();
-        ocrApp(req as Request, res as Response, next);
+        if (!["/api/ocr","/api/vision/describe-frame"].includes(req.url?.split("?")[0]??"")) return next();
+        imageApp(req as Request, res as Response, next);
       });
 
       // Grade endpoint

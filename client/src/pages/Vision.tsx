@@ -3,16 +3,20 @@ import { Link } from 'wouter';
 import Layout from '@/components/Layout';
 import { useI18n, useMessages } from '@/i18n';
 import { visionMessages } from '@/i18n/locales/vision';
+import { visionAssistantMessages } from '@/i18n/locales/visionAssistant';
 import { navigationMessages } from '@/i18n/locales/navigation';
-import { useTextToSpeech } from '@/hooks/useSpeech';
+import { useSpeechToText, useTextToSpeech } from '@/hooks/useSpeech';
+import {getSpeechPreferences,speechEngine,speechInput} from '@/lib/speechEngine';
 import { permissionService, type PermissionState } from '@/lib/permissionService';
 import { DEFAULT_VISION_CONFIG } from '@/lib/vision/config';
 import { CameraService, CameraServiceError } from '@/lib/vision/camera';
 import { MediaPipeVisionProvider, TesseractOCRProvider, UnavailableDepthProvider } from '@/lib/vision/providers';
 import { SegFormerSceneProvider } from '@/lib/vision/modelProviders';
-import { MonocularMetricDepthProvider } from '@/lib/vision/metricModel';
+import { WorkerMetricDepthProvider } from '@/lib/vision/workerMetricModel';
 import { detectVisionCapabilities, type VisionCapabilities } from '@/lib/vision/capabilities';
 import { VisionPipeline } from '@/lib/vision/pipeline';
+import {captureDescriptionFrame,requestFrameDescription,type DescriptionMode} from '@/lib/vision/frameDescription';
+import {getObjectSpeechEnabled,saveObjectSpeechEnabled} from '@/lib/vision/objectSpeech';
 import type { LiveDetectionFrame, PinnedMetricFrame } from '@/lib/vision/pipeline';
 import { LiveVisionOverlay } from '@/components/vision/LiveVisionOverlay';
 import { selectMeterSpeech } from '@/lib/vision/meterSpeech';
@@ -33,14 +37,17 @@ const button='inline-flex min-h-14 items-center justify-center rounded-xl bg-amb
 const secondary='inline-flex min-h-14 items-center justify-center rounded-xl border border-amber-300/50 px-6 py-3 text-lg font-bold text-amber-100 hover:bg-amber-300/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-300';
 
 export default function Vision() {
-  const t=useMessages(visionMessages),nav=useMessages(navigationMessages);
+  const t=useMessages(visionMessages),nav=useMessages(navigationMessages),assistant=useMessages(visionAssistantMessages);
   const {lang}=useI18n();
-  const {speak,stop:stopSpeaking}=useTextToSpeech();
+  const {speak,stop:stopSpeaking,speechMode,speechError}=useTextToSpeech();
+  const dictation=useSpeechToText();
   const videoRef=useRef<HTMLVideoElement|null>(null);
   const nativeCanvasRef=useRef<HTMLCanvasElement|null>(null);
   const cameraRef=useRef<CameraService>(new CameraService(DEFAULT_VISION_CONFIG));
   const pipelineRef=useRef<VisionPipeline|null>(null);
   const generation=useRef(0);
+  const descriptionAbort=useRef<AbortController|null>(null);
+  const descriptionBusyRef=useRef(false);
   const localizationRef=useRef(new BasiraLocalizationEngine());
   const graphNodesRef=useRef<MapNode[]>([]);
   const [locationEstimate,setLocationEstimate]=useState<LocalizationEstimate|null>(null);
@@ -84,6 +91,18 @@ export default function Vision() {
   const [cameraPermission,setCameraPermission]=useState<PermissionState>('not_requested');
   const [online,setOnline]=useState(typeof navigator==='undefined'?true:navigator.onLine);
   const [spokenSummary,setSpokenSummary]=useState('');
+  const [objectSpeechEnabled,setObjectSpeechEnabled]=useState(()=>getObjectSpeechEnabled());
+  const objectSpeechRef=useRef(objectSpeechEnabled);
+  const [lastObjectText,setLastObjectText]=useState('');
+  const [screenReaderMode,setScreenReaderMode]=useState(()=>getSpeechPreferences().screenReaderMode);
+  const [descriptionConsent,setDescriptionConsent]=useState(false);
+  const [descriptionImage,setDescriptionImage]=useState<string|null>(null);
+  const [descriptionText,setDescriptionText]=useState('');
+  const [descriptionError,setDescriptionError]=useState('');
+  const [descriptionBusy,setDescriptionBusy]=useState(false);
+  const [question,setQuestion]=useState('');
+  useEffect(()=>{if(dictation.transcript)setQuestion(dictation.transcript);},[dictation.transcript]);
+  useEffect(()=>{const changed=()=>setScreenReaderMode(getSpeechPreferences().screenReaderMode);window.addEventListener('basira-speech-preferences',changed);return()=>window.removeEventListener('basira-speech-preferences',changed);},[]);
   useEffect(()=>{permissionService.status('camera').then(setCameraPermission).catch(()=>{});const update=()=>setOnline(navigator.onLine);window.addEventListener('online',update);window.addEventListener('offline',update);return()=>{window.removeEventListener('online',update);window.removeEventListener('offline',update);};},[]);
   useEffect(()=>{if(!locationEstimate)return;const timer=window.setInterval(()=>setLocationEstimate(localizationRef.current.fusion.current(Date.now())),5000);return()=>window.clearInterval(timer);},[Boolean(locationEstimate)]);
   useEffect(()=>{
@@ -99,15 +118,17 @@ export default function Vision() {
 
   const stop=useCallback(async()=>{
     generation.current++;
+    descriptionAbort.current?.abort();descriptionAbort.current=null;descriptionBusyRef.current=false;
     const pipeline=pipelineRef.current;pipelineRef.current=null;
     cameraRef.current.stop(videoRef.current??undefined);
     stopSpeaking();
-    setState('STOPPED');setMetricInfo({status:'UNAVAILABLE',source:null});setMeterDiagnostic('OFF');setMeterSnapshot(null);setOverlayFrame(null);setPinnedFrame(null);setMeterRequestBusy(false);setMeterSpokenStatus('');setMetricTiming({load:null,inference:null});speechPacerRef.current.reset();setScene(null);setCandidates([]);setRecognized(null);
+    setState('STOPPED');setMetricInfo({status:'UNAVAILABLE',source:null});setMeterDiagnostic('OFF');setMeterSnapshot(null);setOverlayFrame(null);setPinnedFrame(null);setMeterRequestBusy(false);setMeterSpokenStatus('');setMetricTiming({load:null,inference:null});speechPacerRef.current.reset();setScene(null);setCandidates([]);setRecognized(null);setDescriptionImage(null);setDescriptionText('');setDescriptionBusy(false);
     localizationRef.current=new BasiraLocalizationEngine();setLocationEstimate(null);graphNodesRef.current=[];
     if(pipeline)await pipeline.stop();
   },[stopSpeaking]);
   useEffect(()=>()=>{
     generation.current++;
+    descriptionAbort.current?.abort();
     cameraRef.current.stop(videoRef.current??undefined);
     void pipelineRef.current?.stop();pipelineRef.current=null;
     stopSpeaking();
@@ -128,23 +149,26 @@ export default function Vision() {
       if(!nativeFrames)setCameraPermission('allowed');
       const provider=await MediaPipeVisionProvider.open(visionConfig);
       if(run!==generation.current){await provider.close();cameraRef.current.stop(videoRef.current);return;}
-      let segmentation:SegFormerSceneProvider|undefined;
-      try{segmentation=await SegFormerSceneProvider.open();}
-      catch{setModelWarning(t.segmentationFailure);}
-      if(run!==generation.current){await Promise.allSettled([provider.close(),segmentation?.close()]);cameraRef.current.stop(videoRef.current);return;}
       const currentBuildingId=sessionStorage.getItem('basira-current-building');
       graphNodesRef.current=currentBuildingId?(await navApi.graph(currentBuildingId).then(result=>result.nodes).catch(()=>[])):[];
-      if(run!==generation.current){await Promise.allSettled([provider.close(),segmentation?.close()]);cameraRef.current.stop(videoRef.current);return;}
-      const announcement=new VisionAnnouncementService(t,text=>speak(text,0.9,lang),new BrowserHapticFeedbackProvider(),visionConfig.alertCooldownMs);
+      if(run!==generation.current){await provider.close();cameraRef.current.stop(videoRef.current);return;}
+      const announcement=new VisionAnnouncementService(t,(text,priority)=>{void speechEngine.enqueue(speechInput(text,lang,'ENVIRONMENT'),priority??'HIGH_SAFETY');},new BrowserHapticFeedbackProvider(),visionConfig.alertCooldownMs);
       const pipeline=new VisionPipeline({video:videoRef.current,nativeCanvas:nativeCanvasRef.current,nativeFrames,
-        autoMeterEnabled:autoMeterEnabledRef.current,vision:provider,ocr:new TesseractOCRProvider(),depth:new UnavailableDepthProvider(),
-        estimatedMetricModel:nativeFrames?undefined:()=>MonocularMetricDepthProvider.open(),
-        segmentation,segmentationIntervalMs:detected.segmentationIntervalMs,depthIntervalMs:detected.depthIntervalMs,
+        autoMeterEnabled:autoMeterEnabledRef.current,objectSpeechEnabled:objectSpeechRef.current,approachPhrase:assistant.approach,vision:provider,ocr:new TesseractOCRProvider(),depth:new UnavailableDepthProvider(),
+        estimatedMetricModel:nativeFrames?undefined:signal=>WorkerMetricDepthProvider.open(signal),
+        segmentationIntervalMs:detected.segmentationIntervalMs,depthIntervalMs:detected.depthIntervalMs,
         config:visionConfig,copy:t,mode:'EXPLORATION',buildingId:currentBuildingId,floorId:null,announcement,safetyFlags,
         callbacks:{
           scene:description=>{if(run===generation.current){setScene(description);setState('ANALYZING');}},
           detectionFrame:frame=>{if(run===generation.current)setOverlayFrame(frame);},
           alert:(text,level)=>{if(run===generation.current){setLastAlert(text);setRisk(level);}},
+          objectSpeech:text=>{
+            if(run!==generation.current||!objectSpeechRef.current)return false;
+            if(!getSpeechPreferences().screenReaderMode&&speechEngine.busy)return false;
+            setLastObjectText(text);
+            if(!getSpeechPreferences().screenReaderMode)void speechEngine.enqueue(speechInput(text,lang,'ENVIRONMENT'),'INFORMATION');
+            return true;
+          },
           candidate:candidate=>{if(run===generation.current)setCandidates(previous=>[candidate,...previous].slice(0,10));},
           recognized:place=>{if(run===generation.current){setRecognized(place);void navigationRequest<{place:Place}>(`/places/${place.placeId}`).then(result=>{
             if(run!==generation.current)return;
@@ -181,6 +205,10 @@ export default function Vision() {
       pipelineRef.current=pipeline;
       await pipeline.start();
       if(run===generation.current){setState('WORKING');if(nativeFrames)setCameraPermission('allowed');}
+      // Optional segmentation loads after the detector is live and cannot hold startup hostage.
+      window.setTimeout(()=>{if(run!==generation.current)return;void SegFormerSceneProvider.open().then(model=>{
+        if(run===generation.current)pipeline.setSegmentation(model);else void model.close();
+      }).catch(()=>{if(run===generation.current)setModelWarning(t.segmentationFailure);});},2500);
     } catch(caught) {
       cameraRef.current.stop(videoRef.current??undefined);
       await pipelineRef.current?.stop();pipelineRef.current=null;
@@ -196,6 +224,43 @@ export default function Vision() {
   const report=(detail:boolean)=>{
     const value=scene?(detail?scene.detailedText:scene.shortText):t.noDetections;
     setSpokenSummary(value);speak(value,0.9,lang);
+  };
+  const toggleObjectSpeech=()=>{
+    const enabled=!objectSpeechRef.current;
+    objectSpeechRef.current=enabled;setObjectSpeechEnabled(saveObjectSpeechEnabled(enabled));
+    pipelineRef.current?.setObjectSpeechEnabled(enabled);
+  };
+  const describeCaptured=async(mode:DescriptionMode,recapture=false)=>{
+    if(descriptionBusyRef.current)return;
+    if(!descriptionConsent){setDescriptionError(assistant.needsConsent);return;}
+    if(!videoRef.current){setDescriptionError(assistant.noFrame);return;}
+    if(window.BasiraNativeFrames&&!overlayFrame){setDescriptionError(assistant.noFrame);return;}
+    const run=generation.current;
+    descriptionBusyRef.current=true;setDescriptionBusy(true);setDescriptionError('');
+    const controller=new AbortController();descriptionAbort.current=controller;
+    let timedOut=false;
+    const timeout=window.setTimeout(()=>{timedOut=true;controller.abort();},70_000);
+    try{
+      const image=recapture||!descriptionImage
+        ?await captureDescriptionFrame(videoRef.current,nativeCanvasRef.current,Boolean(window.BasiraNativeFrames))
+        :descriptionImage;
+      if(run!==generation.current)return;
+      if(recapture)setDescriptionImage(image);
+      const result=await requestFrameDescription(image,mode,question,controller.signal);
+      if(run!==generation.current)return;
+      setDescriptionText(result);
+      if(!getSpeechPreferences().screenReaderMode)speak(result,0.9,'ar','ENVIRONMENT');
+    }catch(error){
+      if(run!==generation.current)return;
+      if(controller.signal.aborted&&!timedOut)return;
+      const code=error instanceof Error?error.message:'';
+      setDescriptionError(code==='camera_frame_unavailable'?assistant.noFrame:timedOut||code==='timeout'?assistant.timeout:
+        code==='rate_limited'?assistant.rate:code==='invalid_image'?assistant.invalid:assistant.network);
+    }finally{
+      window.clearTimeout(timeout);
+      if(descriptionAbort.current===controller){descriptionAbort.current=null;descriptionBusyRef.current=false;}
+      if(run===generation.current)setDescriptionBusy(false);
+    }
   };
   const savePersonal=async()=>{
     const estimate=localizationRef.current.fusion.current(Date.now());
@@ -277,6 +342,29 @@ export default function Vision() {
         <p className="absolute bottom-2 left-2 right-2 z-10 rounded-lg bg-stone-950/90 px-3 py-2 text-sm text-amber-100" role="status">{lang==='ar'?'لقطة قياس ثابتة؛ الصورة ليست بثًا حيًا.':lang==='zh-CN'?'测距静止画面；并非实时视频。':'Measurement still; this is not live video.'}</p></>}
       <LiveVisionOverlay frame={previewFrame} snapshot={currentPinnedFrame?currentMeterSnapshot:null} pinned={Boolean(currentPinnedFrame)} names={t.object} directions={t.direction} metersLabel={t.autoMeterMeters} experimentalLabel={t.autoMeterExperimental} rtl={lang==='ar'} />
     </section>
+    <section className="rounded-2xl border border-amber-300/50 bg-stone-900 p-5" aria-label={assistant.objectSpeech}>
+      <button type="button" className={secondary} aria-pressed={objectSpeechEnabled} onClick={toggleObjectSpeech}>{assistant.objectSpeech}: {objectSpeechEnabled?assistant.objectSpeechOn:assistant.objectSpeechOff}</button>
+      <p className="mt-3 min-h-6" role={screenReaderMode?'status':undefined} aria-live={screenReaderMode?'polite':'off'}>{lastObjectText}</p>
+      <p className="mt-2" role="status" aria-live="off">{assistant.speechStatus}: {screenReaderMode?assistant.speechMuted:speechError==='PLAYBACK_BLOCKED'?assistant.speechBlocked:speechError==='NO_VOICE'?assistant.speechNoVoice:speechMode==='PREMIUM'?assistant.speechPremium:assistant.speechLocal}</p>
+      <div className="mt-3 flex flex-wrap gap-2"><button type="button" className={secondary} onClick={()=>speak(assistant.testPhrase,0.9,lang)}>{assistant.testVoice}</button><button type="button" className={secondary} onClick={stopSpeaking}>{assistant.stopVoice}</button></div>
+    </section>
+    <section className="rounded-2xl border border-amber-300/50 bg-stone-900 p-5" aria-label={assistant.title}>
+      <h2 className="text-xl font-bold">{assistant.title}</h2>
+      <p className="mt-2 text-stone-300">{assistant.privacy}</p>
+      <label className="mt-4 flex min-h-14 items-center gap-3"><input type="checkbox" className="size-6" checked={descriptionConsent} onChange={event=>{const checked=event.target.checked;setDescriptionConsent(checked);if(!checked){descriptionAbort.current?.abort();setDescriptionImage(null);setDescriptionText('');}}}/>{assistant.consent}</label>
+      <div className="mt-3 flex flex-wrap gap-3"><button type="button" className={button} disabled={state==='STOPPED'||state==='STARTING'||descriptionBusy} aria-busy={descriptionBusy} onClick={()=>void describeCaptured('brief',true)}>{descriptionBusy?assistant.busy:assistant.capture}</button>
+        <button type="button" className={secondary} disabled={!descriptionImage||descriptionBusy} onClick={()=>void describeCaptured('brief')}>{assistant.again}</button>
+        <button type="button" className={secondary} disabled={!descriptionImage||descriptionBusy} onClick={()=>void describeCaptured('detailed')}>{assistant.more}</button>
+        <button type="button" className={secondary} disabled={!descriptionImage||descriptionBusy} onClick={()=>void describeCaptured('read_text')}>{assistant.readText}</button></div>
+      <div className="mt-4 flex flex-wrap items-end gap-3"><label className="flex-1">{assistant.question}<input className="mt-1 min-h-14 w-full rounded-xl border border-amber-200/40 bg-stone-950 px-4" value={question} maxLength={500} onChange={event=>setQuestion(event.target.value)}/></label>
+        <button type="button" className={secondary} onClick={()=>dictation.isListening?dictation.stopListening():dictation.startListening()}>{dictation.isListening?assistant.listening:assistant.listen}</button>
+        <button type="button" className={secondary} disabled={!descriptionImage||!question.trim()||descriptionBusy} onClick={()=>void describeCaptured('ask')}>{assistant.ask}</button></div>
+      {dictation.error&&<p role="status" className="mt-2 text-amber-200">{dictation.error}</p>}
+      {descriptionError&&<p role="alert" className="mt-3 text-red-200">{descriptionError}</p>}
+      <p role="status" aria-live="polite" className="mt-3">{descriptionBusy?assistant.busy:''}</p>
+      <p role={screenReaderMode?'status':undefined} aria-live={screenReaderMode?'polite':'off'} className="mt-3 whitespace-pre-wrap text-lg">{descriptionText||assistant.empty}</p>
+      <button type="button" className={`${secondary} mt-3`} onClick={stopSpeaking}>{assistant.stopVoice}</button>
+    </section>
     <section className="rounded-2xl border border-amber-200/30 bg-stone-900 p-5" aria-label={t.autoMeterTitle}>
       <h2 className="text-xl font-bold">{t.autoMeterTitle}</h2>
       <p className="mt-2 text-sm text-stone-300">{t.autoMeterRangeNote}</p>
@@ -293,7 +381,7 @@ export default function Vision() {
       <p role="status" aria-live="polite">{t.status}: <strong>{cameraState}</strong></p>
       <p className="mt-2">{nav.permissionCamera}: {({not_requested:nav.notRequested,allowed:nav.allowed,denied:nav.denied,device_settings:nav.deviceSettings,unavailable:nav.unavailable} as const)[cameraPermission]}</p>
       <p className="mt-2">{t.risk}: <strong>{risk?t.riskLabels[risk]:'—'}</strong></p>
-      <p className="mt-2">{t.lastAlert}: <span role="alert" aria-live={risk==='CRITICAL'||risk==='HIGH'?'assertive':'polite'}>{lastAlert||'—'}</span></p>
+       <p className="mt-2">{t.lastAlert}: <span role={screenReaderMode?'alert':undefined} aria-live={screenReaderMode?(risk==='CRITICAL'||risk==='HIGH'?'assertive':'polite'):'off'}>{lastAlert||'—'}</span></p>
     </section>
     {error&&<p role="alert" className="rounded-xl border border-red-400/50 p-4 text-red-200">{error}</p>}
     {OCRWarning&&<p role="status" aria-live="polite" className="text-amber-200">{OCRWarning}</p>}
@@ -337,7 +425,7 @@ export default function Vision() {
       </a>}
     {scene?.walkableArea&&<p role="status" className="text-amber-100">{scene.walkableArea.pathAhead==='BLOCKED'?t.pathBlocked:scene.walkableArea.pathAhead==='CLEAR'?t.pathClearObserved:t.pathUnknown}</p>}
     {scene?.surfaceAnalysis&&<p role="status" className="text-amber-100">{t.surfaceStatus(scene.surfaceAnalysis.surface??'UNKNOWN',scene.surfaceAnalysis.surfaceCoverage??0)}</p>}
-    {scene?.objects.some(object=>object.type==='STAIRS_UNCERTAIN'||object.type==='STAIRS_UP'||object.type==='STAIRS_DOWN')&&<p role="alert" className="text-amber-100">{t.stairsObserved}</p>}
+     {scene?.objects.some(object=>object.type==='STAIRS_UNCERTAIN'||object.type==='STAIRS_UP'||object.type==='STAIRS_DOWN')&&<p role={screenReaderMode?'alert':undefined} className="text-amber-100">{t.stairsObserved}</p>}
     {recognized&&<p role="status" className="rounded-xl border border-emerald-300/40 p-4 text-emerald-100">{t.placeRecognized(recognized.name)}</p>}
     {locationEstimate?.state==='TRACKING'&&<section className="space-y-3 rounded-xl border border-amber-300/40 p-4"><p>موقعك الحالي: بالقرب من {recognized?.name??'مكان معروف'} · الثقة {Math.round(locationEstimate.confidence*100)}٪. التقدير مرتبط بلوحة معروفة وليس قياسًا ميدانيًا للدقة.</p><div className="flex flex-wrap gap-2"><input className="min-h-12 rounded-xl border border-amber-200/40 bg-stone-950 px-3" value={savedName} onChange={e=>setSavedName(e.target.value)} placeholder="اسم مكانك الخاص" aria-label="اسم مكانك الخاص"/><button className={secondary} disabled={!savedName.trim()} onClick={savePersonal}>احفظ هذا المكان</button></div><p role="status" aria-live="polite">{saveNotice}</p></section>}
     {locationEstimate?.state==='LOCALIZATION_LOST'&&<p role="alert" className="rounded-xl border border-amber-300/40 p-4">تعذر تحديد موقعك بدقة داخل المبنى. وجّه الكاميرا نحو لوحة مكان معروف لإعادة التثبيت.</p>}

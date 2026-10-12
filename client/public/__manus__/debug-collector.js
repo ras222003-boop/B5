@@ -471,8 +471,8 @@
       : (input && (input.url || input.href || String(input))) || "";
     var method = init.method || (input && input.method) || "GET";
 
-    // Don't intercept internal requests
-    if (url.indexOf("/__manus__/") === 0) {
+    // Don't collect still images or their descriptions in development logs.
+    if (url.indexOf("/__manus__/") === 0 || url.indexOf("/api/vision/describe-frame") !== -1) {
       return originalFetch(input, init);
     }
 
@@ -622,7 +622,8 @@
     if (
       xhr._manusData &&
       xhr._manusData.url &&
-      xhr._manusData.url.indexOf("/__manus__/") !== 0
+      xhr._manusData.url.indexOf("/__manus__/") !== 0 &&
+      xhr._manusData.url.indexOf("/api/vision/describe-frame") === -1
     ) {
       xhr._manusData.startTime = Date.now();
       xhr._manusData.requestBody = body ? sanitizeValue(tryParseJson(body)) : null;

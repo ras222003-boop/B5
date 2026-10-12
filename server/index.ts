@@ -9,6 +9,7 @@ import { registerSupportRoutes, startTicketMailWorker } from "./support";
 import { registerExamDeliveryRoutes } from "./examDelivery";
 import { registerExamSubmissionRoutes } from "./examSubmissions";
 import { registerOcrRoute } from "./ocr";
+import { registerVisionDescribeRoute } from "./visionDescribe";
 import { registerNavigationRoutes } from "./navigation";
 import { toExamLanguage, assistantSystem, guideSystem, aiFallback, pdfLabels, escapeHtml } from "./locale";
 
@@ -87,6 +88,7 @@ async function startServer() {
 
   // Structured OCR: 3 languages, EXIF rotation, contrast reference, quality report.
   registerOcrRoute(app, invokeLLM);
+  registerVisionDescribeRoute(app, invokeLLM);
 
   // ========== API: Digital Assistant - Chat with AI ==========
   app.post("/api/assistant", async (req, res) => {

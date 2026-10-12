@@ -124,10 +124,10 @@ export class MonocularMetricDepthProvider implements EstimatedMetricDepthProvide
     }
     return new MonocularMetricDepthProvider(ort,session,'wasm');
   }
-  private async run(frame:HTMLCanvasElement,timestamp:number):Promise<EstimatedMetricDepthMap> {
+  private async run(frame:HTMLCanvasElement|OffscreenCanvas,timestamp:number):Promise<EstimatedMetricDepthMap> {
     if(this.closed||!frame.width||!frame.height)throw new Error('invalid_metric_frame');
     const placement=metricPlacement(frame.width,frame.height);
-    const canvas=document.createElement('canvas');canvas.width=SIDE;canvas.height=SIDE;
+    const canvas=typeof document==='undefined'?new OffscreenCanvas(SIDE,SIDE):document.createElement('canvas');canvas.width=SIDE;canvas.height=SIDE;
     const context=canvas.getContext('2d',{willReadFrequently:true});
     if(!context)throw new Error('metric_canvas_unavailable');
     context.fillStyle='#000';context.fillRect(0,0,SIDE,SIDE);
@@ -157,7 +157,7 @@ export class MonocularMetricDepthProvider implements EstimatedMetricDepthProvide
       if(output)for(const tensor of Object.values(output))tensor.dispose();
     }
   }
-  estimate(frame:HTMLCanvasElement,timestamp:number):Promise<EstimatedMetricDepthMap> {
+  estimate(frame:HTMLCanvasElement|OffscreenCanvas,timestamp:number):Promise<EstimatedMetricDepthMap> {
     const promise=this.run(frame,timestamp);
     this.pending=promise;
     void promise.finally(()=>{if(this.pending===promise)this.pending=null;}).catch(()=>{});

@@ -85,4 +85,9 @@ describe('local semantic vision and fusion',()=>{
     expect(announce.announce(events,1000)?.text).toBe(visionMessages.ar.dropOff);
     expect(haptic.critical).toHaveBeenCalledTimes(1);
   });
+  it('uses uncertain language for an unmeasured ground-level inference',()=>{
+    const safety=new BasiraSafetyEngine(DEFAULT_VISION_CONFIG);
+    const announce=new VisionAnnouncementService(visionMessages.ar,vi.fn(),{critical:vi.fn()},5000);
+    expect(announce.announce(safety.classifyAll([object('DROP_OFF',.92)]),1000)?.text).toBe(visionMessages.ar.uncertainDropOff);
+  });
 });
