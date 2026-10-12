@@ -81,8 +81,10 @@ export default function Vision() {
   useEffect(()=>{
     if(!meterSnapshot)return;
     const expiresIn=Math.max(0,6000-(Date.now()-meterSnapshot.capturedAt));
-    const timer=window.setTimeout(()=>setMeterSnapshot(current=>
-      current?.frameId===meterSnapshot.frameId&&current.capturedAt===meterSnapshot.capturedAt?null:current),expiresIn);
+    const timer=window.setTimeout(()=>{
+      setMeterSnapshot(current=>current?.frameId===meterSnapshot.frameId&&current.capturedAt===meterSnapshot.capturedAt?null:current);
+      setMeterDiagnostic(previous=>previous==='READY_OBJECT'||previous==='READY_CENTER'?'FRAME_STALE':previous);
+    },expiresIn);
     return()=>window.clearTimeout(timer);
   },[meterSnapshot]);
 
@@ -215,7 +217,8 @@ export default function Vision() {
         speak(`${t.autoMeterAiSpeechPrefix} ${centerSurfaceLabel(lang)}، ${current.centerSurface.distanceMeters.toFixed(2)} ${t.autoMeterMeters}.`,0.9,lang);
         return;
       }
-      const reason=current?.measurements[0]?.rejectionReason??current?.centerSurface?.rejectionReason??meterDiagnostic;
+      const reason=current?.measurements[0]?.rejectionReason??current?.centerSurface?.rejectionReason??
+        (meterDiagnostic==='READY_OBJECT'||meterDiagnostic==='READY_CENTER'?'FRAME_STALE':meterDiagnostic);
       speak(meterDiagnosticText(reason??'WAITING_CAMERA',lang),0.9,lang);
       return;
     }
