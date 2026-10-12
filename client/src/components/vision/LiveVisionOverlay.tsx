@@ -13,10 +13,12 @@ interface Props {
   metersLabel:string;
   experimentalLabel:string;
   rtl:boolean;
+  /** A captured still may remain visible for six seconds; live video keeps the short limit. */
+  pinned?:boolean;
 }
 
 /** Boxes use the exact source-frame dimensions used by MediaPipe and the metric model. */
-export function LiveVisionOverlay({frame,snapshot,now,names,directions,metersLabel,experimentalLabel,rtl}:Props){
+export function LiveVisionOverlay({frame,snapshot,now,names,directions,metersLabel,experimentalLabel,rtl,pinned=false}:Props){
   const [clock,setClock]=React.useState(()=>Date.now());
   React.useEffect(()=>{
     if(now!==undefined||!frame)return;
@@ -24,14 +26,15 @@ export function LiveVisionOverlay({frame,snapshot,now,names,directions,metersLab
     return()=>window.clearInterval(timer);
   },[frame?.frameId,now]);
   const visibleAt=Math.max(now??clock,frame?.capturedAt??0);
-  if(!frame||!frame.width||!frame.height||visibleAt-frame.capturedAt>2000)return null;
-  return <svg className="pointer-events-none absolute inset-0 size-full" viewBox={`0 0 ${frame.width} ${frame.height}`}
+  const maxAgeMs=pinned?6000:2000;
+  if(!frame||!frame.width||!frame.height||visibleAt-frame.capturedAt>maxAgeMs)return null;
+  return <svg className="pointer-events-none absolute inset-0 size-full" data-frame-id={frame.frameId} viewBox={`0 0 ${frame.width} ${frame.height}`}
     preserveAspectRatio="xMidYMid meet" aria-hidden="true">
     {frame.detections.filter(item=>item.source==='OBJECT_DETECTOR').slice(0,8).map(item=>{
       const box=item.boundingBox;
       if(![box.x,box.y,box.width,box.height].every(Number.isFinite)||box.width<=0||box.height<=0)return null;
       const x=box.x*frame.width,y=box.y*frame.height,w=box.width*frame.width,h=box.height*frame.height;
-      const distance=overlayMeters(item,frame,snapshot,visibleAt);
+      const distance=overlayMeters(item,frame,snapshot,visibleAt,maxAgeMs);
       const label=`${names[item.type]} ${directions[item.horizontalDirection]}${distance===null?'':` · ≈${distance.toFixed(2)} ${metersLabel} (${experimentalLabel})`}`;
       const fontSize=Math.max(13,Math.min(20,frame.width/30));
       const labelWidth=Math.min(frame.width,Math.max(80,label.length*fontSize*.58));

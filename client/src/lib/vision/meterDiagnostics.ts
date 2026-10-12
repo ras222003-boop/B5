@@ -2,7 +2,7 @@ export type MeterDiagnostic =
   | 'OFF' | 'WAITING_CAMERA' | 'MODEL_LOADING' | 'FRAME_PROCESSING' | 'LOW_LIGHT'
   | 'MODEL_NETWORK' | 'MODEL_HTTP' | 'MODEL_REDIRECT' | 'MODEL_HTML'
   | 'MODEL_CONTENT_TYPE' | 'MODEL_SIZE' | 'MODEL_CHECKSUM' | 'WASM_ASSET' | 'MODEL_INIT'
-  | 'INFERENCE_FAILED' | 'FRAME_STALE' | 'NO_OBJECT_DETECTED'
+  | 'INFERENCE_FAILED' | 'FRAME_STALE' | 'MODEL_TIMEOUT' | 'FRAME_TIMEOUT' | 'NO_OBJECT_DETECTED'
   | 'LOW_CONFIDENCE' | 'NO_ALIGNED_DEPTH' | 'NO_OBJECT_DEPTH' | 'INVALID_MODEL_DEPTH'
   | 'DEPTH_INCONSISTENT' | 'OUT_OF_TARGET_RANGE' | 'READY_OBJECT' | 'READY_CENTER';
 
@@ -41,7 +41,7 @@ const copy:Record<'ar'|'en'|'zh-CN',Record<MeterDiagnostic,string>>={
     MODEL_HTML:'استُرجعت صفحة HTML بدل ملف النموذج.',MODEL_CONTENT_TYPE:'نوع ملف النموذج غير صحيح.',
     MODEL_SIZE:'حجم ملف النموذج غير صحيح أو تنزيله ناقص.',MODEL_CHECKSUM:'ملف النموذج تالف أو لا يطابق الأوزان المترية المعتمدة.',WASM_ASSET:'ملفات تشغيل WASM غير متاحة أو تعيد صفحة بديلة.',
     MODEL_INIT:'تعذر تهيئة النموذج في هذا المتصفح.',INFERENCE_FAILED:'فشل استدلال العمق في هذا الإطار.',
-    FRAME_STALE:'استغرق الاستدلال وقتًا طويلًا وأصبح الإطار قديمًا.',NO_OBJECT_DETECTED:'لم يتعرف الكاشف على جسم في الإطار.',
+    FRAME_STALE:'استغرق الاستدلال وقتًا طويلًا وأصبح الإطار قديمًا.',MODEL_TIMEOUT:'انتهت مهلة تحميل النموذج. حاول القياس مجددًا.',FRAME_TIMEOUT:'انتهت مهلة انتظار إطار جديد من الكاميرا.',NO_OBJECT_DETECTED:'لم يتعرف الكاشف على جسم في الإطار.',
     LOW_CONFIDENCE:'ثقة التعرف على الجسم منخفضة.',NO_ALIGNED_DEPTH:'الصورة وخريطة العمق غير متزامنتين.',
     NO_OBJECT_DEPTH:'لا توجد قراءة عمق صالحة لهذا الجسم.',INVALID_MODEL_DEPTH:'قيم العمق ناقصة أو غير صالحة.',
     DEPTH_INCONSISTENT:'قيم العمق على السطح مختلفة؛ رُفضت القراءة.',OUT_OF_TARGET_RANGE:'العمق خارج المدى التجريبي 0.5 إلى 3 أمتار.',
@@ -55,7 +55,7 @@ const copy:Record<'ar'|'en'|'zh-CN',Record<MeterDiagnostic,string>>={
     MODEL_HTML:'An HTML page was returned instead of the model file.',MODEL_CONTENT_TYPE:'The model file has the wrong content type.',
     MODEL_SIZE:'The model file has the wrong size or an incomplete download.',MODEL_CHECKSUM:'The model bytes are damaged or do not match the approved metric weights.',WASM_ASSET:'WASM runtime files are unavailable or return another page.',
     MODEL_INIT:'The model could not initialize in this browser.',INFERENCE_FAILED:'Depth inference failed for this frame.',
-    FRAME_STALE:'Inference took too long; this frame is stale.',NO_OBJECT_DETECTED:'The detector found no object in this frame.',
+    FRAME_STALE:'Inference took too long; this frame is stale.',MODEL_TIMEOUT:'Model loading timed out. Try measuring again.',FRAME_TIMEOUT:'Timed out waiting for a new camera frame.',NO_OBJECT_DETECTED:'The detector found no object in this frame.',
     LOW_CONFIDENCE:'Object detection confidence is too low.',NO_ALIGNED_DEPTH:'The image and depth map are not aligned.',
     NO_OBJECT_DEPTH:'No valid depth reading for this object.',INVALID_MODEL_DEPTH:'Depth values are missing or invalid.',
     DEPTH_INCONSISTENT:'Depth values across the surface disagree; reading rejected.',OUT_OF_TARGET_RANGE:'Depth is outside the experimental 0.5–3 metre range.',
@@ -69,7 +69,7 @@ const copy:Record<'ar'|'en'|'zh-CN',Record<MeterDiagnostic,string>>={
     MODEL_HTML:'返回的是 HTML 页面，而不是模型文件。',MODEL_CONTENT_TYPE:'模型文件的内容类型错误。',
     MODEL_SIZE:'模型文件大小错误或下载不完整。',MODEL_CHECKSUM:'模型文件损坏或与已验证的公制权重不符。',WASM_ASSET:'WASM 运行文件不可用或返回了其他页面。',
     MODEL_INIT:'此浏览器无法初始化模型。',INFERENCE_FAILED:'当前画面的深度推理失败。',
-    FRAME_STALE:'推理耗时过长，画面已过期。',NO_OBJECT_DETECTED:'当前画面未识别到物体。',
+    FRAME_STALE:'推理耗时过长，画面已过期。',MODEL_TIMEOUT:'模型加载超时，请重试测距。',FRAME_TIMEOUT:'等待新相机画面超时。',NO_OBJECT_DETECTED:'当前画面未识别到物体。',
     LOW_CONFIDENCE:'物体识别置信度过低。',NO_ALIGNED_DEPTH:'图像与深度图未同步。',
     NO_OBJECT_DEPTH:'该物体没有有效深度读数。',INVALID_MODEL_DEPTH:'深度值缺失或无效。',
     DEPTH_INCONSISTENT:'表面深度值不一致，读数已拒绝。',OUT_OF_TARGET_RANGE:'深度超出 0.5 至 3 米的实验范围。',

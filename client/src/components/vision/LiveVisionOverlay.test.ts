@@ -25,4 +25,11 @@ describe('SVG camera overlay',()=>{
     expect(mismatched).toContain('كرسي أمامك');
     expect(mismatched).not.toContain('1.20');
   });
+  it('keeps a labelled pinned measurement on its captured frame, then expires it',()=>{
+    const pinned=renderToStaticMarkup(createElement(LiveVisionOverlay,{...props,pinned:true,now:5000}));
+    expect(pinned).toContain('data-frame-id="f1"');
+    expect(pinned).toContain('1.20');
+    expect(renderToStaticMarkup(createElement(LiveVisionOverlay,{...props,now:5000}))).not.toContain('1.20');
+    expect(renderToStaticMarkup(createElement(LiveVisionOverlay,{...props,pinned:true,now:7001}))).not.toContain('1.20');
+  });
 });

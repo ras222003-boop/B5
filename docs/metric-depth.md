@@ -59,7 +59,7 @@ as an object. AI
 readings are displayed and spoken only in the opt-in Auto Meter panel; they are
 never turned into trusted `DepthReading`, scene metric fusion, collision alarms,
 stair/drop-off alerts, or movement commands. Low-light and unknown-quality
-frames are withheld. A displayed reading also expires after six seconds. The
+frames are withheld. A displayed reading appears on a clearly labelled still of the exact measured frame and expires after six seconds; the live video receives no older numeric overlay. The
 browser releases per-frame ONNX tensors and does not retain an extra 99 MB copy
 of the model after session creation.
 

@@ -25,6 +25,8 @@ interface Callbacks {
   depthFailure:()=>void;
   metricStatus?:(diagnostic:MetricDiagnostic)=>void;
   autoMeterSnapshot?:(snapshot:AutoMeterSnapshot|null)=>void;
+  /** The JPEG is captured from the exact detector/metric input, never from a later live frame. */
+  pinnedMetricFrame?:(result:PinnedMetricFrame|null)=>void;
   autoMeterRejected?:()=>void;
   estimatedMetricStatus?:(status:'UNAVAILABLE'|'WAITING'|'LIVE'|'LOW_LIGHT')=>void;
   metricModelFailure?:()=>void;
@@ -39,6 +41,10 @@ export interface LiveDetectionFrame {
   width:number;
   height:number;
   detections:VisionDetection[];
+}
+export interface PinnedMetricFrame {
+  frame:LiveDetectionFrame;
+  imageDataUrl:string;
 }
 export interface MeterAttempt {
   snapshot:AutoMeterSnapshot|null;
@@ -129,17 +135,20 @@ export class VisionPipeline {
   /** A button press is satisfied only by a frame captured after the press. */
   requestMeterNow():Promise<MeterAttempt>{
     if(!this.running||!this.autoMeterEnabled)return Promise.resolve({snapshot:null,diagnostic:'OFF'});
-    if(!this.options.nativeFrames&&!this.estimatedModel){
-      return Promise.resolve({snapshot:null,diagnostic:this.modelOpening?'MODEL_LOADING':this.currentMeterDiagnostic});
-    }
+    if(!this.options.nativeFrames&&!this.options.estimatedMetricModel)return Promise.resolve({snapshot:null,diagnostic:'MODEL_INIT'});
     return new Promise(resolve=>{
       const requestedAt=performance.now();
       const timer=window.setTimeout(()=>{
         this.pendingMeterRequests=this.pendingMeterRequests.filter(item=>item.timer!==timer);
-        resolve({snapshot:null,diagnostic:this.currentMeterDiagnostic==='FRAME_PROCESSING'?'FRAME_STALE':this.currentMeterDiagnostic});
+        const diagnostic=!this.options.nativeFrames&&!this.estimatedModel&&
+          (this.modelOpening||this.currentMeterDiagnostic==='MODEL_LOADING')?'MODEL_TIMEOUT':'FRAME_TIMEOUT';
+        this.reportMeterDiagnostic(diagnostic);
+        resolve({snapshot:null,diagnostic});
+        this.forceMeterCapture=this.pendingMeterRequests.length>0;
       },15_000);
       this.pendingMeterRequests.push({requestedAt,resolve,timer});
       this.forceMeterCapture=true;
+      if(!this.options.nativeFrames&&!this.estimatedModel&&!this.modelOpening)void this.startMetricModel();
     });
   }
   private reportMeterDiagnostic(diagnostic:MeterDiagnostic){
@@ -162,6 +171,7 @@ export class VisionPipeline {
     if(!enabled)this.cancelMeterRequests('OFF');
     this.metricDepth=null;
     this.options.callbacks.autoMeterSnapshot?.(null);
+    this.options.callbacks.pinnedMetricFrame?.(null);
     this.reportMeterDiagnostic(enabled?(this.options.nativeFrames?'WAITING_CAMERA':'MODEL_LOADING'):'OFF');
     this.options.callbacks.metricStatus?.({status:enabled&&this.options.nativeFrames?'WAITING':'UNAVAILABLE',source:null});
     if(!this.options.nativeFrames){
@@ -173,6 +183,7 @@ export class VisionPipeline {
       try{await this.options.nativeFrames.setMeterEnabled(enabled);}
       catch{
         this.autoMeterEnabled=false;this.autoMeterGeneration++;
+        this.cancelMeterRequests('OFF');
         this.options.callbacks.autoMeterRejected?.();
         this.options.callbacks.metricStatus?.({status:'UNAVAILABLE',source:null});
         return false;
@@ -211,10 +222,13 @@ export class VisionPipeline {
       this.options.callbacks.metricTiming?.('LOAD',Math.round(performance.now()-openedAt));
       this.options.callbacks.estimatedMetricStatus?.('WAITING');
       this.reportMeterDiagnostic('WAITING_CAMERA');
+      this.forceMeterCapture=this.pendingMeterRequests.length>0;
     }).catch(error=>{
       if(this.running&&this.autoMeterEnabled&&token===this.autoMeterGeneration){
         this.options.callbacks.estimatedMetricStatus?.('UNAVAILABLE');
-        this.reportMeterDiagnostic(meterErrorCode(error,'MODEL_INIT'));
+        const diagnostic=meterErrorCode(error,'MODEL_INIT');
+        this.reportMeterDiagnostic(diagnostic);
+        this.cancelMeterRequests(diagnostic);
         this.options.callbacks.metricModelFailure?.();
       }
     });
@@ -236,8 +250,13 @@ export class VisionPipeline {
         return;
       }
       const snapshot=measureEstimatedObjects(detections,map,`web-${timestamp}`,capturedAt);
-      this.options.callbacks.detectionFrame?.({frameId:snapshot.frameId,capturedAt,width:frame.width,height:frame.height,detections});
+      const detectionFrame={frameId:snapshot.frameId,capturedAt,width:frame.width,height:frame.height,detections};
+      this.options.callbacks.detectionFrame?.(detectionFrame);
       this.options.callbacks.autoMeterSnapshot?.(snapshot);
+      if(snapshot.measurements.some(item=>item.distanceMeters!==null)){
+        try{this.options.callbacks.pinnedMetricFrame?.({frame:detectionFrame,imageDataUrl:frame.toDataURL('image/jpeg',.75)});}
+        catch{this.options.callbacks.pinnedMetricFrame?.(null);}
+      }else this.options.callbacks.pinnedMetricFrame?.(null);
       const diagnostic=snapshot.measurements.some(item=>item.distanceMeters!==null)?'READY_OBJECT'
         :snapshot.centerSurface?.distanceMeters!=null?'READY_CENTER'
         :snapshot.measurements[0]?.rejectionReason??'NO_OBJECT_DETECTED';
@@ -248,10 +267,11 @@ export class VisionPipeline {
       if(this.running&&generation===this.generation&&meterGeneration===this.autoMeterGeneration){
         const model=this.estimatedModel;this.estimatedModel=null;
         this.options.callbacks.autoMeterSnapshot?.(null);
+        this.options.callbacks.pinnedMetricFrame?.(null);
         this.options.callbacks.estimatedMetricStatus?.('UNAVAILABLE');
         const diagnostic=meterErrorCode(error,'INFERENCE_FAILED');
         this.reportMeterDiagnostic(diagnostic);
-        this.finishMeterAttempt(timestamp,{snapshot:null,diagnostic});
+        this.cancelMeterRequests(diagnostic);
         this.options.callbacks.metricModelFailure?.();
         if(model)void model.close();
       }
@@ -279,6 +299,7 @@ export class VisionPipeline {
         if(!this.running||generation!==this.generation)return;
         if(checkAtomicRgbFrame(sample)||!sample||sample.frameId===this.lastNativeFrameId){
           this.options.callbacks.autoMeterSnapshot?.(null);
+          this.options.callbacks.pinnedMetricFrame?.(null);
           this.options.callbacks.metricStatus?.({status:this.autoMeterEnabled?'WAITING':'UNAVAILABLE',source:null});
           this.schedule(500);return;
         }
@@ -331,6 +352,7 @@ export class VisionPipeline {
           frameCapturedAt=metricCapturedAt;
           detectionFrame=metricFrame;detectorTimestamp=started;this.lastModel=started;
           this.options.callbacks.autoMeterSnapshot?.(null);
+          this.options.callbacks.pinnedMetricFrame?.(null);
           this.options.callbacks.estimatedMetricStatus?.('WAITING');
           this.reportMeterDiagnostic('FRAME_PROCESSING');
         }
@@ -355,6 +377,10 @@ export class VisionPipeline {
       if(this.options.nativeFrames&&meterGeneration===this.autoMeterGeneration&&this.autoMeterEnabled){
         const snapshot=measureAutoMeterObjects(detections,nativeMap,nativeFrameId,frameCapturedAt,nativeMap?.source);
         this.options.callbacks.autoMeterSnapshot?.(snapshot);
+        if(snapshot.measurements.some(item=>item.distanceMeters!==null)&&this.options.nativeCanvas){
+          try{this.options.callbacks.pinnedMetricFrame?.({frame:{frameId,capturedAt:frameCapturedAt,width,height,detections},imageDataUrl:this.options.nativeCanvas.toDataURL('image/jpeg',.75)});}
+          catch{this.options.callbacks.pinnedMetricFrame?.(null);}
+        }else this.options.callbacks.pinnedMetricFrame?.(null);
         const diagnostic=snapshot.measurements.some(item=>item.distanceMeters!==null)
           ?'READY_OBJECT':snapshot.measurements[0]?.rejectionReason??'NO_OBJECT_DETECTED';
         this.reportMeterDiagnostic(diagnostic);
@@ -505,6 +531,7 @@ export class VisionPipeline {
     this.options.callbacks.estimatedMetricStatus?.('UNAVAILABLE');
     this.reportMeterDiagnostic('OFF');
     this.options.callbacks.autoMeterSnapshot?.(null);
+    this.options.callbacks.pinnedMetricFrame?.(null);
     this.options.callbacks.metricStatus?.({status:'UNAVAILABLE',source:null});
     if(this.timer!==null){window.clearTimeout(this.timer);this.timer=null;}
     this.batteryCleanup?.();this.batteryCleanup=null;

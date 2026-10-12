@@ -13,7 +13,7 @@ import { SegFormerSceneProvider } from '@/lib/vision/modelProviders';
 import { MonocularMetricDepthProvider } from '@/lib/vision/metricModel';
 import { detectVisionCapabilities, type VisionCapabilities } from '@/lib/vision/capabilities';
 import { VisionPipeline } from '@/lib/vision/pipeline';
-import type { LiveDetectionFrame } from '@/lib/vision/pipeline';
+import type { LiveDetectionFrame, PinnedMetricFrame } from '@/lib/vision/pipeline';
 import { LiveVisionOverlay } from '@/components/vision/LiveVisionOverlay';
 import { selectMeterSpeech } from '@/lib/vision/meterSpeech';
 import type { MetricDiagnostic } from '@/lib/vision/metricEngine';
@@ -60,6 +60,7 @@ export default function Vision() {
   const speechPacerRef=useRef(new AutoMeterSpeechPacer());
   const [meterSnapshot,setMeterSnapshot]=useState<AutoMeterSnapshot|null>(null);
   const [overlayFrame,setOverlayFrame]=useState<LiveDetectionFrame|null>(null);
+  const [pinnedFrame,setPinnedFrame]=useState<PinnedMetricFrame|null>(null);
   const [meterRequestBusy,setMeterRequestBusy]=useState(false);
   const [meterSpokenStatus,setMeterSpokenStatus]=useState('');
   const [metricTiming,setMetricTiming]=useState<{load:number|null;inference:number|null}>({load:null,inference:null});
@@ -90,6 +91,7 @@ export default function Vision() {
     const expiresIn=Math.max(0,6000-(Date.now()-meterSnapshot.capturedAt));
     const timer=window.setTimeout(()=>{
       setMeterSnapshot(current=>current?.frameId===meterSnapshot.frameId&&current.capturedAt===meterSnapshot.capturedAt?null:current);
+      setPinnedFrame(current=>current?.frame.frameId===meterSnapshot.frameId&&current.frame.capturedAt===meterSnapshot.capturedAt?null:current);
       setMeterDiagnostic(previous=>previous==='READY_OBJECT'||previous==='READY_CENTER'?'FRAME_STALE':previous);
     },expiresIn);
     return()=>window.clearTimeout(timer);
@@ -100,7 +102,7 @@ export default function Vision() {
     const pipeline=pipelineRef.current;pipelineRef.current=null;
     cameraRef.current.stop(videoRef.current??undefined);
     stopSpeaking();
-    setState('STOPPED');setMetricInfo({status:'UNAVAILABLE',source:null});setMeterDiagnostic('OFF');setMeterSnapshot(null);setOverlayFrame(null);setMeterRequestBusy(false);setMeterSpokenStatus('');setMetricTiming({load:null,inference:null});speechPacerRef.current.reset();setScene(null);setCandidates([]);setRecognized(null);
+    setState('STOPPED');setMetricInfo({status:'UNAVAILABLE',source:null});setMeterDiagnostic('OFF');setMeterSnapshot(null);setOverlayFrame(null);setPinnedFrame(null);setMeterRequestBusy(false);setMeterSpokenStatus('');setMetricTiming({load:null,inference:null});speechPacerRef.current.reset();setScene(null);setCandidates([]);setRecognized(null);
     localizationRef.current=new BasiraLocalizationEngine();setLocationEstimate(null);graphNodesRef.current=[];
     if(pipeline)await pipeline.stop();
   },[stopSpeaking]);
@@ -115,7 +117,7 @@ export default function Vision() {
   const start=async()=>{
     if(state!=='STOPPED'||!videoRef.current||!nativeCanvasRef.current)return;
     const run=++generation.current;
-    setError('');setOCRWarning('');setModelWarning('');setDepthWarning('');setMetricInfo({status:'UNAVAILABLE',source:null});setMeterDiagnostic(autoMeterEnabledRef.current?'MODEL_LOADING':'OFF');setMeterSnapshot(null);setOverlayFrame(null);setMeterSpokenStatus('');setMetricTiming({load:null,inference:null});setLastAlert('');setRisk(null);setSpokenSummary('');setState('STARTING');
+    setError('');setOCRWarning('');setModelWarning('');setDepthWarning('');setMetricInfo({status:'UNAVAILABLE',source:null});setMeterDiagnostic(autoMeterEnabledRef.current?'MODEL_LOADING':'OFF');setMeterSnapshot(null);setOverlayFrame(null);setPinnedFrame(null);setMeterSpokenStatus('');setMetricTiming({load:null,inference:null});setLastAlert('');setRisk(null);setSpokenSummary('');setState('STARTING');
     try {
       const safetyFlags=await loadSafetyFlags();
       const detected=detectVisionCapabilities();setCapabilities(detected);
@@ -157,6 +159,7 @@ export default function Vision() {
           metricTiming:(phase,milliseconds)=>{if(run===generation.current)setMetricTiming(previous=>({...previous,[phase==='LOAD'?'load':'inference']:milliseconds}));},
           autoMeterSnapshot:snapshot=>{if(run===generation.current){
             setMeterSnapshot(snapshot);
+            if(!snapshot)setPinnedFrame(null);
             if(snapshot&&Date.now()-snapshot.capturedAt<6000&&autoMeterSpeechRef.current){
               const item=speechPacerRef.current.choose(snapshot);
               if(item?.distanceMeters!==null&&item?.distanceMeters!==undefined){
@@ -165,10 +168,12 @@ export default function Vision() {
               }
             }
           }},
+          pinnedMetricFrame:result=>{if(run===generation.current)setPinnedFrame(result);},
           autoMeterRejected:()=>{if(run===generation.current){
             autoMeterEnabledRef.current=false;
             setAutoMeterEnabled(saveAutoMeterEnabled(false));
             setMeterSnapshot(null);
+            setPinnedFrame(null);
           }},
           fatal:()=>{if(run===generation.current){setError(t.providerFailure);void stop();}},
         },
@@ -209,7 +214,7 @@ export default function Vision() {
     if(enabled)setDepthWarning('');
     autoMeterEnabledRef.current=enabled;
     setAutoMeterEnabled(saveAutoMeterEnabled(enabled));
-    setMeterSnapshot(null);setMeterSpokenStatus('');setMeterDiagnostic(enabled?(window.BasiraNativeFrames?'WAITING_CAMERA':'MODEL_LOADING'):'OFF');speechPacerRef.current.reset();
+    setMeterSnapshot(null);setPinnedFrame(null);setMeterSpokenStatus('');setMeterDiagnostic(enabled?(window.BasiraNativeFrames?'WAITING_CAMERA':'MODEL_LOADING'):'OFF');speechPacerRef.current.reset();
     void pipelineRef.current?.setAutoMeterEnabled(enabled);
   };
   const toggleAutoMeterSpeech=()=>{
@@ -256,16 +261,21 @@ export default function Vision() {
   const cameraState=state==='STOPPED'?t.stopped:state==='STARTING'?t.starting:state==='WORKING'?t.working:t.analyzing;
   const hasNativeFrames=typeof window!=='undefined'&&Boolean(window.BasiraNativeFrames);
   const currentMeterSnapshot=meterSnapshot&&Date.now()-meterSnapshot.capturedAt<6000?meterSnapshot:null;
+  const currentPinnedFrame=pinnedFrame&&currentMeterSnapshot&&pinnedFrame.frame.frameId===currentMeterSnapshot.frameId&&
+    pinnedFrame.frame.capturedAt===currentMeterSnapshot.capturedAt?pinnedFrame:null;
+  const previewFrame=currentPinnedFrame?.frame??overlayFrame;
   return <Layout><div className="container max-w-4xl space-y-4 py-6 text-stone-100">
     <Link href="/navigation" className="text-amber-300 underline">{nav.title}</Link>
     <header><h1 className="text-3xl font-black">{t.title}</h1><p className="mt-3 text-lg text-stone-300">{t.description}</p></header>
     <p className="rounded-xl border border-amber-300/40 bg-amber-300/10 p-4 text-amber-100">{t.advisory}</p>
     <div className="flex flex-wrap gap-3">{state==='STOPPED'?<button type="button" className={button} onClick={start}>{t.start}</button>:<button type="button" className={button} onClick={()=>void stop()}>{t.stop}</button>}</div>
     <section aria-label={t.preview} className="relative mx-auto w-full max-w-2xl overflow-hidden rounded-xl bg-stone-950"
-      style={{aspectRatio:overlayFrame?`${overlayFrame.width}/${overlayFrame.height}`:hasNativeFrames?'3/4':'4/3'}}>
-      <video ref={videoRef} muted playsInline aria-hidden="true" className={`absolute inset-0 size-full object-contain ${hasNativeFrames?'hidden':''}`} />
-      <canvas ref={nativeCanvasRef} width={480} height={640} aria-hidden="true" className={`absolute inset-0 size-full object-contain ${hasNativeFrames?'':'hidden'}`} />
-      <LiveVisionOverlay frame={overlayFrame} snapshot={currentMeterSnapshot} names={t.object} directions={t.direction} metersLabel={t.autoMeterMeters} experimentalLabel={t.autoMeterExperimental} rtl={lang==='ar'} />
+      style={{aspectRatio:previewFrame?`${previewFrame.width}/${previewFrame.height}`:hasNativeFrames?'3/4':'4/3'}}>
+      <video ref={videoRef} muted playsInline aria-hidden="true" className={`absolute inset-0 size-full object-contain ${hasNativeFrames||currentPinnedFrame?'hidden':''}`} />
+      <canvas ref={nativeCanvasRef} width={480} height={640} aria-hidden="true" className={`absolute inset-0 size-full object-contain ${hasNativeFrames&&!currentPinnedFrame?'':'hidden'}`} />
+      {currentPinnedFrame&&<><img src={currentPinnedFrame.imageDataUrl} alt="" aria-hidden="true" data-testid="pinned-metric-image" data-frame-id={currentPinnedFrame.frame.frameId} className="absolute inset-0 size-full object-contain" />
+        <p className="absolute bottom-2 left-2 right-2 z-10 rounded-lg bg-stone-950/90 px-3 py-2 text-sm text-amber-100" role="status">{lang==='ar'?'لقطة قياس ثابتة؛ الصورة ليست بثًا حيًا.':lang==='zh-CN'?'测距静止画面；并非实时视频。':'Measurement still; this is not live video.'}</p></>}
+      <LiveVisionOverlay frame={previewFrame} snapshot={currentPinnedFrame?currentMeterSnapshot:null} pinned={Boolean(currentPinnedFrame)} names={t.object} directions={t.direction} metersLabel={t.autoMeterMeters} experimentalLabel={t.autoMeterExperimental} rtl={lang==='ar'} />
     </section>
     <section className="rounded-2xl border border-amber-200/30 bg-stone-900 p-5" aria-label={t.autoMeterTitle}>
       <h2 className="text-xl font-bold">{t.autoMeterTitle}</h2>
@@ -293,7 +303,7 @@ export default function Vision() {
     {autoMeterEnabled&&state!=='STOPPED'&&<section aria-label={t.autoMeterObjectsTitle}
       className="rounded-xl border border-amber-200/30 bg-stone-900 p-4">
       <h2 className="mb-2 font-bold">{t.autoMeterObjectsTitle}</h2>
-      <button type="button" className={`${secondary} mb-3`} disabled={meterRequestBusy} aria-busy={meterRequestBusy} onClick={()=>void speakMetersNow()}>{meterRequestBusy?t.autoMeterAiWaiting:t.autoMeterSpeakNow}</button>
+      <button type="button" className={`${secondary} mb-3`} disabled={meterRequestBusy||state==='STARTING'} aria-busy={meterRequestBusy} onClick={()=>void speakMetersNow()}>{meterRequestBusy?t.autoMeterAiWaiting:t.autoMeterSpeakNow}</button>
       <p role="status" aria-live="polite" data-testid="fresh-meter-result" className="mb-3">{meterSpokenStatus}</p>
       {!currentMeterSnapshot?.measurements.length?<p>{t.autoMeterNoObjects}</p>:
         <ul className="space-y-3">{currentMeterSnapshot.measurements.slice(0,5).map(item=><li key={item.id} className="border-b border-amber-200/20 pb-2">

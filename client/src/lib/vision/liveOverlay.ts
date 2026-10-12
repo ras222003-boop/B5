@@ -14,8 +14,8 @@ export function mapBoxToPreview(box:BoundingBox,frame:{width:number;height:numbe
     width:box.width*drawnWidth,height:box.height*drawnHeight};
 }
 
-export function overlayMeters(detection:VisionDetection,frame:LiveDetectionFrame,snapshot:AutoMeterSnapshot|null,now:number):number|null {
+export function overlayMeters(detection:VisionDetection,frame:LiveDetectionFrame,snapshot:AutoMeterSnapshot|null,now:number,maxAgeMs=2000):number|null {
   if(!snapshot||snapshot.frameId!==frame.frameId||snapshot.capturedAt!==frame.capturedAt||
-    now-snapshot.capturedAt>2000||now<snapshot.capturedAt)return null;
+    now-snapshot.capturedAt>maxAgeMs||now<snapshot.capturedAt)return null;
   return snapshot.measurements.find(item=>item.id===detection.id&&item.frameId===frame.frameId)?.distanceMeters??null;
 }
