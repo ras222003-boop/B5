@@ -18,7 +18,7 @@ const wasm=[
 let failures=0;
 for(const asset of [...model,...wasm]){
   const url=new URL(asset.path,base);
-  let head,range;
+  let head,range,reader;
   try{
     head=await fetch(url,{method:'HEAD',redirect:'manual'});
     range=await fetch(url,{headers:{Range:'bytes=0-255'},redirect:'manual'});
@@ -27,13 +27,21 @@ for(const asset of [...model,...wasm]){
     const rangeSize=Number(/\/(\d+)$/.exec(range.headers.get('content-range')??'')?.[1])||null;
     const size=Number(head.headers.get('content-length'))||rangeSize||null;
     const matchesType=value=>value===asset.type||(asset.type==='application/javascript'&&value==='text/javascript');
-    const good=head.status===200&&range.status===206&&matchesType(type)&&matchesType(rangeType)&&
-      (asset.size===null?size!==null:size===asset.size);
-    console.log(`${good?'OK  ':'FAIL'} ${head.status}/${range.status} ${type||'no-type'} ${size??'no-size'} ${asset.path}`);
+    reader=range.body?.getReader();
+    const first=reader?await reader.read():{value:null};
+    const prefix=first.value?.subarray(0,256)??new Uint8Array();
+    const textPrefix=new TextDecoder().decode(prefix).trimStart().toLowerCase();
+    const html=textPrefix.startsWith('<!doctype html')||textPrefix.startsWith('<html');
+    const magic=asset.type==='application/wasm'?prefix.length>=4&&prefix[0]===0&&prefix[1]===97&&prefix[2]===115&&prefix[3]===109
+      :asset.type==='application/json'?textPrefix.startsWith('{'):prefix.length>0;
+    const ignoredRange=range.status===200&&Number(range.headers.get('content-length'))===size;
+    const good=head.status===200&&(range.status===206||ignoredRange)&&matchesType(type)&&matchesType(rangeType)&&
+      (asset.size===null?size!==null:size===asset.size)&&magic&&!html;
+    console.log(`${good?'OK  ':'FAIL'} ${head.status}/${range.status} ${type||'no-type'} ${size??'no-size'} ${asset.path}${ignoredRange?' (range ignored)':''}`);
     if(!good)failures++;
   }catch(error){
     failures++;
     console.log(`FAIL network ${asset.path}: ${error instanceof Error?error.message:String(error)}`);
-  }finally{await range?.body?.cancel().catch(()=>{});}
+  }finally{await reader?.cancel().catch(()=>{});}
 }
 if(failures){console.error(`${failures} hosted assets failed validation`);process.exitCode=1;}

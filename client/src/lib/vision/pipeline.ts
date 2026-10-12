@@ -16,6 +16,7 @@ import {meterErrorCode,type MeterDiagnostic} from './meterDiagnostics';
 
 interface Callbacks {
   scene:(description:SceneDescription)=>void;
+  detectionFrame?:(frame:LiveDetectionFrame)=>void;
   alert:(text:string,risk:SceneDescription['riskLevel'])=>void;
   candidate:(candidate:PlaceCandidate)=>void;
   recognized:(place:RecognizedPlace)=>void;
@@ -24,12 +25,30 @@ interface Callbacks {
   depthFailure:()=>void;
   metricStatus?:(diagnostic:MetricDiagnostic)=>void;
   autoMeterSnapshot?:(snapshot:AutoMeterSnapshot|null)=>void;
+  /** The JPEG is captured from the exact detector/metric input, never from a later live frame. */
+  pinnedMetricFrame?:(result:PinnedMetricFrame|null)=>void;
   autoMeterRejected?:()=>void;
   estimatedMetricStatus?:(status:'UNAVAILABLE'|'WAITING'|'LIVE'|'LOW_LIGHT')=>void;
   metricModelFailure?:()=>void;
   meterDiagnostic?:(diagnostic:MeterDiagnostic)=>void;
+  metricTiming?:(phase:'LOAD'|'INFERENCE',milliseconds:number)=>void;
   fatal:(error:unknown)=>void;
   quality?:(light:FrameLightStatus)=>void;
+}
+export interface LiveDetectionFrame {
+  frameId:string;
+  capturedAt:number;
+  width:number;
+  height:number;
+  detections:VisionDetection[];
+}
+export interface PinnedMetricFrame {
+  frame:LiveDetectionFrame;
+  imageDataUrl:string;
+}
+export interface MeterAttempt {
+  snapshot:AutoMeterSnapshot|null;
+  diagnostic:MeterDiagnostic;
 }
 export interface VisionPipelineOptions {
   video:HTMLVideoElement; vision:VisionProvider; ocr:OCRProvider; depth:DepthProvider;
@@ -88,6 +107,9 @@ export class VisionPipeline {
   private estimatedModel:EstimatedMetricDepthProvider|null=null;
   private modelOpening:Promise<void>|null=null;
   private modelBusy=false;
+  private forceMeterCapture=false;
+  private pendingMeterRequests:{requestedAt:number;resolve:(result:MeterAttempt)=>void;timer:number}[]=[];
+  private currentMeterDiagnostic:MeterDiagnostic='OFF';
   private lastModel=Number.NEGATIVE_INFINITY;
   private latestObjects:VisionDetection[]=[];
   private lastLightCheck=Number.NEGATIVE_INFINITY;
@@ -110,12 +132,47 @@ export class VisionPipeline {
   get active(){return this.running;}
   setFindingDestination(active:boolean){this.findingDestination=active;}
   setAlertDistanceMeters(value:number){this.safety.setAlertDistanceMeters(value);}
+  /** A button press is satisfied only by a frame captured after the press. */
+  requestMeterNow():Promise<MeterAttempt>{
+    if(!this.running||!this.autoMeterEnabled)return Promise.resolve({snapshot:null,diagnostic:'OFF'});
+    if(!this.options.nativeFrames&&!this.options.estimatedMetricModel)return Promise.resolve({snapshot:null,diagnostic:'MODEL_INIT'});
+    return new Promise(resolve=>{
+      const requestedAt=performance.now();
+      const timer=window.setTimeout(()=>{
+        this.pendingMeterRequests=this.pendingMeterRequests.filter(item=>item.timer!==timer);
+        const diagnostic=!this.options.nativeFrames&&!this.estimatedModel&&
+          (this.modelOpening||this.currentMeterDiagnostic==='MODEL_LOADING')?'MODEL_TIMEOUT':'FRAME_TIMEOUT';
+        this.reportMeterDiagnostic(diagnostic);
+        resolve({snapshot:null,diagnostic});
+        this.forceMeterCapture=this.pendingMeterRequests.length>0;
+      },15_000);
+      this.pendingMeterRequests.push({requestedAt,resolve,timer});
+      this.forceMeterCapture=true;
+      if(!this.options.nativeFrames&&!this.estimatedModel&&!this.modelOpening)void this.startMetricModel();
+    });
+  }
+  private reportMeterDiagnostic(diagnostic:MeterDiagnostic){
+    this.currentMeterDiagnostic=diagnostic;
+    this.options.callbacks.meterDiagnostic?.(diagnostic);
+  }
+  private finishMeterAttempt(capturedAt:number,result:MeterAttempt){
+    const ready=this.pendingMeterRequests.filter(item=>capturedAt>=item.requestedAt);
+    this.pendingMeterRequests=this.pendingMeterRequests.filter(item=>capturedAt<item.requestedAt);
+    for(const item of ready){window.clearTimeout(item.timer);item.resolve(result);}
+    this.forceMeterCapture=this.pendingMeterRequests.length>0;
+  }
+  private cancelMeterRequests(diagnostic:MeterDiagnostic){
+    for(const item of this.pendingMeterRequests){window.clearTimeout(item.timer);item.resolve({snapshot:null,diagnostic});}
+    this.pendingMeterRequests=[];this.forceMeterCapture=false;
+  }
   async setAutoMeterEnabled(enabled:boolean):Promise<boolean>{
     this.autoMeterEnabled=enabled;
     this.autoMeterGeneration++;
+    if(!enabled)this.cancelMeterRequests('OFF');
     this.metricDepth=null;
     this.options.callbacks.autoMeterSnapshot?.(null);
-    this.options.callbacks.meterDiagnostic?.(enabled?(this.options.nativeFrames?'WAITING_CAMERA':'MODEL_LOADING'):'OFF');
+    this.options.callbacks.pinnedMetricFrame?.(null);
+    this.reportMeterDiagnostic(enabled?(this.options.nativeFrames?'WAITING_CAMERA':'MODEL_LOADING'):'OFF');
     this.options.callbacks.metricStatus?.({status:enabled&&this.options.nativeFrames?'WAITING':'UNAVAILABLE',source:null});
     if(!this.options.nativeFrames){
       this.options.callbacks.estimatedMetricStatus?.(enabled&&this.options.estimatedMetricModel?'WAITING':'UNAVAILABLE');
@@ -126,6 +183,7 @@ export class VisionPipeline {
       try{await this.options.nativeFrames.setMeterEnabled(enabled);}
       catch{
         this.autoMeterEnabled=false;this.autoMeterGeneration++;
+        this.cancelMeterRequests('OFF');
         this.options.callbacks.autoMeterRejected?.();
         this.options.callbacks.metricStatus?.({status:'UNAVAILABLE',source:null});
         return false;
@@ -156,16 +214,21 @@ export class VisionPipeline {
     }
     if(this.estimatedModel||!this.options.estimatedMetricModel||!this.running||!this.autoMeterEnabled)return;
     const token=this.autoMeterGeneration;
-    this.options.callbacks.meterDiagnostic?.('MODEL_LOADING');
+    const openedAt=performance.now();
+    this.reportMeterDiagnostic('MODEL_LOADING');
     const opening=this.options.estimatedMetricModel().then(async model=>{
       if(!this.running||!this.autoMeterEnabled||token!==this.autoMeterGeneration){await model.close();return;}
       this.estimatedModel=model;
+      this.options.callbacks.metricTiming?.('LOAD',Math.round(performance.now()-openedAt));
       this.options.callbacks.estimatedMetricStatus?.('WAITING');
-      this.options.callbacks.meterDiagnostic?.('WAITING_CAMERA');
+      this.reportMeterDiagnostic('WAITING_CAMERA');
+      this.forceMeterCapture=this.pendingMeterRequests.length>0;
     }).catch(error=>{
       if(this.running&&this.autoMeterEnabled&&token===this.autoMeterGeneration){
         this.options.callbacks.estimatedMetricStatus?.('UNAVAILABLE');
-        this.options.callbacks.meterDiagnostic?.(meterErrorCode(error,'MODEL_INIT'));
+        const diagnostic=meterErrorCode(error,'MODEL_INIT');
+        this.reportMeterDiagnostic(diagnostic);
+        this.cancelMeterRequests(diagnostic);
         this.options.callbacks.metricModelFailure?.();
       }
     });
@@ -173,34 +236,50 @@ export class VisionPipeline {
     await opening;
     if(this.modelOpening===opening)this.modelOpening=null;
   }
-  private async processEstimatedMetric(frame:HTMLCanvasElement,detections:VisionDetection[],timestamp:number,generation:number,meterGeneration:number){
+  private async processEstimatedMetric(frame:HTMLCanvasElement,detections:VisionDetection[],timestamp:number,capturedAt:number,generation:number,meterGeneration:number){
     this.modelBusy=true;
+    const inferenceStarted=performance.now();
     try{
       const map=await this.estimatedModel!.estimate(frame,timestamp);
       if(!this.running||generation!==this.generation||meterGeneration!==this.autoMeterGeneration||!this.autoMeterEnabled)return;
       if(performance.now()-timestamp>6000){
         this.options.callbacks.autoMeterSnapshot?.(null);
+        this.options.callbacks.pinnedMetricFrame?.(null);
         this.options.callbacks.estimatedMetricStatus?.('UNAVAILABLE');
-        this.options.callbacks.meterDiagnostic?.('FRAME_STALE');
+        this.reportMeterDiagnostic('FRAME_STALE');
+        this.finishMeterAttempt(timestamp,{snapshot:null,diagnostic:'FRAME_STALE'});
         return;
       }
-      const snapshot=measureEstimatedObjects(detections,map,`web-${timestamp}`,Date.now());
+      const snapshot=measureEstimatedObjects(detections,map,`web-${timestamp}`,capturedAt);
+      const detectionFrame={frameId:snapshot.frameId,capturedAt,width:frame.width,height:frame.height,detections};
+      this.options.callbacks.detectionFrame?.(detectionFrame);
       this.options.callbacks.autoMeterSnapshot?.(snapshot);
+      if(snapshot.measurements.some(item=>item.distanceMeters!==null)){
+        try{this.options.callbacks.pinnedMetricFrame?.({frame:detectionFrame,imageDataUrl:frame.toDataURL('image/jpeg',.75)});}
+        catch{this.options.callbacks.pinnedMetricFrame?.(null);}
+      }else this.options.callbacks.pinnedMetricFrame?.(null);
       const diagnostic=snapshot.measurements.some(item=>item.distanceMeters!==null)?'READY_OBJECT'
         :snapshot.centerSurface?.distanceMeters!=null?'READY_CENTER'
         :snapshot.measurements[0]?.rejectionReason??'NO_OBJECT_DETECTED';
-      this.options.callbacks.meterDiagnostic?.(diagnostic);
+      this.reportMeterDiagnostic(diagnostic);
+      this.finishMeterAttempt(timestamp,{snapshot,diagnostic});
       this.options.callbacks.estimatedMetricStatus?.('LIVE');
     }catch(error){
       if(this.running&&generation===this.generation&&meterGeneration===this.autoMeterGeneration){
         const model=this.estimatedModel;this.estimatedModel=null;
         this.options.callbacks.autoMeterSnapshot?.(null);
+        this.options.callbacks.pinnedMetricFrame?.(null);
         this.options.callbacks.estimatedMetricStatus?.('UNAVAILABLE');
-        this.options.callbacks.meterDiagnostic?.(meterErrorCode(error,'INFERENCE_FAILED'));
+        const diagnostic=meterErrorCode(error,'INFERENCE_FAILED');
+        this.reportMeterDiagnostic(diagnostic);
+        this.cancelMeterRequests(diagnostic);
         this.options.callbacks.metricModelFailure?.();
         if(model)void model.close();
       }
-    }finally{frame.width=frame.height=0;this.modelBusy=false;}
+    }finally{
+      this.options.callbacks.metricTiming?.('INFERENCE',Math.round(performance.now()-inferenceStarted));
+      frame.width=frame.height=0;this.modelBusy=false;
+    }
   }
   private async tick(){
     this.timer=null;
@@ -213,12 +292,13 @@ export class VisionPipeline {
       let nativeFrameId='';
       let nativeMap:MetricDepthMap|null=null;
       let metricFrame:HTMLCanvasElement|null=null;
+      let metricCapturedAt=0;
+      let frameCapturedAt=Date.now();
       const meterGeneration=this.autoMeterGeneration;
       if(this.options.nativeFrames&&this.options.nativeCanvas){
         const sample=await this.options.nativeFrames.nextFrame();
         if(!this.running||generation!==this.generation)return;
         if(checkAtomicRgbFrame(sample)||!sample||sample.frameId===this.lastNativeFrameId){
-          this.options.callbacks.autoMeterSnapshot?.(null);
           this.options.callbacks.metricStatus?.({status:this.autoMeterEnabled?'WAITING':'UNAVAILABLE',source:null});
           this.schedule(500);return;
         }
@@ -235,6 +315,7 @@ export class VisionPipeline {
         context.save();context.translate(480,0);context.rotate(Math.PI/2);
         context.drawImage(image,0,0,640,480);context.restore();
         detectorTimestamp=performance.now();
+        frameCapturedAt=Date.now();
         detectionFrame=canvas;
         nativeFrameId=sample.frameId;
         if(this.autoMeterEnabled&&meterGeneration===this.autoMeterGeneration&&checkAtomicFrame(sample)===null){
@@ -249,12 +330,18 @@ export class VisionPipeline {
         if(previous!==this.cameraLight)this.options.callbacks.quality?.(this.cameraLight);
       }
       if(!this.options.nativeFrames&&this.autoMeterEnabled&&(this.estimatedModel||this.modelOpening)&&this.cameraLight!=='NOT_LOW_LIGHT'){
-        this.options.callbacks.autoMeterSnapshot?.(null);
+        if(this.cameraLight==='LOW_LIGHT'){
+          this.options.callbacks.autoMeterSnapshot?.(null);
+          this.options.callbacks.pinnedMetricFrame?.(null);
+        }
         this.options.callbacks.estimatedMetricStatus?.(this.cameraLight==='LOW_LIGHT'?'LOW_LIGHT':'UNAVAILABLE');
-        this.options.callbacks.meterDiagnostic?.(this.cameraLight==='LOW_LIGHT'?'LOW_LIGHT':'WAITING_CAMERA');
+        const diagnostic=this.cameraLight==='LOW_LIGHT'?'LOW_LIGHT':
+          this.modelOpening&&!this.estimatedModel?'MODEL_LOADING':'WAITING_CAMERA';
+        this.reportMeterDiagnostic(diagnostic);
+        if(this.cameraLight==='LOW_LIGHT')this.finishMeterAttempt(started,{snapshot:null,diagnostic});
       }
       if(!this.options.nativeFrames&&this.autoMeterEnabled&&this.estimatedModel&&!this.modelBusy&&
-        this.cameraLight==='NOT_LOW_LIGHT'&&started-this.lastModel>=1500){
+        this.cameraLight==='NOT_LOW_LIGHT'&&(this.forceMeterCapture||started-this.lastModel>=1500)){
         const video=this.options.video;
         metricFrame=document.createElement('canvas');
         const scale=Math.min(1,this.options.config.inputResolution.width/video.videoWidth,
@@ -264,16 +351,21 @@ export class VisionPipeline {
         const context=metricFrame.getContext('2d');
         if(context){
           context.drawImage(video,0,0,metricFrame.width,metricFrame.height);
+          metricCapturedAt=Date.now();
+          frameCapturedAt=metricCapturedAt;
           detectionFrame=metricFrame;detectorTimestamp=started;this.lastModel=started;
-          this.options.callbacks.autoMeterSnapshot?.(null);
           this.options.callbacks.estimatedMetricStatus?.('WAITING');
-          this.options.callbacks.meterDiagnostic?.('FRAME_PROCESSING');
+          this.reportMeterDiagnostic('FRAME_PROCESSING');
         }
         else metricFrame=null;
       }
       const detections=await this.options.vision.detect(detectionFrame,detectorTimestamp);
       if(!this.running||generation!==this.generation)return;
-      if(metricFrame)void this.processEstimatedMetric(metricFrame,detections,detectorTimestamp,generation,meterGeneration);
+      const frameId=this.options.nativeFrames?nativeFrameId:`web-${detectorTimestamp}`;
+      const width=detectionFrame instanceof HTMLVideoElement?detectionFrame.videoWidth:detectionFrame.width;
+      const height=detectionFrame instanceof HTMLVideoElement?detectionFrame.videoHeight:detectionFrame.height;
+      this.options.callbacks.detectionFrame?.({frameId,capturedAt:frameCapturedAt,width,height,detections});
+      if(metricFrame)void this.processEstimatedMetric(metricFrame,detections,detectorTimestamp,metricCapturedAt,generation,meterGeneration);
       // Depth must be captured independently of semantic segmentation. A
       // segmentation model failure cannot disable a trusted metric sensor.
       if(!this.options.nativeFrames&&this.options.metricDepth && started-this.lastMetric>=500) {
@@ -284,10 +376,16 @@ export class VisionPipeline {
       }
       if(!this.options.nativeFrames)this.options.callbacks.metricStatus?.(metricDiagnostic(this.metricDepth,started,Boolean(this.options.metricDepth)));
       if(this.options.nativeFrames&&meterGeneration===this.autoMeterGeneration&&this.autoMeterEnabled){
-        const snapshot=measureAutoMeterObjects(detections,nativeMap,nativeFrameId,Date.now(),nativeMap?.source);
+        const snapshot=measureAutoMeterObjects(detections,nativeMap,nativeFrameId,frameCapturedAt,nativeMap?.source);
         this.options.callbacks.autoMeterSnapshot?.(snapshot);
-        this.options.callbacks.meterDiagnostic?.(snapshot.measurements.some(item=>item.distanceMeters!==null)
-          ?'READY_OBJECT':snapshot.measurements[0]?.rejectionReason??'NO_OBJECT_DETECTED');
+        if(snapshot.measurements.some(item=>item.distanceMeters!==null)&&this.options.nativeCanvas){
+          try{this.options.callbacks.pinnedMetricFrame?.({frame:{frameId,capturedAt:frameCapturedAt,width,height,detections},imageDataUrl:this.options.nativeCanvas.toDataURL('image/jpeg',.75)});}
+          catch{this.options.callbacks.pinnedMetricFrame?.(null);}
+        }else this.options.callbacks.pinnedMetricFrame?.(null);
+        const diagnostic=snapshot.measurements.some(item=>item.distanceMeters!==null)
+          ?'READY_OBJECT':snapshot.measurements[0]?.rejectionReason??'NO_OBJECT_DETECTED';
+        this.reportMeterDiagnostic(diagnostic);
+        this.finishMeterAttempt(started,{snapshot,diagnostic});
       }
       const enriched=await Promise.all(detections.map(async detection=>({ ...detection,approximateDistance:await this.readDepth(detection,started) })));
       if(!this.running||generation!==this.generation)return;
@@ -429,10 +527,12 @@ export class VisionPipeline {
     if(!this.running)return;
     this.running=false;this.generation++;
     this.autoMeterEnabled=false;this.autoMeterGeneration++;
+    this.cancelMeterRequests('OFF');
     const model=this.estimatedModel;this.estimatedModel=null;
     this.options.callbacks.estimatedMetricStatus?.('UNAVAILABLE');
-    this.options.callbacks.meterDiagnostic?.('OFF');
+    this.reportMeterDiagnostic('OFF');
     this.options.callbacks.autoMeterSnapshot?.(null);
+    this.options.callbacks.pinnedMetricFrame?.(null);
     this.options.callbacks.metricStatus?.({status:'UNAVAILABLE',source:null});
     if(this.timer!==null){window.clearTimeout(this.timer);this.timer=null;}
     this.batteryCleanup?.();this.batteryCleanup=null;
