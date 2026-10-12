@@ -2,7 +2,7 @@ import type { Express, Request } from "express";
 import sharp from "sharp";
 import { OCR_JSON_SCHEMA, normalizeOcrResult, toExamLanguage, type ExamLanguage, type OcrResult } from "../shared/ocr";
 
-export type VisionCompletion = (messages: Array<{ role: string; content: unknown }>, options?: { response_format?: unknown; model?: string }) => Promise<any>;
+export type VisionCompletion = (messages: Array<{ role: string; content: unknown }>, options?: { response_format?: unknown; model?: string; signal?: AbortSignal; max_tokens?: number }) => Promise<any>;
 
 const MAX_IMAGE_BYTES = 14 * 1024 * 1024;
 // Includes current 48 MP phone cameras while retaining a decompression guard.

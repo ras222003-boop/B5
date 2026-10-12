@@ -27,7 +27,7 @@ const DEFAULT_LLM_MODEL = process.env.MANUS_LLM_MODEL || "gemini-3-flash-preview
 /**
  * Call the LLM via Forge API
  */
-async function invokeLLM(messages: Array<{ role: string; content: any }>, options?: { response_format?: any; model?: string }) {
+async function invokeLLM(messages: Array<{ role: string; content: any }>, options?: { response_format?: any; model?: string; signal?: AbortSignal; max_tokens?: number }) {
   const url = `${MANUS_API_URL}/v1/chat/completions`;
   const body: any = {
     messages,
@@ -36,6 +36,7 @@ async function invokeLLM(messages: Array<{ role: string; content: any }>, option
   if (options?.response_format) {
     body.response_format = options.response_format;
   }
+  if (options?.max_tokens) body.max_tokens = options.max_tokens;
 
   const resp = await fetch(url, {
     method: "POST",
@@ -44,7 +45,7 @@ async function invokeLLM(messages: Array<{ role: string; content: any }>, option
       Authorization: `Bearer ${MANUS_API_KEY}`,
     },
     body: JSON.stringify(body),
-    signal: options?.model ? AbortSignal.timeout(60_000) : undefined,
+    signal: options?.model ? AbortSignal.any([AbortSignal.timeout(60_000),...(options.signal?[options.signal]:[])]) : options?.signal,
   });
 
   if (!resp.ok) {
@@ -76,6 +77,7 @@ async function startServer() {
   });
 
   registerAccountAndSpeechRoutes(app);
+  registerVisionDescribeRoute(app, invokeLLM);
 
   // Parse JSON bodies up to 20MB for image data
   app.use('/api/navigation/organizations',express.json({limit:'1mb'}));
@@ -88,7 +90,6 @@ async function startServer() {
 
   // Structured OCR: 3 languages, EXIF rotation, contrast reference, quality report.
   registerOcrRoute(app, invokeLLM);
-  registerVisionDescribeRoute(app, invokeLLM);
 
   // ========== API: Digital Assistant - Chat with AI ==========
   app.post("/api/assistant", async (req, res) => {

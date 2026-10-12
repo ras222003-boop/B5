@@ -60,8 +60,8 @@ export class AudioPlaybackManager {
   get busy() { return this.current!==null||this.queue.length>0; }
   get cancellationEpoch() { return this.cancellations; }
   private muted() { return typeof localStorage !== 'undefined' && getSpeechPreferences().screenReaderMode; }
-  enqueue(input: SpeechRequest, priority: SpeechPriority = 'INFORMATION', pauseAfterMs = 0, key?: string) {
-    if (!input.text.trim() || this.muted()) { this.update({ mode: 'MUTED', isSpeaking: false }); return Promise.resolve(); }
+  enqueue(input: SpeechRequest, priority: SpeechPriority = 'INFORMATION', pauseAfterMs = 0, key?: string, manualTest = false) {
+    if (!input.text.trim() || (this.muted() && !manualTest)) { this.update({ mode: 'MUTED', isSpeaking: false }); return Promise.resolve(); }
     return new Promise<void>(resolve => {
       const item = { input, priority, pauseAfterMs, key, resolve };
       if (this.current && priorityRank[priority] > priorityRank[this.current.priority]) {
@@ -171,6 +171,11 @@ export class AudioPlaybackManager {
 }
 
 export const speechEngine = new AudioPlaybackManager();
+/** A deliberate tap may preview audio even while automatic speech is muted for VoiceOver. */
+export function testSpeech(text: string, language: SpeechLanguage) {
+  speechEngine.replaceAtPriority('INFORMATION');
+  return speechEngine.enqueue(speechInput(text, language, 'GENERAL'), 'INFORMATION', 0, undefined, true);
+}
 export function speechInput(text: string, language: SpeechLanguage, context: SpeechContext = 'GENERAL', rate = 1): SpeechRequest {
   const preferences = getSpeechPreferences();
   const arabicStyle = preferences.arabicStyle;
@@ -183,5 +188,5 @@ export function voicePreview() {
   const p = getSpeechPreferences();
   const text = p.language === 'ar' ? previewText[p.arabicStyle] : previewText[p.language];
   speechEngine.replaceAtPriority('INFORMATION');
-  return speechEngine.enqueue(speechInput(text, p.language, 'GENERAL'));
+  return speechEngine.enqueue(speechInput(text, p.language, 'GENERAL'), 'INFORMATION', 0, undefined, true);
 }
