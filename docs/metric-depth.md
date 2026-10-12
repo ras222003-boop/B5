@@ -1,5 +1,8 @@
 # Indoor camera-only metric depth in Basira
 
+The live camera overlay and fresh on-demand measurement are documented in
+[vision-live-metric-integration.md](vision-live-metric-integration.md).
+
 ## Implementation and provenance
 
 Basira Vision now loads **Depth Anything V2 Metric Hypersim Small** when the user
