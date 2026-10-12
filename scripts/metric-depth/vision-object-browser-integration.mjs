@@ -84,5 +84,5 @@ try{
   if(!result.busySeen||!result.status?.includes('كرسي')||!result.status.includes('متر وخمسين')||
     !result.spoken.some(item=>item.lang.startsWith('ar')&&item.text.includes('كرسي')&&item.text.includes('متر وخمسين')))
     throw new Error(`Arabic on-demand speech missing: ${JSON.stringify(result)}`);
-  console.log(JSON.stringify(result));
+  console.log(JSON.stringify({...result,seenFrameCount:result.seenFrameIds.length,seenFrameIds:undefined}));
 }finally{await browser.close();}

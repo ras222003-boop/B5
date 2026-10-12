@@ -333,7 +333,8 @@ export class VisionPipeline {
       if(!this.options.nativeFrames&&this.autoMeterEnabled&&(this.estimatedModel||this.modelOpening)&&this.cameraLight!=='NOT_LOW_LIGHT'){
         this.options.callbacks.autoMeterSnapshot?.(null);
         this.options.callbacks.estimatedMetricStatus?.(this.cameraLight==='LOW_LIGHT'?'LOW_LIGHT':'UNAVAILABLE');
-        const diagnostic=this.cameraLight==='LOW_LIGHT'?'LOW_LIGHT':'WAITING_CAMERA';
+        const diagnostic=this.cameraLight==='LOW_LIGHT'?'LOW_LIGHT':
+          this.modelOpening&&!this.estimatedModel?'MODEL_LOADING':'WAITING_CAMERA';
         this.reportMeterDiagnostic(diagnostic);
         if(this.cameraLight==='LOW_LIGHT')this.finishMeterAttempt(started,{snapshot:null,diagnostic});
       }
