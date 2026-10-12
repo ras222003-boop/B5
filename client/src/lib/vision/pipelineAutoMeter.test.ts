@@ -6,6 +6,38 @@ import {MeterModelError} from './meterDiagnostics';
 afterEach(()=>{vi.unstubAllGlobals();vi.useRealTimers();});
 
 describe('browser metric model lifecycle',()=>{
+  it('keeps the previous measured still when the next camera inference begins',async()=>{
+    class FakeVideo {videoWidth=640;videoHeight=480;readyState=2;}
+    const canvas={width:0,height:0,getContext:()=>({drawImage:()=>{}})};
+    vi.stubGlobal('HTMLVideoElement',FakeVideo);
+    vi.stubGlobal('HTMLMediaElement',{HAVE_CURRENT_DATA:2});
+    vi.stubGlobal('document',{createElement:()=>canvas});
+    vi.stubGlobal('window',{setTimeout,clearTimeout});
+    const display:{snapshot:string|null;image:string|null}={snapshot:'prior-frame',image:'prior-frame'};
+    const close=vi.fn(async()=>{});
+    const model={close} as unknown as EstimatedMetricDepthProvider;
+    const pipeline=new VisionPipeline({autoMeterEnabled:true,video:new FakeVideo() as unknown as HTMLVideoElement,
+      vision:{detect:async()=>[],close},ocr:{close},depth:{close},
+      config:{inputResolution:{width:640,height:480},frameAnalysisRate:2,OCRRefreshRate:3000} as VisionPipelineOptions['config'],
+      copy:{} as VisionPipelineOptions['copy'],mode:'EXPLORATION',buildingId:null,floorId:null,
+      announcement:{reset:()=>{}},callbacks:{
+        autoMeterSnapshot:snapshot=>{display.snapshot=snapshot?.frameId??null;},
+        pinnedMetricFrame:result=>{display.image=result?.frame.frameId??null;},
+      },
+    } as unknown as VisionPipelineOptions);
+    const internals=pipeline as unknown as {running:boolean;estimatedModel:EstimatedMetricDepthProvider|null;
+      cameraLight:string;lastLightCheck:number;ocrEnabled:boolean;publish:()=>void;
+      processEstimatedMetric:()=>Promise<void>;tick:()=>Promise<void>};
+    internals.running=true;internals.estimatedModel=model;internals.cameraLight='NOT_LOW_LIGHT';
+    internals.lastLightCheck=performance.now();internals.ocrEnabled=false;
+    internals.publish=()=>{};
+    const inferred=vi.fn(async()=>{});internals.processEstimatedMetric=inferred;
+    await internals.tick();
+    expect(inferred).toHaveBeenCalledOnce();
+    expect(display).toEqual({snapshot:'prior-frame',image:'prior-frame'});
+    await pipeline.stop();
+    expect(display).toEqual({snapshot:null,image:null});
+  });
   function waitingPipeline(open:()=>Promise<EstimatedMetricDepthProvider>){
     vi.stubGlobal('window',{setTimeout,clearTimeout});
     const close=vi.fn(async()=>{});

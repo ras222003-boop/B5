@@ -244,6 +244,7 @@ export class VisionPipeline {
       if(!this.running||generation!==this.generation||meterGeneration!==this.autoMeterGeneration||!this.autoMeterEnabled)return;
       if(performance.now()-timestamp>6000){
         this.options.callbacks.autoMeterSnapshot?.(null);
+        this.options.callbacks.pinnedMetricFrame?.(null);
         this.options.callbacks.estimatedMetricStatus?.('UNAVAILABLE');
         this.reportMeterDiagnostic('FRAME_STALE');
         this.finishMeterAttempt(timestamp,{snapshot:null,diagnostic:'FRAME_STALE'});
@@ -298,8 +299,6 @@ export class VisionPipeline {
         const sample=await this.options.nativeFrames.nextFrame();
         if(!this.running||generation!==this.generation)return;
         if(checkAtomicRgbFrame(sample)||!sample||sample.frameId===this.lastNativeFrameId){
-          this.options.callbacks.autoMeterSnapshot?.(null);
-          this.options.callbacks.pinnedMetricFrame?.(null);
           this.options.callbacks.metricStatus?.({status:this.autoMeterEnabled?'WAITING':'UNAVAILABLE',source:null});
           this.schedule(500);return;
         }
@@ -331,7 +330,10 @@ export class VisionPipeline {
         if(previous!==this.cameraLight)this.options.callbacks.quality?.(this.cameraLight);
       }
       if(!this.options.nativeFrames&&this.autoMeterEnabled&&(this.estimatedModel||this.modelOpening)&&this.cameraLight!=='NOT_LOW_LIGHT'){
-        this.options.callbacks.autoMeterSnapshot?.(null);
+        if(this.cameraLight==='LOW_LIGHT'){
+          this.options.callbacks.autoMeterSnapshot?.(null);
+          this.options.callbacks.pinnedMetricFrame?.(null);
+        }
         this.options.callbacks.estimatedMetricStatus?.(this.cameraLight==='LOW_LIGHT'?'LOW_LIGHT':'UNAVAILABLE');
         const diagnostic=this.cameraLight==='LOW_LIGHT'?'LOW_LIGHT':
           this.modelOpening&&!this.estimatedModel?'MODEL_LOADING':'WAITING_CAMERA';
@@ -352,8 +354,6 @@ export class VisionPipeline {
           metricCapturedAt=Date.now();
           frameCapturedAt=metricCapturedAt;
           detectionFrame=metricFrame;detectorTimestamp=started;this.lastModel=started;
-          this.options.callbacks.autoMeterSnapshot?.(null);
-          this.options.callbacks.pinnedMetricFrame?.(null);
           this.options.callbacks.estimatedMetricStatus?.('WAITING');
           this.reportMeterDiagnostic('FRAME_PROCESSING');
         }

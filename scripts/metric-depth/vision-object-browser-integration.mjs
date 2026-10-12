@@ -12,7 +12,7 @@ const browser=await chromium.launch({channel:'chrome',headless:true});
 try{
   const context=await browser.newContext({permissions:['camera'],locale:'ar-SA'});
   await context.addInitScript(({photo})=>{
-    localStorage.setItem('basira-auto-meter-enabled-v1','true');
+    localStorage.setItem('basira-auto-meter-enabled-v1','false');
     localStorage.setItem('basira-auto-meter-speech-v1','false');
     window.__spoken=[];
     window.speechSynthesis.speak=utterance=>{
@@ -36,15 +36,24 @@ try{
     export class MonocularMetricDepthProvider {
       static async open() { await new Promise(resolve => setTimeout(resolve, 3000)); return new MonocularMetricDepthProvider(); }
       async estimate(frame, timestamp) {
-        // Several detector frames complete before this slower depth frame.
-        await new Promise(resolve => setTimeout(resolve, 2200));
-        return {width:64,height:48,values:new Float32Array(64*48).fill(1.5),source:'MONOCULAR_METRIC',timestamp};
+        window.__metricRuns=(window.__metricRuns??0)+1;
+        const reject=window.__rejectMetric===true;
+        if(window.__metricRuns===2){
+          window.__secondMetricStarted=true;
+          await new Promise(resolve=>{window.__releaseSecondMetric=resolve;});
+        }else{
+          // Several detector frames complete before this slower depth frame.
+          await new Promise(resolve => setTimeout(resolve, 2200));
+        }
+        if(reject)window.__invalidMetricCompleted=(window.__invalidMetricCompleted??0)+1;
+        return {width:64,height:48,values:new Float32Array(64*48).fill(reject?NaN:1.5),source:'MONOCULAR_METRIC',timestamp};
       }
       async close() {}
     }
   `}));
   await page.goto(`${origin}/navigation/vision`,{waitUntil:'domcontentloaded'});
   await page.getByRole('button',{name:'تشغيل رؤية بصيرة'}).click();
+  await page.getByRole('button',{name:'تشغيل القياس التلقائي'}).click();
   const measure=page.getByRole('button',{name:'قياس الآن ونطق النتيجة'});
   await measure.waitFor({timeout:60_000});
   await page.evaluate(()=>{
@@ -84,5 +93,23 @@ try{
   if(!result.busySeen||!result.status?.includes('كرسي')||!result.status.includes('متر وخمسين')||
     !result.spoken.some(item=>item.lang.startsWith('ar')&&item.text.includes('كرسي')&&item.text.includes('متر وخمسين')))
     throw new Error(`Arabic on-demand speech missing: ${JSON.stringify(result)}`);
-  console.log(JSON.stringify({...result,seenFrameCount:result.seenFrameIds.length,seenFrameIds:undefined}));
+  const firstFrameId=result.imageFrameId;
+  await page.waitForFunction(()=>window.__secondMetricStarted===true,undefined,{timeout:8000});
+  await page.waitForTimeout(300);
+  const retained=await pinned.getAttribute('data-frame-id');
+  if(retained!==firstFrameId)throw new Error(`Measured still disappeared when the next inference started: ${JSON.stringify({firstFrameId,retained})}`);
+  await page.evaluate(()=>{window.__rejectMetric=true;window.__releaseSecondMetric();});
+  await page.waitForFunction(first=>{
+    const next=document.querySelector('[data-testid="pinned-metric-image"]')?.getAttribute('data-frame-id');
+    return Boolean(next&&next!==first);
+  },firstFrameId,{timeout:8000});
+  const replacement=await pinned.getAttribute('data-frame-id');
+  await page.waitForFunction(()=>window.__invalidMetricCompleted>0,undefined,{timeout:12_000});
+  await pinned.waitFor({state:'detached',timeout:3000});
+  const rejected=await page.evaluate(()=>({videoLive:!document.querySelector('video')?.classList.contains('hidden'),
+    hasOldNumber:[...document.querySelectorAll('section[aria-label="معاينة الكاميرا، اختيارية"] svg text')]
+      .some(node=>node.textContent?.includes('1.50'))}));
+  if(!rejected.videoLive||rejected.hasOldNumber)throw new Error(`Rejected depth left a number on live video: ${JSON.stringify(rejected)}`);
+  console.log(JSON.stringify({...result,seenFrameCount:result.seenFrameIds.length,seenFrameIds:undefined,
+    retainedDuringNextInference:retained,replacedBy:replacement,rejectedThenReturnedToLive:rejected.videoLive}));
 }finally{await browser.close();}
