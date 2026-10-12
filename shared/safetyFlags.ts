@@ -6,7 +6,7 @@ export interface SafetyFlags {
   nativeArLocalization:boolean;
   experimentalObstacleClasses:boolean;
 }
-// Metric depth remains inactive unless a validated native depth bridge is present.
-// Enable it by default so a supported phone can honor the selected metre range;
-// BASIRA_METRIC_DEPTH=false remains an immediate server-side kill switch.
+// Only the validated native depth bridge may use this existing navigation flag.
+// The camera-only Auto Meter is isolated from navigation and never uses it.
+// BASIRA_METRIC_DEPTH=false remains the server-side kill switch.
 export const SAFE_DEFAULT_FLAGS:SafetyFlags={dropOffDetection:false,stairDirection:false,metricDepth:true,nativeArLocalization:false,experimentalObstacleClasses:false};

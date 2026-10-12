@@ -5,12 +5,19 @@ on:
       - "android/DepthLab/**"
       - ".github/workflows/android-depth-compile.yml"
   workflow_dispatch:
+    inputs:
+      basira_vision_url:
+        description: 'Published HTTPS /navigation/vision URL for a testable APK'
+        required: false
+        type: string
 permissions:
   contents: read
 jobs:
   compile-android-depth:
     runs-on: ubuntu-latest
     timeout-minutes: 25
+    env:
+      BASIRA_VISION_URL: ${{ inputs.basira_vision_url || vars.BASIRA_VISION_URL }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
@@ -26,11 +33,20 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: 8.11.1
-      - name: Build ARCore research APK
-        run: gradle -p android/DepthLab :app:assembleDebug --no-daemon
-      - name: Attach internal debug APK
+      - name: Build ARCore Vision APK
+        shell: bash
+        run: |
+          if [[ -n "$BASIRA_VISION_URL" ]]; then
+            [[ "$BASIRA_VISION_URL" == https://*/navigation/vision ]] || { echo "Expected an HTTPS /navigation/vision URL"; exit 1; }
+            gradle -p android/DepthLab :app:assembleDebug --no-daemon "-PbasiraVisionUrl=$BASIRA_VISION_URL"
+          else
+            echo "BASIRA_VISION_URL is unset: compile check only; no installable artifact is published."
+            gradle -p android/DepthLab :app:assembleDebug --no-daemon
+          fi
+      - name: Attach configured debug APK
+        if: env.BASIRA_VISION_URL != ''
         uses: actions/upload-artifact@v4
         with:
-          name: basira-arcore-depth-lab-debug
+          name: basira-auto-meter-android-debug
           path: android/DepthLab/app/build/outputs/apk/debug/*.apk
           retention-days: 7

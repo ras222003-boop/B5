@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { checkAtomicFrame, rotateNativeDepthClockwise, type AtomicNativeFrame } from './nativeFramePair';
+import { checkAtomicFrame, checkAtomicRgbFrame, rotateNativeDepthClockwise, type AtomicNativeFrame } from './nativeFramePair';
 
 const fixture = (): AtomicNativeFrame => ({
   frameId:'arkit-123.123456',nativeTimestampMs:123123.456,source:'ARKIT_DEPTH',
@@ -11,6 +11,17 @@ const fixture = (): AtomicNativeFrame => ({
 describe('single-frame ARKit RGB+depth bridge',()=>{
   it('accepts verified LiDAR samples with consistent geometry',()=>{
     expect(checkAtomicFrame(fixture())).toBeNull();
+  });
+  it('allows RGB-only native vision while withholding depth and accepts matched ARCore frames',()=>{
+    const rgb={...fixture(),depthEnabled:false,alignedToCameraFrame:false,rawDepthFresh:false,
+      depthWidth:0,depthHeight:0,values:[],validCoverage:0};
+    expect(checkAtomicRgbFrame(rgb)).toBeNull();
+    expect(checkAtomicFrame(rgb)).toBe('unverified_source');
+    const android={...fixture(),source:'ARCORE_DEPTH' as const,frameId:'arcore-123123456000',
+      nativeTimestampMs:123123.456,depthEnabled:true};
+    expect(checkAtomicFrame(android)).toBeNull();
+    expect(rotateNativeDepthClockwise(android,2000).source).toBe('ARCORE_DEPTH');
+    expect(checkAtomicFrame({...android,nativeTimestampMs:123130})).toBe('unverified_frame');
   });
   it('does not use non-native, mismatched, stale or untrusted camera frames',()=>{
     expect(checkAtomicFrame(null)).toBe('frame_unavailable');

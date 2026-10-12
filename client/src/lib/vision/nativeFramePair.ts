@@ -3,7 +3,9 @@ import type { MetricDepthMap } from '@shared/vision';
 export interface AtomicNativeFrame {
   frameId: string;
   nativeTimestampMs: number;
-  source: 'ARKIT_DEPTH';
+  source: 'ARKIT_DEPTH' | 'ARCORE_DEPTH';
+  /** False when the native session is supplying RGB only. */
+  depthEnabled?: boolean;
   capturedWithNativeSession: boolean;
   alignedToCameraFrame: boolean;
   rawDepthFresh: boolean;
@@ -18,29 +20,42 @@ export interface AtomicNativeFrame {
 declare global {
   interface Window {
     /** Only installed by a native, allowed-origin WebKit wrapper. */
-    BasiraNativeFrames?: { nextFrame(): Promise<AtomicNativeFrame | null> };
+    BasiraNativeFrames?: {
+      start(): Promise<void>;
+      setMeterEnabled(enabled:boolean): Promise<void>;
+      stop(): Promise<void>;
+      nextFrame(): Promise<AtomicNativeFrame | null>;
+    };
   }
 }
 
-/** Fail-closed on frames without verifiable same-frame RGB and depth metadata. */
-export function checkAtomicFrame(frame: AtomicNativeFrame | null): string | null {
+/** RGB continues while the optional depth sensor is switched off. */
+export function checkAtomicRgbFrame(frame: AtomicNativeFrame | null): string | null {
   if (!frame) return 'frame_unavailable';
-  if (frame.source !== 'ARKIT_DEPTH' || !frame.capturedWithNativeSession ||
-      !frame.alignedToCameraFrame || !frame.rawDepthFresh) return 'unverified_source';
-  if (!/^arkit-[\d.]+$/.test(frame.frameId) ||
+  if (!['ARKIT_DEPTH','ARCORE_DEPTH'].includes(frame.source) || !frame.capturedWithNativeSession) return 'unverified_source';
+  const prefix=frame.source==='ARKIT_DEPTH'?'arkit-':'arcore-';
+  if (!frame.frameId.startsWith(prefix) || !/^[\d.]+$/.test(frame.frameId.slice(prefix.length)) ||
       !Number.isFinite(frame.nativeTimestampMs) || frame.nativeTimestampMs <= 0) return 'unverified_frame';
   // Frame identity is derived from the native ARFrame timestamp; reject tampered or
   // accidentally joined camera/depth frames even when both carry plausible metadata.
-  const labelledFrameTimeMs=Number(frame.frameId.slice('arkit-'.length))*1000;
+  const labelledFrameTimeMs=Number(frame.frameId.slice(prefix.length))*(prefix==='arkit-'?1000:1/1_000_000);
   if(!Number.isFinite(labelledFrameTimeMs) ||
       Math.abs(labelledFrameTimeMs-frame.nativeTimestampMs)>2) return 'unverified_frame';
   if (!Number.isInteger(frame.cameraWidth) || !Number.isInteger(frame.cameraHeight) ||
       frame.cameraWidth < 300 || frame.cameraHeight < 200 ||
       Math.abs(frame.cameraWidth / frame.cameraHeight - 4 / 3) > 0.03) return 'invalid_camera_geometry';
-  if (frame.depthWidth !== 64 || frame.depthHeight !== 48 ||
-      frame.values?.length !== 64 * 48) return 'invalid_depth_geometry';
   if (!/^[A-Za-z0-9+/]+={0,2}$/.test(frame.imageBase64) ||
       frame.imageBase64.length < 100 || frame.imageBase64.length > 3_000_000) return 'invalid_camera_frame';
+  return null;
+}
+
+/** Fail closed unless depth belongs to the validated camera image. */
+export function checkAtomicFrame(frame: AtomicNativeFrame | null): string | null {
+  const rgbError=checkAtomicRgbFrame(frame);
+  if(rgbError || !frame)return rgbError;
+  if (frame.depthEnabled===false || !frame.alignedToCameraFrame || !frame.rawDepthFresh) return 'unverified_source';
+  if (frame.depthWidth !== 64 || frame.depthHeight !== 48 ||
+      frame.values?.length !== 64 * 48) return 'invalid_depth_geometry';
   if (!Number.isFinite(frame.validCoverage) || frame.validCoverage < 0.7 || frame.validCoverage > 1) return 'low_depth_coverage';
   if (frame.values.some(n => !Number.isFinite(n) || n < 0 || n > 10)) return 'invalid_depth_values';
   const actualValid = frame.values.filter(n => n > 0).length / frame.values.length;
@@ -69,7 +84,7 @@ export function rotateNativeDepthClockwise(frame: AtomicNativeFrame, at: number)
     values,
     timestamp: at,
     confidence: frame.validCoverage,
-    source: 'ARKIT_DEPTH',
+    source: frame.source,
     alignmentVerified: true,
   };
 }

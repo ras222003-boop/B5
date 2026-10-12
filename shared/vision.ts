@@ -88,12 +88,15 @@ export interface SegmentationGrid { width: number; height: number; labels: Uint8
 export interface RelativeDepthMap { width: number; height: number; values: Float32Array; confidence: number; source: 'MONOCULAR_ESTIMATE'; timestamp: number }
 /** Camera-space metric pixels; alignmentVerified is set only by a trusted RGB+depth adapter. */
 export interface MetricDepthMap { width: number; height: number; values: Float32Array; confidence: number; source: 'ARKIT_DEPTH' | 'LIDAR' | 'ARCORE_DEPTH' | 'DEPTH_SENSOR'; timestamp: number; alignmentVerified?: boolean }
+/** Unverified monocular metres are for the opt-in object-distance display only. */
+export interface EstimatedMetricDepthMap { width: number; height: number; values: Float32Array; source: 'MONOCULAR_METRIC'; timestamp: number }
 
 /** Frame input is ephemeral; providers must never retain or upload it implicitly. */
 export interface VisionProvider { detect(frame: HTMLVideoElement | HTMLCanvasElement, timestamp: number): Promise<VisionDetection[]>; close(): Promise<void> }
 export interface SceneSegmentationProvider { segment(frame: Blob, timestamp: number): Promise<SegmentationGrid>; close(): Promise<void> }
 export interface RelativeDepthProvider { estimate(frame: Blob, timestamp: number): Promise<RelativeDepthMap>; close(): Promise<void> }
 export interface MetricDepthProvider { capture(timestamp: number): Promise<MetricDepthMap | null>; close(): Promise<void> }
+export interface EstimatedMetricDepthProvider { estimate(frame: HTMLCanvasElement, timestamp: number): Promise<EstimatedMetricDepthMap>; close(): Promise<void> }
 export interface WalkableAreaProvider { analyze(grid: SegmentationGrid, detections: VisionDetection[]): WalkableAreaResult }
 export interface OCRProvider { recognize(frame: { blob: Blob; width: number; height: number }, timestamp: number): Promise<OCRDetection[]>; close(): Promise<void> }
 export interface DepthProvider { read(detection: VisionDetection): Promise<DepthReading | null>; close(): Promise<void> }

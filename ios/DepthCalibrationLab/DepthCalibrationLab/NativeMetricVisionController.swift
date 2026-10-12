@@ -6,14 +6,18 @@ import QuartzCore
 import UIKit
 import WebKit
 
-/// Experimental native camera: camera pixels AND depth come from the same ARFrame.
-/// No web getUserMedia() stream is ever used. Nothing here enables walking alerts.
+/// Camera frames for the existing Basira vision page. RGB and optional LiDAR
+/// depth are captured from one ARFrame; the page decides when to enable metres.
+/// Nothing here enables walking or stair alerts.
 final class NativeMetricVisionController: UIViewController, ARSessionDelegate, WKNavigationDelegate {
     private let session = ARSession()
     private let context = CIContext()
     private var webView: WKWebView?
     private var allowedHost = ""
     private var running = false
+    private var meterEnabled = false
+    private var sessionGeneration = 0
+    private var firstDepthTimestamp: TimeInterval = .infinity
     private var latestTimestamp: TimeInterval = -1
     private var lastArrival: CFTimeInterval = -1
     private var busy = false
@@ -26,8 +30,8 @@ final class NativeMetricVisionController: UIViewController, ARSessionDelegate, W
               url.scheme == "https",
               let hostname = url.host?.lowercased(),
               !hostname.contains(".example"),
-              url.path == "/navigation/native-vision" else {
-            showFailure("يجب ضبط BasiraVisionURL على صفحة كاميرا LiDAR المنشورة في بصيرة قبل تشغيل التعرف على الأجسام.")
+              url.path == "/navigation/vision" else {
+            showFailure("يجب ضبط BasiraVisionURL على صفحة الرؤية المنشورة في بصيرة قبل تشغيل الكاميرا.")
             return
         }
         allowedHost = hostname
@@ -39,10 +43,14 @@ final class NativeMetricVisionController: UIViewController, ARSessionDelegate, W
         (() => {
           const messenger = window.webkit?.messageHandlers?.basiraNativeFrame;
           if (!messenger) return;
+          const send = (action, extra = {}) => messenger.postMessage({action, ...extra});
           Object.defineProperty(window, 'BasiraNativeFrames', {
             value: Object.freeze({
+              start: async () => { await send('start'); },
+              setMeterEnabled: async (enabled) => { await send('meter', {enabled: enabled === true}); },
+              stop: async () => { await send('stop'); },
               nextFrame: async () => {
-                try { return (await messenger.postMessage({action:'frame'})) ?? null; }
+                try { return (await send('frame')) ?? null; }
                 catch { return null; }
               }
             }), configurable: false
@@ -64,12 +72,12 @@ final class NativeMetricVisionController: UIViewController, ARSessionDelegate, W
         webView = web
         web.load(URLRequest(url: url))
         let close = UIButton(type: .system)
-        close.setTitle("إغلاق كاميرا LiDAR", for: .normal)
+        close.setTitle("إغلاق رؤية بصيرة", for: .normal)
         close.addTarget(self, action: #selector(closeCamera), for: .touchUpInside)
         close.backgroundColor = .black.withAlphaComponent(0.85)
         close.tintColor = .white
         close.layer.cornerRadius = 10
-        close.accessibilityLabel = "إغلاق الكاميرا وإيقاف مستشعر LiDAR"
+        close.accessibilityLabel = "إغلاق الرؤية وإيقاف الكاميرا والقياس"
         close.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(close)
         NSLayoutConstraint.activate([
@@ -83,62 +91,89 @@ final class NativeMetricVisionController: UIViewController, ARSessionDelegate, W
         NotificationCenter.default.addObserver(self, selector: #selector(pauseInBackground), name: UIApplication.didEnterBackgroundNotification, object: nil)
     }
 
-    override func viewDidAppear(_ animated: Bool) {
-        super.viewDidAppear(animated)
-        guard !allowedHost.isEmpty else { return }
-        if !ARWorldTrackingConfiguration.isSupported ||
-           !ARWorldTrackingConfiguration.supportsFrameSemantics(.sceneDepth) {
-            showFailure("هذا الجهاز لا يدعم ARKit Scene Depth. لن تظهر أمتار تقديرية.")
+    private func startSession(reply: @escaping (Any?, String?) -> Void) {
+        if running { reply(NSNull(), nil); return }
+        guard ARWorldTrackingConfiguration.isSupported else {
+            reply(nil, "arkit_unsupported")
             return
         }
+        sessionGeneration += 1
+        let attempt = sessionGeneration
+        let launch = { [weak self] in
+            guard let self else { reply(nil, "camera_unavailable"); return }
+            guard self.sessionGeneration == attempt else { reply(nil, "camera_stopped"); return }
+            guard !self.running else { reply(NSNull(), nil); return }
+            // Scene depth stays OFF until the Auto Meter switch is enabled.
+            self.meterEnabled = false
+            self.firstDepthTimestamp = .infinity
+            self.latestTimestamp = -1
+            self.lastArrival = -1
+            let config = ARWorldTrackingConfiguration()
+            self.session.run(config, options: [.resetTracking, .removeExistingAnchors])
+            self.running = true
+            reply(NSNull(), nil)
+        }
         switch AVCaptureDevice.authorizationStatus(for: .video) {
-        case .authorized: startSession()
+        case .authorized: launch()
         case .notDetermined:
-            AVCaptureDevice.requestAccess(for: .video) { [weak self] allowed in
+            AVCaptureDevice.requestAccess(for: .video) { granted in
                 DispatchQueue.main.async {
-                    if allowed { self?.startSession() }
-                    else { self?.showFailure("رُفضت صلاحية الكاميرا؛ يجب تفعيلها لإجراء القياس.") }
+                    if granted { launch() }
+                    else { reply(nil, "camera_denied") }
                 }
             }
-        case .denied, .restricted:
-            showFailure("اسمح باستخدام الكاميرا من إعدادات iOS ثم أعد فتح المختبر.")
-        @unknown default:
-            showFailure("تعذر طلب إذن الكاميرا.")
+        case .denied, .restricted: reply(nil, "camera_denied")
+        @unknown default: reply(nil, "camera_unavailable")
         }
     }
 
-    private func startSession() {
-        guard !running else { return }
+    private func setMeterEnabled(_ enabled: Bool, reply: @escaping (Any?, String?) -> Void) {
+        guard running else { reply(nil, "camera_stopped"); return }
+        if enabled == meterEnabled { reply(NSNull(), nil); return }
+        if enabled && !ARWorldTrackingConfiguration.supportsFrameSemantics(.sceneDepth) {
+            reply(nil, "scene_depth_unsupported")
+            return
+        }
+        meterEnabled = enabled
+        firstDepthTimestamp = enabled ? (session.currentFrame?.timestamp ?? latestTimestamp) : .infinity
         let config = ARWorldTrackingConfiguration()
-        config.frameSemantics = [.sceneDepth]
-        session.run(config, options: [.resetTracking, .removeExistingAnchors])
-        running = true
+        if enabled { config.frameSemantics = [.sceneDepth] }
+        session.run(config)
+        reply(NSNull(), nil)
+    }
+
+    private func stopSession() {
+        sessionGeneration += 1
+        meterEnabled = false
+        running = false
+        firstDepthTimestamp = .infinity
+        latestTimestamp = -1
+        lastArrival = -1
+        session.pause()
     }
 
     @objc private func pauseInBackground() {
-        running = false
-        session.pause()
+        stopSession()
     }
 
     override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
-        running = false
-        session.pause()
-        session.delegate = nil
+        stopSession()
     }
 
     func session(_ session: ARSession, didUpdate frame: ARFrame) {
+        guard running else { return }
         latestTimestamp = frame.timestamp
         lastArrival = CACurrentMediaTime()
     }
 
     func session(_ session: ARSession, didFailWithError error: Error) {
-        running = false
+        stopSession()
         showFailure("تعذر الحصول على إطار ARKit متزامن. أوقف التجربة وأعد تشغيلها.")
     }
 
-    // The browser must not navigate to arbitrary pages while a camera-capable
-    // WebKit message handler exists. All linked resources still load normally.
+    // Other Basira pages remain reachable, but only the vision path may call
+    // the native camera handler. Leaving it stops the AR session immediately.
     func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction,
                  decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
         guard let url = navigationAction.request.url,
@@ -152,7 +187,8 @@ final class NativeMetricVisionController: UIViewController, ARSessionDelegate, W
             decisionHandler(.cancel)
             return
         }
-        decisionHandler(url.path == "/navigation/native-vision" ? .allow : .cancel)
+        if url.path != "/navigation/vision" { stopSession() }
+        decisionHandler(.allow)
     }
 
     private func showFailure(_ message: String) {
@@ -161,52 +197,89 @@ final class NativeMetricVisionController: UIViewController, ARSessionDelegate, W
         if presentedViewController == nil { present(alert, animated: true) }
     }
 
-    @objc private func closeCamera() { running = false; session.pause(); dismiss(animated: true) }
+    @objc private func closeCamera() {
+        stopSession()
+        if presentingViewController != nil {
+            dismiss(animated: true)
+        } else {
+            let lab = NativeCalibrationHomeController()
+            lab.modalPresentationStyle = .fullScreen
+            present(lab, animated: true)
+        }
+    }
 
-    deinit { NotificationCenter.default.removeObserver(self) }
+    deinit {
+        session.delegate = nil
+        NotificationCenter.default.removeObserver(self)
+    }
 
     fileprivate func handle(_ message: WKScriptMessage, reply: @escaping (Any?, String?) -> Void) {
-        guard !busy, running, message.name == "basiraNativeFrame",
+        if !Thread.isMainThread {
+            DispatchQueue.main.async { [weak self] in
+                guard let self else { reply(nil, "camera_unavailable"); return }
+                self.handle(message, reply: reply)
+            }
+            return
+        }
+        guard message.name == "basiraNativeFrame",
               message.frameInfo.isMainFrame,
               message.frameInfo.securityOrigin.host.lowercased() == allowedHost,
               message.frameInfo.securityOrigin.protocol == "https",
-              message.frameInfo.securityOrigin.port == 443,
+              // WebKit may report the implicit HTTPS port as zero.
+              [0, 443].contains(message.frameInfo.securityOrigin.port),
               let page = webView?.url,
               page.scheme == "https", page.host?.lowercased() == allowedHost,
-              page.path == "/navigation/native-vision",
-              let request = message.body as? [String: String],
-              request["action"] == "frame",
+              page.path == "/navigation/vision",
+              let request = message.body as? [String: Any],
+              let action = request["action"] as? String else {
+            reply(nil, "invalid_camera_request")
+            return
+        }
+        switch action {
+        case "start":
+            startSession(reply: reply)
+        case "meter":
+            guard let enabled = request["enabled"] as? Bool else {
+                reply(nil, "invalid_meter_request")
+                return
+            }
+            setMeterEnabled(enabled, reply: reply)
+        case "stop":
+            stopSession()
+            reply(NSNull(), nil)
+        case "frame":
+            sendFrame(reply: reply)
+        default:
+            reply(nil, "unknown_camera_request")
+        }
+    }
+
+    private func sendFrame(reply: @escaping (Any?, String?) -> Void) {
+        guard !busy, running,
               let frame = session.currentFrame,
               latestTimestamp == frame.timestamp,
               lastArrival > 0,
               CACurrentMediaTime() - lastArrival < 0.25,
-              case .normal = frame.camera.trackingState,
-              let depth = frame.sceneDepth else {
+              case .normal = frame.camera.trackingState else {
             reply(NSNull(), nil)
             return
         }
         busy = true
-        // Capture all data synchronously on the main ARSession queue before replying to JS.
+        // The single ARFrame owns both capturedImage and sceneDepth. Wait for a
+        // new frame after enabling depth; an earlier RGB frame cannot carry it.
+        let depth = meterEnabled && frame.timestamp > firstDepthTimestamp ? frame.sceneDepth : nil
         let result = buildAtomicFrame(frame, depth: depth)
         busy = false
         reply(result.map { $0 as Any } ?? NSNull(), nil)
     }
 
-    /// Apple documents sceneDepth pixels as corresponding to regions of capturedImage.
-    /// RGB and depth are kept in native sensor orientation. Both are rotated together
-    /// by the React canvas adapter to avoid mixing crop/display transforms.
-    private func buildAtomicFrame(_ frame: ARFrame, depth: ARDepthData) -> [String: Any]? {
+    /// RGB and depth remain in native sensor orientation. The web adapter
+    /// rotates both clockwise together before object detection and sampling.
+    private func buildAtomicFrame(_ frame: ARFrame, depth: ARDepthData?) -> [String: Any]? {
         let cameraBuffer = frame.capturedImage
-        let map = depth.depthMap
-        guard let confidence = depth.confidenceMap,
-              CVPixelBufferGetPixelFormatType(map) == kCVPixelFormatType_DepthFloat32,
-              CVPixelBufferGetPixelFormatType(confidence) == kCVPixelFormatType_OneComponent8 else { return nil }
-
         let cameraWidth = CVPixelBufferGetWidth(cameraBuffer), cameraHeight = CVPixelBufferGetHeight(cameraBuffer)
-        let dw = CVPixelBufferGetWidth(map), dh = CVPixelBufferGetHeight(map)
-        guard cameraWidth > 0, cameraHeight > 0, dw >= 64, dh >= 48,
-              CVPixelBufferGetWidth(confidence) == dw, CVPixelBufferGetHeight(confidence) == dh,
-              abs(Double(cameraWidth)/Double(cameraHeight) - Double(dw)/Double(dh)) < 0.03 else { return nil }
+        guard cameraWidth >= 300, cameraHeight >= 200,
+              abs(Double(cameraWidth) / Double(cameraHeight) - 4.0 / 3.0) < 0.03 else { return nil }
 
         let scale = min(640.0 / Double(cameraWidth), 480.0 / Double(cameraHeight))
         let source = CIImage(cvPixelBuffer: cameraBuffer)
@@ -214,11 +287,38 @@ final class NativeMetricVisionController: UIViewController, ARSessionDelegate, W
         guard let jpeg = context.jpegRepresentation(of: scaled, colorSpace: CGColorSpaceCreateDeviceRGB(),
                                                     options: [:]) else { return nil }
 
-        guard CVPixelBufferLockBaseAddress(map, .readOnly) == kCVReturnSuccess else { return nil }
+        // The RGB camera remains usable if depth is off, unsupported or invalid.
+        // Invalid depth is represented by an empty map, never by a guessed value.
+        var payload: [String: Any] = [
+            "frameId": String(format: "arkit-%0.6f", locale: Locale(identifier: "en_US_POSIX"), frame.timestamp),
+            "nativeTimestampMs": frame.timestamp * 1000,
+            "source": "ARKIT_DEPTH",
+            "capturedWithNativeSession": true,
+            "alignedToCameraFrame": false,
+            "rawDepthFresh": false,
+            "cameraWidth": cameraWidth,
+            "cameraHeight": cameraHeight,
+            "imageBase64": jpeg.base64EncodedString(),
+            "depthEnabled": false,
+            "depthWidth": 0,
+            "depthHeight": 0,
+            "values": [Double](),
+            "validCoverage": 0.0
+        ]
+        guard let depth, let confidence = depth.confidenceMap else { return payload }
+        let map = depth.depthMap
+        guard CVPixelBufferGetPixelFormatType(map) == kCVPixelFormatType_DepthFloat32,
+              CVPixelBufferGetPixelFormatType(confidence) == kCVPixelFormatType_OneComponent8 else { return payload }
+        let dw = CVPixelBufferGetWidth(map), dh = CVPixelBufferGetHeight(map)
+        guard dw >= 64, dh >= 48,
+              CVPixelBufferGetWidth(confidence) == dw, CVPixelBufferGetHeight(confidence) == dh,
+              abs(Double(cameraWidth)/Double(cameraHeight) - Double(dw)/Double(dh)) < 0.03 else { return payload }
+
+        guard CVPixelBufferLockBaseAddress(map, .readOnly) == kCVReturnSuccess else { return payload }
         defer { CVPixelBufferUnlockBaseAddress(map, .readOnly) }
-        guard CVPixelBufferLockBaseAddress(confidence, .readOnly) == kCVReturnSuccess else { return nil }
+        guard CVPixelBufferLockBaseAddress(confidence, .readOnly) == kCVReturnSuccess else { return payload }
         defer { CVPixelBufferUnlockBaseAddress(confidence, .readOnly) }
-        guard let db = CVPixelBufferGetBaseAddress(map), let cb = CVPixelBufferGetBaseAddress(confidence) else { return nil }
+        guard let db = CVPixelBufferGetBaseAddress(map), let cb = CVPixelBufferGetBaseAddress(confidence) else { return payload }
         let depths = db.assumingMemoryBound(to: Float32.self)
         let conf = cb.assumingMemoryBound(to: UInt8.self)
         let dStride = CVPixelBufferGetBytesPerRow(map) / MemoryLayout<Float32>.stride
@@ -241,21 +341,15 @@ final class NativeMetricVisionController: UIViewController, ARSessionDelegate, W
         }
         let coverage = Double(valid) / Double(w * h)
         // We reject sparse maps instead of guessing depth around an object.
-        guard coverage >= 0.7 else { return nil }
-        return [
-            "frameId": String(format: "arkit-%0.6f", frame.timestamp),
-            "nativeTimestampMs": frame.timestamp * 1000,
-            "source": "ARKIT_DEPTH",
-            "capturedWithNativeSession": true,
-            "alignedToCameraFrame": true,
-            "rawDepthFresh": true,
-            "cameraWidth": cameraWidth,
-            "cameraHeight": cameraHeight,
-            "imageBase64": jpeg.base64EncodedString(),
-            "depthWidth": w, "depthHeight": h,
-            "values": values,
-            "validCoverage": coverage
-        ]
+        guard coverage >= 0.7 else { return payload }
+        payload["alignedToCameraFrame"] = true
+        payload["rawDepthFresh"] = true
+        payload["depthEnabled"] = true
+        payload["depthWidth"] = w
+        payload["depthHeight"] = h
+        payload["values"] = values
+        payload["validCoverage"] = coverage
+        return payload
     }
 }
 

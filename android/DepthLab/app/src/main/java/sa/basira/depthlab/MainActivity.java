@@ -2,6 +2,7 @@ package sa.basira.depthlab;
 
 import android.Manifest;
 import android.app.Activity;
+import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.graphics.Color;
 import android.media.Image;
@@ -108,6 +109,11 @@ public final class MainActivity extends Activity implements GLSurfaceView.Render
         panel.addView(status);
         panel.addView(reading);
         panel.addView(speak);
+        Button vision = new Button(this);
+        vision.setText("رؤية بصيرة مع قياس الأجسام التلقائي");
+        vision.setContentDescription("فتح رؤية بصيرة مع محرك قياس ARCore الاختياري");
+        vision.setOnClickListener(view -> startActivity(new Intent(this, NativeVisionActivity.class)));
+        panel.addView(vision);
         root.addView(panel,panelParams);
         setContentView(root);
         tts=new TextToSpeech(this, s -> {
