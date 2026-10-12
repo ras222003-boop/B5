@@ -1,0 +1,31 @@
+{
+  "format": "basira-metric-onnx-parts-v1",
+  "totalBytes": 98940415,
+  "sha256": "2e762752eb777176c94036ecd0003fee8dfee78784e1e80a8bc3aaf1075e8bc4",
+  "parts": [
+    {
+      "file": "model_fp32.part-0.bin",
+      "bytes": 16777216
+    },
+    {
+      "file": "model_fp32.part-1.bin",
+      "bytes": 16777216
+    },
+    {
+      "file": "model_fp32.part-2.bin",
+      "bytes": 16777216
+    },
+    {
+      "file": "model_fp32.part-3.bin",
+      "bytes": 16777216
+    },
+    {
+      "file": "model_fp32.part-4.bin",
+      "bytes": 16777216
+    },
+    {
+      "file": "model_fp32.part-5.bin",
+      "bytes": 15054335
+    }
+  ]
+}

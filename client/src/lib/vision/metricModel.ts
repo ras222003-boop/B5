@@ -1,16 +1,65 @@
 import type { EstimatedMetricDepthMap, EstimatedMetricDepthProvider } from '@shared/vision';
+import {checkAssetResponse,MeterModelError} from './meterDiagnostics';
 
 const SIDE=392;
-const MODEL='/vision/models/depth-anything/Depth-Anything-V2-Metric-Hypersim-Small/onnx/model_fp32.onnx';
+const MODEL_BASE='/vision/models/depth-anything/Depth-Anything-V2-Metric-Hypersim-Small/onnx/';
+const EXPECTED_BYTES=98_940_415;
+const EXPECTED_SHA='2e762752eb777176c94036ecd0003fee8dfee78784e1e80a8bc3aaf1075e8bc4';
+const PART_SIZE=16*1024*1024;
 const MEAN=[.485,.456,.406] as const;
 const STD=[.229,.224,.225] as const;
 
-async function metricModelBytes():Promise<Uint8Array> {
-  const response=await fetch(MODEL,{cache:'force-cache'});
-  if(!response.ok)throw new Error(`metric_model_http_${response.status}`);
-  const bytes=new Uint8Array(await response.arrayBuffer());
-  if(bytes.byteLength<90_000_000||bytes.byteLength>100_000_000)throw new Error('invalid_metric_model_size');
+async function fetchMetricAsset(path:string,kind:'model'|'manifest'):Promise<Response> {
+  let response:Response;
+  try { response=await fetch(MODEL_BASE+path,{cache:'force-cache'}); }
+  catch { throw new MeterModelError('MODEL_NETWORK'); }
+  checkAssetResponse(response,kind);
+  return response;
+}
+
+interface PartManifest {format:string;totalBytes:number;sha256:string;parts:{file:string;bytes:number}[]}
+/** The current hosted single-file route returns HTML. Fetch smaller slices of the same FP32 bytes. */
+export async function metricModelBytes():Promise<Uint8Array> {
+  const manifestResponse=await fetchMetricAsset('parts.json','manifest');
+  let manifest:PartManifest;
+  try{manifest=await manifestResponse.json() as PartManifest;}
+  catch{throw new MeterModelError('MODEL_HTML');}
+  if(manifest?.format!=='basira-metric-onnx-parts-v1'||manifest.totalBytes!==EXPECTED_BYTES||
+    manifest.sha256!==EXPECTED_SHA||!Array.isArray(manifest.parts)||manifest.parts.length!==6||
+    manifest.parts.some((part,index)=>!part||part.file!==`model_fp32.part-${index}.bin`||
+      part.bytes!==(index<5?PART_SIZE:EXPECTED_BYTES-5*PART_SIZE)))throw new MeterModelError('MODEL_SIZE');
+  const bytes=new Uint8Array(EXPECTED_BYTES);
+  let offset=0;
+  for(const part of manifest.parts){
+    const response=await fetchMetricAsset(part.file,'model');
+    const advertised=Number(response.headers.get('content-length'));
+    if(advertised&&advertised!==part.bytes)throw new MeterModelError('MODEL_SIZE');
+    let chunk:Uint8Array;
+    try{chunk=new Uint8Array(await response.arrayBuffer());}
+    catch{throw new MeterModelError('MODEL_NETWORK');}
+    const prefix=new TextDecoder().decode(chunk.subarray(0,64)).trimStart().toLowerCase();
+    if(prefix.startsWith('<!doctype html')||prefix.startsWith('<html'))throw new MeterModelError('MODEL_HTML');
+    if(chunk.byteLength!==part.bytes)throw new MeterModelError('MODEL_SIZE');
+    bytes.set(chunk,offset);
+    offset+=chunk.byteLength;
+  }
+  const hash=await crypto.subtle.digest('SHA-256',bytes.buffer as ArrayBuffer);
+  const actual=Array.from(new Uint8Array(hash),value=>value.toString(16).padStart(2,'0')).join('');
+  if(actual!==EXPECTED_SHA)throw new MeterModelError('MODEL_CHECKSUM');
   return bytes;
+}
+
+async function diagnoseWasmAssets():Promise<boolean> {
+  for(const file of ['ort-wasm-simd-threaded.wasm','ort-wasm-simd-threaded.mjs']){
+    let response:Response;
+    try{response=await fetch(`/vision/onnx/${file}`,{method:'HEAD',cache:'no-store'});}
+    catch{return false;}
+    try{checkAssetResponse(response,file.endsWith('.wasm')?'wasm':'module');}
+    catch{return false;}
+    const size=Number(response.headers.get('content-length'));
+    if(size&&size<(file.endsWith('.wasm')?1_000_000:1_000))return false;
+  }
+  return true;
 }
 
 export interface MetricImagePlacement { x:number;y:number;width:number;height:number }
@@ -68,7 +117,11 @@ export class MonocularMetricDepthProvider implements EstimatedMetricDepthProvide
         return new MonocularMetricDepthProvider(ort,session,'webgpu');
       }catch{/* A WebGPU adapter may lack a required ONNX operator. */}
     }
-    const session=await ort.InferenceSession.create(bytes,{executionProviders:['wasm'],graphOptimizationLevel:'all'});
+    let session:import('onnxruntime-web').InferenceSession;
+    try{session=await ort.InferenceSession.create(bytes,{executionProviders:['wasm'],graphOptimizationLevel:'all'});}
+    catch{
+      throw new MeterModelError(await diagnoseWasmAssets()?'MODEL_INIT':'WASM_ASSET');
+    }
     return new MonocularMetricDepthProvider(ort,session,'wasm');
   }
   private async run(frame:HTMLCanvasElement,timestamp:number):Promise<EstimatedMetricDepthMap> {
@@ -88,7 +141,8 @@ export class MonocularMetricDepthProvider implements EstimatedMetricDepthProvide
       catch(error){
         if(this.backend!=='webgpu'||this.closed)throw error;
         await this.session.release();
-        this.session=await this.ort.InferenceSession.create(await metricModelBytes(),{executionProviders:['wasm'],graphOptimizationLevel:'all'});
+        try{this.session=await this.ort.InferenceSession.create(await metricModelBytes(),{executionProviders:['wasm'],graphOptimizationLevel:'all'});}
+        catch(error){throw error instanceof MeterModelError?error:new MeterModelError(await diagnoseWasmAssets()?'MODEL_INIT':'WASM_ASSET');}
         this.backend='wasm';
         output=await this.session.run({pixel_values:input});
       }

@@ -1,5 +1,6 @@
 import type { EstimatedMetricDepthMap, MetricDepthMap, VisionDetection, VisionObjectType, HorizontalDirection } from '@shared/vision';
 import { metricDepthForDetection } from './fusion';
+import type {MeterDiagnostic} from './meterDiagnostics';
 
 export const AUTO_METER_MIN_METERS = 0.5;
 export const AUTO_METER_MAX_METERS = 3;
@@ -29,7 +30,7 @@ export interface AutoMeterMeasurement {
   rawMeters:number|null;
   source:MetricDepthMap['source']|'MONOCULAR_METRIC'|null;
   reliability:'EXPERIMENTAL'|'UNAVAILABLE';
-  rejectionReason:'NO_ALIGNED_DEPTH'|'NO_OBJECT_DEPTH'|'OUT_OF_TARGET_RANGE'|'INVALID_MODEL_DEPTH'|null;
+  rejectionReason:'NO_ALIGNED_DEPTH'|'NO_OBJECT_DEPTH'|'OUT_OF_TARGET_RANGE'|'INVALID_MODEL_DEPTH'|'DEPTH_INCONSISTENT'|'LOW_CONFIDENCE'|null;
   frameId:string;
   capturedAt:number;
 }
@@ -38,48 +39,67 @@ export interface AutoMeterSnapshot {
   nativeSource:MetricDepthMap['source']|'MONOCULAR_METRIC';
   capturedAt:number;
   measurements:AutoMeterMeasurement[];
+  /** AI-only visible surface at the frame centre; never a detector or safety reading. */
+  centerSurface?:{distanceMeters:number|null;rawMeters:number|null;rejectionReason:MeterDiagnostic|null};
+}
+
+type SurfaceResult={meters:number|null;reason:'INVALID_MODEL_DEPTH'|'DEPTH_INCONSISTENT'|null};
+function validEstimatedMap(map:EstimatedMetricDepthMap):boolean {
+  return map.source==='MONOCULAR_METRIC'&&Number.isInteger(map.width)&&Number.isInteger(map.height)&&
+    map.width>=16&&map.height>=16&&map.values.length===map.width*map.height;
+}
+function sampleSurface(map:EstimatedMetricDepthMap,b:{x:number;y:number;width:number;height:number},center=false):SurfaceResult {
+  if(!validEstimatedMap(map)||![b.x,b.y,b.width,b.height].every(Number.isFinite)||b.x<0||b.y<0||
+    b.width<=0||b.height<=0||b.x+b.width>1||b.y+b.height>1||
+    b.width*map.width<7||b.height*map.height<7)return {meters:null,reason:'INVALID_MODEL_DEPTH'};
+  const samples:number[]=[];
+  let middle:number|null=null;
+  for(let y=0;y<5;y++)for(let x=0;x<5;x++){
+    const offset=.26,step=.12;
+    const px=Math.min(map.width-1,Math.floor((b.x+(offset+x*step)*b.width)*map.width));
+    const py=Math.min(map.height-1,Math.floor((b.y+(offset+y*step)*b.height)*map.height));
+    const value=map.values[py*map.width+px];
+    if(Number.isFinite(value)&&value>=.2&&value<=20){samples.push(value);if(x===2&&y===2)middle=value;}
+  }
+  if(samples.length<(center?23:20)||middle===null)return {meters:null,reason:'INVALID_MODEL_DEPTH'};
+  samples.sort((a,b)=>a-b);
+  const median=samples[Math.floor(samples.length/2)];
+  const allowed=center?Math.max(.1,median*.08):Math.max(.15,median*.12);
+  if(samples[Math.ceil((samples.length-1)*.9)]-samples[Math.floor((samples.length-1)*.1)]>allowed||
+    Math.abs(middle-median)>allowed)return {meters:null,reason:'DEPTH_INCONSISTENT'};
+  return {meters:Math.round(median*100)/100,reason:null};
 }
 
 /** Strict association for an AI-only display. This never creates a DepthReading. */
 export function estimatedMetersForDetection(d:VisionDetection,map:EstimatedMetricDepthMap):number|null {
-  if(d.source!=='OBJECT_DETECTOR'||d.confidence<.75||d.timestamp!==map.timestamp||
-    map.source!=='MONOCULAR_METRIC'||!Number.isInteger(map.width)||!Number.isInteger(map.height)||
-    map.width<16||map.height<16||map.values.length!==map.width*map.height)return null;
-  const b=d.boundingBox;
-  if(![b.x,b.y,b.width,b.height].every(Number.isFinite)||b.x<0||b.y<0||b.width<=0||b.height<=0||
-    b.x+b.width>1||b.y+b.height>1||b.width*map.width<7||b.height*map.height<7)return null;
-  const samples:number[]=[];
-  let center:number|null=null;
-  for(let y=0;y<5;y++)for(let x=0;x<5;x++){
-    const px=Math.min(map.width-1,Math.floor((b.x+(.26+x*.12)*b.width)*map.width));
-    const py=Math.min(map.height-1,Math.floor((b.y+(.26+y*.12)*b.height)*map.height));
-    const value=map.values[py*map.width+px];
-    if(Number.isFinite(value)&&value>=.2&&value<=20){samples.push(value);if(x===2&&y===2)center=value;}
-  }
-  if(samples.length<20||center===null)return null;
-  samples.sort((a,b)=>a-b);
-  const median=samples[Math.floor(samples.length/2)];
-  const allowed=Math.max(.15,median*.12);
-  if(samples[Math.ceil((samples.length-1)*.9)]-samples[Math.floor((samples.length-1)*.1)]>allowed||
-    Math.abs(center-median)>allowed)return null;
-  return Math.round(median*100)/100;
+  if(d.source!=='OBJECT_DETECTOR'||d.confidence<.75||d.timestamp!==map.timestamp)return null;
+  return sampleSurface(map,d.boundingBox).meters;
+}
+
+export function estimatedCenterSurface(map:EstimatedMetricDepthMap):AutoMeterSnapshot['centerSurface'] {
+  const result=sampleSurface(map,{x:.35,y:.35,width:.3,height:.3},true);
+  const inRange=result.meters!==null&&result.meters>=AUTO_METER_MIN_METERS&&result.meters<=AUTO_METER_MAX_METERS;
+  return {distanceMeters:inRange?result.meters:null,rawMeters:result.meters,
+    rejectionReason:result.reason??(inRange?null:'OUT_OF_TARGET_RANGE')};
 }
 
 export function measureEstimatedObjects(
   detections:readonly VisionDetection[],map:EstimatedMetricDepthMap,frameId:string,capturedAt:number,
 ):AutoMeterSnapshot {
   const measurements=detections.filter(d=>d.source==='OBJECT_DETECTOR').slice(0,8).map(d=>{
-    const reading=estimatedMetersForDetection(d,map);
+    const result=d.confidence<.75?{meters:null,reason:'LOW_CONFIDENCE' as const}
+      :d.timestamp!==map.timestamp?{meters:null,reason:'NO_ALIGNED_DEPTH' as const}:sampleSurface(map,d.boundingBox);
+    const reading=result.meters;
     const inRange=reading!==null&&reading>=AUTO_METER_MIN_METERS&&reading<=AUTO_METER_MAX_METERS;
     return {
       id:d.id,trackId:d.trackId??`${d.type}:${d.horizontalDirection}`,type:d.type,direction:d.horizontalDirection,
       distanceMeters:inRange?reading:null,rawMeters:reading,source:inRange?'MONOCULAR_METRIC':null,
       reliability:inRange?'EXPERIMENTAL':'UNAVAILABLE',
-      rejectionReason:reading===null?'INVALID_MODEL_DEPTH':!inRange?'OUT_OF_TARGET_RANGE':null,
+      rejectionReason:result.reason??(!inRange?'OUT_OF_TARGET_RANGE':null),
       frameId,capturedAt,
     } satisfies AutoMeterMeasurement;
   });
-  return {frameId,nativeSource:'MONOCULAR_METRIC',capturedAt,measurements};
+  return {frameId,nativeSource:'MONOCULAR_METRIC',capturedAt,measurements,centerSurface:estimatedCenterSurface(map)};
 }
 
 /** Measurement is display-only. No value from this function feeds obstacle or stair alarms. */

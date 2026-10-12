@@ -1,7 +1,9 @@
 import {describe,expect,it} from 'vitest';
 import type {EstimatedMetricDepthMap,VisionDetection} from '@shared/vision';
-import {metricMapForFrame,metricPixels,metricPlacement} from './metricModel';
+import {metricMapForFrame,metricPixels,metricPlacement,metricModelBytes} from './metricModel';
 import {estimatedMetersForDetection,measureEstimatedObjects} from './autoMeter';
+import {checkAssetResponse,MeterModelError} from './meterDiagnostics';
+import {vi} from 'vitest';
 
 const detection=(timestamp=10):VisionDetection=>({
   id:'chair',type:'CHAIR',source:'OBJECT_DETECTOR',confidence:.9,
@@ -53,5 +55,40 @@ describe('unverified AI distance isolation',()=>{
     expect(estimatedMetersForDetection(detection(),mixed)).toBeNull();
     expect(estimatedMetersForDetection(detection(),map(NaN))).toBeNull();
     expect(measureEstimatedObjects([detection()],map(4),'web-10',100).measurements[0]).toMatchObject({distanceMeters:null,rejectionReason:'OUT_OF_TARGET_RANGE'});
+  });
+  it('reads a consistent centre surface without requiring an object name',()=>{
+    const snapshot=measureEstimatedObjects([],map(1.5),'web-10',100);
+    expect(snapshot.measurements).toEqual([]);
+    expect(snapshot.centerSurface).toEqual({distanceMeters:1.5,rawMeters:1.5,rejectionReason:null});
+    expect('approximateDistance' in snapshot).toBe(false);
+  });
+  it('rejects mixed, missing and out-of-range centre surfaces',()=>{
+    const mixed=map();
+    mixed.values.forEach((_,index)=>{mixed.values[index]=index%2?1:3;});
+    expect(measureEstimatedObjects([],mixed,'web',100).centerSurface).toMatchObject({distanceMeters:null,rejectionReason:'DEPTH_INCONSISTENT'});
+    expect(measureEstimatedObjects([],map(NaN),'web',100).centerSurface).toMatchObject({distanceMeters:null,rejectionReason:'INVALID_MODEL_DEPTH'});
+    expect(measureEstimatedObjects([],map(4),'web',100).centerSurface).toMatchObject({distanceMeters:null,rejectionReason:'OUT_OF_TARGET_RANGE'});
+  });
+  it('reports object confidence and inconsistent depth separately',()=>{
+    expect(measureEstimatedObjects([{...detection(),confidence:.5}],map(),'web',100).measurements[0].rejectionReason).toBe('LOW_CONFIDENCE');
+    const mixed=map();mixed.values.forEach((_,index)=>{mixed.values[index]=index%2?1:3;});
+    expect(measureEstimatedObjects([detection()],mixed,'web',100).measurements[0].rejectionReason).toBe('DEPTH_INCONSISTENT');
+  });
+});
+
+describe('hosted metric assets',()=>{
+  it('rejects a 200 HTML fallback before attempting ONNX initialization',async()=>{
+    const fetch=vi.fn(async()=>new Response('<!doctype html><title>Basira</title>',{status:200,headers:{'content-type':'text/html'}}));
+    vi.stubGlobal('fetch',fetch);
+    await expect(metricModelBytes()).rejects.toMatchObject({code:'MODEL_HTML'});
+    expect(fetch).toHaveBeenCalledOnce();
+    vi.unstubAllGlobals();
+  });
+  it('distinguishes redirects, wrong MIME and missing files',()=>{
+    const response=(status:number,type:string,redirected=false)=>({ok:status>=200&&status<300,status,redirected,url:'',headers:new Headers({'content-type':type})}) as Response;
+    expect(()=>checkAssetResponse(response(200,'text/html'),'model')).toThrowError(MeterModelError);
+    expect(()=>checkAssetResponse(response(200,'application/octet-stream',true),'model')).toThrowError('MODEL_REDIRECT');
+    expect(()=>checkAssetResponse(response(404,'text/html'),'model')).toThrowError('MODEL_HTTP');
+    expect(()=>checkAssetResponse(response(200,'application/json'),'model')).toThrowError('MODEL_CONTENT_TYPE');
   });
 });
