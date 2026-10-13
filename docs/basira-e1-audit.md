@@ -18,7 +18,7 @@
 | استهلاك الطاقة والذاكرة والحرارة على الهاتف | غير مقاس | لا جهاز هاتف ضمن هذه التجربة |
 | زمن ظهور الجسم إلى بدء سماع العربية | غير مقاس | يتطلب كاميرا ومشغل صوت وتجربة فعلية |
 
-سجلات الأساس المحلية: `.basira-evidence/baseline-tests.json` و`baseline-tests.log` و`baseline-types.log` و`detector-before.json`. يحفظ `baseline-provider.ts` نسخة الكاشف المستعملة في المقارنة. هذه أدلة تنفيذ محلية؛ لا تتضمن نتائج هاتف أو بيانات حركة. أداة إعادة القياس: [perception-detector-benchmark.mjs](../scripts/perception-detector-benchmark.mjs).
+أدلة الأساس المحفوظة: [الاختبارات](perception-evidence/baseline-tests.json) و[قياس الكاشف الأول](perception-evidence/detector-initial-baseline.json). السجلات التفصيلية المحلية في `.basira-evidence/baseline-tests.log` و`baseline-types.log`. يحفظ `baseline-provider.ts` نسخة الكاشف للمقارنة الزوجية اللاحقة الموثقة في [تقرير التنفيذ](basira-perception-status.md). هذه أدلة تنفيذ محلية؛ لا تتضمن نتائج هاتف أو بيانات حركة. أداة إعادة القياس: [perception-detector-benchmark.mjs](../scripts/perception-detector-benchmark.mjs).
 
 قياس 106.7 ms لا يشمل تأخر انتظار الإطار التالي عند 2 Hz، أو OCR، أو تجزئة المشهد، أو قائمة انتظار الصوت. ينفّذ `detectForVideo` استدعاءً متزامنًا على المسار الرئيسي، ولذلك قد يشغل ذلك المسار طوال الاستدلال في هذه النسخة. لا يجوز تحويل مقلوب هذا الزمن إلى ادعاء بمعدل كاميرا حقيقي.
 

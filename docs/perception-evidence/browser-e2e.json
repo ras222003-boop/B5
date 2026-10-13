@@ -1,0 +1,30 @@
+{
+  "scope": "Desktop Chrome with real local EfficientDet on a canvas stream of one chair photograph; speech submitted to browser stub, no phone/physical camera/auditory/SR user validation.",
+  "reports": [
+    {
+      "screenReaderMode": false,
+      "telemetry": "الإطارات المعالجة: 8؛ المعدل الفعلي 1.9 إطار/ثانية؛ زمن الدورة عند المئين 95: 401 مللي ثانية. درجة التصنيف ليست احتمال اصطدام.",
+      "speechSubmitted": [
+        {
+          "text": "كرسي أمام الكاميرا.",
+          "lang": "ar-SA"
+        },
+        {
+          "text": "كرسي أمام الكاميرا.",
+          "lang": "ar-SA"
+        }
+      ],
+      "cloudUploads": 0,
+      "newPanelAxeViolations": [],
+      "errors": []
+    },
+    {
+      "screenReaderMode": true,
+      "telemetry": "الإطارات المعالجة: 9؛ المعدل الفعلي 1.9 إطار/ثانية؛ زمن الدورة عند المئين 95: 316 مللي ثانية. درجة التصنيف ليست احتمال اصطدام.",
+      "speechSubmitted": [],
+      "cloudUploads": 0,
+      "newPanelAxeViolations": [],
+      "errors": []
+    }
+  ]
+}

@@ -1,0 +1,31 @@
+{
+  "date": "2026-10-13",
+  "baseRevision": "c52b755b9c18ad2fb08163e4ff329fdcf6384415",
+  "implementationRevision": "d994d2a",
+  "vitest": {
+    "files": 82,
+    "passed": 455,
+    "durationSeconds": 37.89,
+    "failed": 0
+  },
+  "metricsTests": {
+    "failed": 0,
+    "passed": 13
+  },
+  "autoMeterReportTests": {
+    "failed": 0,
+    "passed": 4
+  },
+  "typecheck": "passed",
+  "clientBuild": "passed; existing chunk-size warning",
+  "serverBuild": "passed",
+  "metricArtifactIntegrity": "passed",
+  "browserScenarios": 2,
+  "browserEvidence": "browser-e2e.json",
+  "physicalPhone": "not run",
+  "audibleSpeech": "not run; browser synthesis stub only",
+  "realScreenReader": "not run",
+  "liveForge": "not run; key not configured",
+  "annotatedAccuracy": "not measured",
+  "databaseMigrations": "not rerun locally; no schema changes"
+}
