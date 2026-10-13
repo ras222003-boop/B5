@@ -8,7 +8,7 @@ import type { Plugin } from 'vite';
  * Vite's development server this URL otherwise enters Vite's import pipeline
  * and triggers "This file is in /public and should not be imported from source".
  *
- * Serve ONLY the four pinned, self-hosted ORT runtime files as raw HTTP assets
+ * Serve only the pinned ORT files and MediaPipe ES-module worker runtime as raw HTTP assets
  * before Vite's transforms. Production builds continue using normal publicDir.
  */
 const ONNX_RUNTIME_FILES = new Set([
@@ -20,6 +20,8 @@ const ONNX_RUNTIME_FILES = new Set([
 
 const RUNTIME_PATH = '/vision/onnx/';
 const ASSET_DIR = path.resolve(import.meta.dirname, '../client/public/vision/onnx');
+const MEDIAPIPE_FILES=new Set(['vision_wasm_module_internal.js','vision_wasm_module_internal.wasm']);
+const MEDIAPIPE_PATH='/vision/mediapipe/';
 
 function authorizedForPrivatePreview(header: string | undefined) {
   const username = process.env.BASIRA_PREVIEW_ACCESS_USERNAME;
@@ -42,12 +44,19 @@ export function vitePluginOnnxRuntimeRawAssets(): Plugin {
       server.middlewares.use((req, res, next) => {
         if (req.method !== 'GET' && req.method !== 'HEAD') return next();
         let filename: string;
+        let directory=ASSET_DIR;
         try {
           const pathname = new URL(req.url ?? '/', 'http://localhost').pathname;
-          if (!pathname.startsWith(RUNTIME_PATH)) return next();
-          filename = pathname.slice(RUNTIME_PATH.length);
+          if(pathname.startsWith(MEDIAPIPE_PATH)){
+            filename=pathname.slice(MEDIAPIPE_PATH.length);
+            if(!MEDIAPIPE_FILES.has(filename))return next();
+            directory=path.resolve(ASSET_DIR,'../mediapipe');
+          }else{
+            if (!pathname.startsWith(RUNTIME_PATH)) return next();
+            filename = pathname.slice(RUNTIME_PATH.length);
+            if (!ONNX_RUNTIME_FILES.has(filename)) return next();
+          }
         } catch { return next(); }
-        if (!ONNX_RUNTIME_FILES.has(filename)) return next();
 
         // Manus private preview uses Basic Auth. Asset middleware MUST NOT
         // bypass that gate, even if plugin ordering changes across environments.
@@ -59,7 +68,7 @@ export function vitePluginOnnxRuntimeRawAssets(): Plugin {
           return;
         }
 
-        const filePath = path.join(ASSET_DIR, filename);
+        const filePath = path.join(directory, filename);
         let size: number;
         try { size = statSync(filePath).size; }
         catch {
@@ -68,7 +77,7 @@ export function vitePluginOnnxRuntimeRawAssets(): Plugin {
           return;
         }
         res.statusCode = 200;
-        res.setHeader('Content-Type', filename.endsWith('.mjs') ? 'text/javascript; charset=utf-8' : 'application/wasm');
+        res.setHeader('Content-Type', filename.endsWith('.js')||filename.endsWith('.mjs') ? 'text/javascript; charset=utf-8' : 'application/wasm');
         res.setHeader('Content-Length', size);
         res.setHeader('Cache-Control', 'private, no-store');
         res.setHeader('Vary', 'Authorization');

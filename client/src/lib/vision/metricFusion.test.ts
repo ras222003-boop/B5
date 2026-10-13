@@ -36,10 +36,10 @@ describe('verified metric object association',()=>{
  });
  it('keeps monocular and world-pose guesses from producing metres in scene summary',()=>{
    const fusion=new VisionFusionEngine(new BasiraSafetyEngine(DEFAULT_VISION_CONFIG));
-   const frame=fusion.fuse({objects:[detection()],segmentation:null,metricDepth:map(),relativeDepth:null,signs:[]});
+   const frame=fusion.fuse({objects:[detection()],segmentation:null,metricDepth:map(),relativeDepth:null,signs:[]},100);
    expect(frame.detections[0].approximateDistance?.distanceMeters).toBeCloseTo(1.42);
    expect(new SceneUnderstandingService(visionMessages.ar).summarize(frame.events,null,100).shortText).toContain('متر');
-   const noMap=fusion.fuse({objects:[detection()],segmentation:null,metricDepth:null,relativeDepth:null,signs:[]});
+   const noMap=fusion.fuse({objects:[detection()],segmentation:null,metricDepth:null,relativeDepth:null,signs:[]},100);
    expect(noMap.detections[0].approximateDistance).toBeNull();
    expect(new SceneUnderstandingService(visionMessages.ar).summarize(noMap.events,null,100).shortText).not.toContain('متر');
  });

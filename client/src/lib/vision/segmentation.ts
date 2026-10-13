@@ -2,6 +2,13 @@ import type { BoundingBox, GroundSurface, MetricDepthMap, RelativeDepthMap, Segm
 import { classifyDirection, classifyVertical } from './safety';
 
 export const SEG = { OTHER:0, FLOOR:1, ROAD:2, SIDEWALK:3, PATH:4, STAIRS:5, DOOR:6, COLUMN:7, WALL:8, BARRIER:9, SIGN:10, SOLID:11 } as const;
+/** Reject malformed grids before indexing; labels are an internal compact vocabulary. */
+export function isValidSegmentationGrid(grid:SegmentationGrid):boolean {
+  return Number.isInteger(grid.width)&&Number.isInteger(grid.height)&&grid.width>0&&grid.height>0&&
+    grid.width*grid.height<=1_048_576&&grid.labels instanceof Uint8Array&&
+    grid.labels.length===grid.width*grid.height&&Number.isFinite(grid.timestamp)&&
+    grid.labels.every(code=>code<=SEG.SOLID);
+}
 export function semanticCode(label: string): number {
   switch(label.toLowerCase().trim()) {
     case 'floor': return SEG.FLOOR;
@@ -24,6 +31,7 @@ const groundSurface=(code:number):GroundSurface=>code===SEG.FLOOR?'FLOOR':code==
 interface Region { code:number; count:number; x0:number; y0:number; x1:number; y1:number }
 /** Four-connected components keep adjacent doors or obstacles from becoming one huge box. */
 export function semanticRegions(grid:SegmentationGrid):Region[] {
+  if(!isValidSegmentationGrid(grid))return [];
   const {width:w,height:h,labels}=grid,seen=new Uint8Array(labels.length),regions:Region[]=[];
   for(let start=0;start<labels.length;start++) {
     const code=labels[start];
@@ -53,7 +61,8 @@ export function detectionsFromSegmentation(grid:SegmentationGrid):VisionDetectio
     const type=regionType[region.code];if(!type)return [];
     // Semantic masks have no calibrated score. This is a conservative region-quality estimate.
     const quality=Math.min(type==='STAIRS_UNCERTAIN'?.78:.72,0.5+region.count/(grid.width*grid.height));
-    return [{id:`seg-${grid.timestamp}-${index}`,type,confidence:quality,boundingBox,
+    return [{id:`seg-${grid.timestamp}-${index}`,type,confidence:quality,confidenceKind:'REGION_HEURISTIC' as const,
+      evidence:['SEMANTIC_REGION','UNCALIBRATED_AREA_HEURISTIC'],boundingBox,
       horizontalDirection:classifyDirection(boundingBox),verticalPosition:classifyVertical(boundingBox),
       approximateDistance:null,timestamp:grid.timestamp,source:'SEGMENTATION' as const,
       trackId:`SEG:${type}:${Math.round((boundingBox.x+boundingBox.width/2)*5)}`}];
@@ -62,6 +71,8 @@ export function detectionsFromSegmentation(grid:SegmentationGrid):VisionDetectio
 const intersectsPath=(d:VisionDetection)=>d.boundingBox.x<0.67&&d.boundingBox.x+d.boundingBox.width>0.33&&d.boundingBox.y+d.boundingBox.height>0.55;
 export class SemanticWalkableAreaProvider implements WalkableAreaProvider {
   analyze(grid:SegmentationGrid,detections:VisionDetection[]):WalkableAreaResult {
+    if(!isValidSegmentationGrid(grid))return {pathAhead:'UNKNOWN',freeSpaceLeft:0,freeSpaceCenter:0,freeSpaceRight:0,
+      confidence:0,source:'SEMANTIC_SEGMENTATION',surface:'UNKNOWN',surfaceCoverage:0};
     const counts=[0,0,0],total=[0,0,0],surfaces=new Map<GroundSurface,number>();
     for(let y=Math.floor(grid.height*0.55);y<Math.floor(grid.height*0.9);y++)for(let x=0;x<grid.width;x++){
       const sector=Math.min(2,Math.floor(x*3/grid.width));total[sector]++;
@@ -83,7 +94,11 @@ export class SemanticWalkableAreaProvider implements WalkableAreaProvider {
 /** Possible floor termination only; a single RGB frame cannot establish a true pit or drop. */
 export class DropOffHazardDetector {
   detect(grid:SegmentationGrid,depth:MetricDepthMap|RelativeDepthMap|null):VisionDetection|null {
-    if(!depth||grid.width<4||grid.height<4)return null;
+    if(!isValidSegmentationGrid(grid)||!depth||grid.width<4||grid.height<4||depth.timestamp!==grid.timestamp||
+      !Number.isInteger(depth.width)||!Number.isInteger(depth.height)||depth.width<4||depth.height<4||
+      depth.width*depth.height>1_048_576||depth.values.length!==depth.width*depth.height||
+      !Number.isFinite(depth.confidence)||depth.confidence<=0||depth.confidence>1||
+      (depth.source!=='MONOCULAR_ESTIMATE'&&depth.alignmentVerified!==true))return null;
     const w=grid.width,h=grid.height;
     const coverage=(from:number,to:number)=>{
       let ground=0,total=0;

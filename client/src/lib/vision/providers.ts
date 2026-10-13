@@ -3,44 +3,69 @@ import type { VisionConfig } from './config';
 import { classifyDirection, classifyVertical } from './safety';
 
 const clamp = (n: number) => Math.max(0, Math.min(1, n));
-const cocoTypes: Record<string, VisionObjectType> = {
+export const cocoTypes: Readonly<Record<string, VisionObjectType>> = {
   person: 'PERSON', chair: 'CHAIR', 'dining table': 'TABLE', bicycle: 'BICYCLE',
   car: 'CAR', bus: 'BUS', truck: 'TRUCK', motorcycle: 'MOTORCYCLE',
   'stop sign': 'SIGN', 'traffic light': 'SIGN',
+  couch: 'SOFA', bed: 'BED', backpack: 'BACKPACK', handbag: 'HANDBAG',
+  suitcase: 'SUITCASE', bottle: 'BOTTLE', dog: 'DOG', cat: 'CAT',
 };
+
+interface RawDetection {
+  categories: { categoryName?: string; score: number }[];
+  boundingBox?: { originX: number; originY: number; width: number; height: number };
+}
+/** Validates pixel geometry before clipping. Unknown COCO classes remain unnamed objects. */
+export function normalizeObjectDetections(entries: readonly RawDetection[], width: number, height: number, timestamp: number): VisionDetection[] {
+  if (![width, height, timestamp].every(Number.isFinite) || width <= 0 || height <= 0) return [];
+  const candidates: VisionDetection[] = [];
+  for (const [index, entry] of Array.from(entries.entries())) {
+    const category = entry.categories?.[0], box = entry.boundingBox;
+    if (!category?.categoryName || !Number.isFinite(category.score) || category.score < 0 || category.score > 1 || !box) continue;
+    if (![box.originX, box.originY, box.width, box.height].every(Number.isFinite) || box.width <= 0 || box.height <= 0) continue;
+    const x = clamp(box.originX / width), y = clamp(box.originY / height);
+    const right = clamp((box.originX + box.width) / width), bottom = clamp((box.originY + box.height) / height);
+    if (right <= x || bottom <= y) continue;
+    const boundingBox = { x, y, width: right - x, height: bottom - y };
+    const type = cocoTypes[category.categoryName.toLowerCase()] ?? 'UNKNOWN_OBSTACLE';
+    candidates.push({
+      id: `${timestamp}-${index}`, type, confidence: category.score, boundingBox,
+      horizontalDirection: classifyDirection(boundingBox), verticalPosition: classifyVertical(boundingBox),
+      approximateDistance: null, timestamp, source: 'OBJECT_DETECTOR', confidenceKind: 'MODEL_SCORE',
+      evidence: ['EFFICIENTDET_COCO_CLASSIFICATION'],
+    });
+  }
+  // Class-aware NMS prevents duplicate names while preserving overlapping different objects.
+  const kept:VisionDetection[]=[];
+  for(const candidate of candidates.sort((a,b)=>b.confidence-a.confidence))
+    if(!kept.some(other=>other.type===candidate.type&&boxIoU(other.boundingBox,candidate.boundingBox)>.6))kept.push(candidate);
+  return kept;
+}
+
+function boxIoU(a: VisionDetection['boundingBox'], b: VisionDetection['boundingBox']): number {
+  const intersection = Math.max(0, Math.min(a.x + a.width, b.x + b.width) - Math.max(a.x, b.x)) *
+    Math.max(0, Math.min(a.y + a.height, b.y + b.height) - Math.max(a.y, b.y));
+  return intersection / (a.width * a.height + b.width * b.height - intersection);
+}
 
 /** EfficientDet-Lite0/COCO: only labels actually represented by the model are mapped. */
 export class MediaPipeVisionProvider implements VisionProvider {
   private constructor(private readonly detector: import('@mediapipe/tasks-vision').ObjectDetector) {}
   static async open(config: VisionConfig): Promise<MediaPipeVisionProvider> {
     const { FilesetResolver, ObjectDetector } = await import('@mediapipe/tasks-vision');
-    const fileset = await FilesetResolver.forVisionTasks('/vision/mediapipe');
+    const fileset = await FilesetResolver.forVisionTasks('/vision/mediapipe',typeof document==='undefined');
     const detector = await ObjectDetector.createFromOptions(fileset, {
       baseOptions: { modelAssetPath: '/vision/efficientdet_lite0_int8.tflite' },
       runningMode: 'VIDEO', scoreThreshold: config.detectionThreshold, maxResults: 12,
     });
     return new MediaPipeVisionProvider(detector);
   }
-  async detect(frame: HTMLVideoElement | HTMLCanvasElement, timestamp: number): Promise<VisionDetection[]> {
-    const width=frame instanceof HTMLVideoElement ? frame.videoWidth : frame.width;
-    const height=frame instanceof HTMLVideoElement ? frame.videoHeight : frame.height;
+  async detect(frame: HTMLVideoElement | HTMLCanvasElement | OffscreenCanvas, timestamp: number): Promise<VisionDetection[]> {
+    const width='videoWidth' in frame ? frame.videoWidth : frame.width;
+    const height='videoHeight' in frame ? frame.videoHeight : frame.height;
     if (!width || !height) return [];
     const result=this.detector.detectForVideo(frame,timestamp);
-    return result.detections.flatMap((entry,index) => {
-      const category=entry.categories[0], box=entry.boundingBox;
-      if (!category || !box || !category.categoryName) return [];
-      const boundingBox={x:clamp(box.originX/width),y:clamp(box.originY/height),width:clamp(box.width/width),height:clamp(box.height/height)};
-      const mapped=cocoTypes[category.categoryName.toLowerCase()];
-      const center=boundingBox.x+boundingBox.width/2;
-      const type=mapped ?? (boundingBox.width*boundingBox.height>=0.1 && center>=0.3 && center<=0.7 ? 'UNKNOWN_OBSTACLE' : null);
-      if (!type) return [];
-      return [{
-        id:`${timestamp}-${index}`,type,confidence:clamp(category.score),boundingBox,
-        horizontalDirection:classifyDirection(boundingBox),verticalPosition:classifyVertical(boundingBox),
-        approximateDistance:null,timestamp,source:'OBJECT_DETECTOR' as const,
-        trackId:`${type}:${Math.round(center*5)}:${Math.round((boundingBox.y+boundingBox.height/2)*3)}`,
-      }];
-    });
+    return normalizeObjectDetections(result.detections, width, height, timestamp);
   }
   async close() { this.detector.close(); }
 }

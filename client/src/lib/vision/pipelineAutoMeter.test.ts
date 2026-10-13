@@ -7,11 +7,10 @@ afterEach(()=>{vi.unstubAllGlobals();vi.useRealTimers();});
 
 describe('browser metric model lifecycle',()=>{
   it('keeps the previous measured still when the next camera inference begins',async()=>{
-    class FakeVideo {videoWidth=640;videoHeight=480;readyState=2;}
-    const canvas={width:0,height:0,getContext:()=>({drawImage:()=>{}})};
+    class FakeVideo {videoWidth=640;videoHeight=480;readyState=2;currentTime=1;paused=false;}
     vi.stubGlobal('HTMLVideoElement',FakeVideo);
     vi.stubGlobal('HTMLMediaElement',{HAVE_CURRENT_DATA:2});
-    vi.stubGlobal('document',{createElement:()=>canvas});
+    vi.stubGlobal('document',{createElement:()=>({width:0,height:0,getContext:()=>({drawImage:()=>{},getImageData:()=>({data:new Uint8ClampedArray(96*72*4).fill(160)})})})});
     vi.stubGlobal('window',{setTimeout,clearTimeout});
     const display:{snapshot:string|null;image:string|null}={snapshot:'prior-frame',image:'prior-frame'};
     const close=vi.fn(async()=>{});

@@ -1,6 +1,15 @@
 import type { MetricDepthMap, ObstacleDetection, RelativeDepthMap, SegmentationGrid, VisionDetection, WalkableAreaResult } from '@shared/vision';
 import { BasiraSafetyEngine } from './safety';
-import { detectionsFromSegmentation, DropOffHazardDetector, SemanticWalkableAreaProvider } from './segmentation';
+import { detectionsFromSegmentation, DropOffHazardDetector, isValidSegmentationGrid, SemanticWalkableAreaProvider } from './segmentation';
+
+export const FUSION_MAX_AGE_MS = 1250;
+export const FUSION_MAX_SKEW_MS = 250;
+const isFresh = (timestamp:number,now:number) => Number.isFinite(timestamp)&&Number.isFinite(now)&&
+  timestamp<=now&&now-timestamp<=FUSION_MAX_AGE_MS;
+const validDetection = (d:VisionDetection) => Number.isFinite(d.confidence)&&d.confidence>=0&&d.confidence<=1&&
+  [d.boundingBox.x,d.boundingBox.y,d.boundingBox.width,d.boundingBox.height].every(Number.isFinite)&&
+  d.boundingBox.x>=0&&d.boundingBox.y>=0&&d.boundingBox.width>0&&d.boundingBox.height>0&&
+  d.boundingBox.x+d.boundingBox.width<=1.001&&d.boundingBox.y+d.boundingBox.height<=1.001;
 
 const overlap=(a:VisionDetection,b:VisionDetection)=>{
   const x=Math.max(0,Math.min(a.boundingBox.x+a.boundingBox.width,b.boundingBox.x+b.boundingBox.width)-Math.max(a.boundingBox.x,b.boundingBox.x));
@@ -17,11 +26,11 @@ const overlap=(a:VisionDetection,b:VisionDetection)=>{
  * safety. Absolute Scale (world-pose displacement) cannot feed this path.
  */
 export function metricDepthForDetection(d: VisionDetection, map: MetricDepthMap): VisionDetection['approximateDistance'] {
-  if (map.alignmentVerified !== true || map.confidence < .75 || d.source !== 'OBJECT_DETECTOR' ||
-      d.confidence < .75 || Math.abs(d.timestamp-map.timestamp) > 100 ||
+  if (map.alignmentVerified !== true || !Number.isFinite(map.confidence) || map.confidence < .75 || map.confidence > 1 || d.source !== 'OBJECT_DETECTOR' ||
+      !Number.isFinite(d.confidence) || d.confidence < .75 || d.confidence > 1 || Math.abs(d.timestamp-map.timestamp) > 100 ||
       !Number.isFinite(d.timestamp) || !Number.isFinite(map.timestamp) ||
       !['ARKIT_DEPTH','LIDAR','ARCORE_DEPTH','DEPTH_SENSOR'].includes(map.source) ||
-      !Number.isInteger(map.width) || !Number.isInteger(map.height) ||
+      !Number.isInteger(map.width) || !Number.isInteger(map.height) || map.width<=0 || map.height<=0 || map.width*map.height>1_048_576 ||
       map.values.length !== map.width*map.height) return null;
   const box=d.boundingBox;
   if (![box.x,box.y,box.width,box.height].every(Number.isFinite) ||
@@ -59,20 +68,32 @@ export class VisionFusionEngine {
   private readonly walkable=new SemanticWalkableAreaProvider();
   private readonly dropOff=new DropOffHazardDetector();
   constructor(private readonly safety:BasiraSafetyEngine) {}
-  fuse(input:FusionInput):FusionFrame {
-    const semantic=input.segmentation?detectionsFromSegmentation(input.segmentation):[];
-    const objects=[...input.objects];
+  /** All source timestamps and now use the same monotonic clock. */
+  fuse(input:FusionInput,now=performance.now()):FusionFrame {
+    const freshObjects=input.objects.filter(d=>validDetection(d)&&isFresh(d.timestamp,now));
+    const freshSigns=input.signs.filter(d=>validDetection(d)&&isFresh(d.timestamp,now));
+    const freshGrid=input.segmentation&&isValidSegmentationGrid(input.segmentation)&&isFresh(input.segmentation.timestamp,now)?input.segmentation:null;
+    const newest=Math.max(...freshObjects.map(d=>d.timestamp),...freshSigns.map(d=>d.timestamp),freshGrid?.timestamp??Number.NEGATIVE_INFINITY);
+    const sameScene=(timestamp:number)=>newest-timestamp<=FUSION_MAX_SKEW_MS;
+    const segmentation=freshGrid&&sameScene(freshGrid.timestamp)?freshGrid:null;
+    const metricDepth=input.metricDepth&&isFresh(input.metricDepth.timestamp,now)&&sameScene(input.metricDepth.timestamp)&&
+      input.metricDepth.timestamp<=newest?input.metricDepth:null;
+    const relativeDepth=input.relativeDepth&&isFresh(input.relativeDepth.timestamp,now)&&sameScene(input.relativeDepth.timestamp)&&
+      input.relativeDepth.timestamp<=newest?input.relativeDepth:null;
+    const semantic=segmentation?detectionsFromSegmentation(segmentation):[];
+    const objects=freshObjects.filter(d=>sameScene(d.timestamp));
     for(const item of semantic){
       const duplicate=objects.some(existing=>existing.type===item.type&&overlap(existing,item)>.35);
       if(!duplicate)objects.push(item);
     }
-    const alignedDepth=input.segmentation&&input.metricDepth?.timestamp===input.segmentation.timestamp?input.metricDepth:
-      input.segmentation&&input.relativeDepth?.timestamp===input.segmentation.timestamp?input.relativeDepth:null;
-    const hazard=input.segmentation?this.dropOff.detect(input.segmentation,alignedDepth):null;
+    const alignedDepth=segmentation&&metricDepth?.timestamp===segmentation.timestamp?metricDepth:
+      segmentation&&relativeDepth?.timestamp===segmentation.timestamp?relativeDepth:null;
+    const hazard=segmentation?this.dropOff.detect(segmentation,alignedDepth):null;
     if(hazard)objects.unshift(hazard);
-    const walkableArea=input.segmentation?this.walkable.analyze(input.segmentation,objects):null;
-    const detections=[...objects,...input.signs];
-    const enriched=detections.map(d=>({...d,approximateDistance:input.metricDepth?metricDepthForDetection(d,input.metricDepth):d.approximateDistance}));
+    const walkableArea=segmentation?this.walkable.analyze(segmentation,objects):null;
+    const detections=[...objects,...freshSigns.filter(d=>sameScene(d.timestamp))];
+    // A rejected supplied depth map cannot leave an earlier metric association in place.
+    const enriched=detections.map(d=>({...d,approximateDistance:metricDepth?metricDepthForDetection(d,metricDepth):input.metricDepth?null:d.approximateDistance}));
     return {detections:enriched,events:this.safety.classifyAll(enriched),walkableArea,surfaceAnalysis:walkableArea};
   }
 }
