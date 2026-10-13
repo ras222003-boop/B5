@@ -120,3 +120,4 @@ client/public/__manus__/version.json
 .metric-temp/
 client/public/vision/models/depth-anything/Depth-Anything-V2-Metric-Hypersim-Small/*.pth
 client/public/vision/models/depth-anything/Depth-Anything-V2-Metric-Hypersim-Small/onnx/model_quantized.onnx
+scripts/vision-quality/output/

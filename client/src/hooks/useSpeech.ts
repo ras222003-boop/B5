@@ -204,7 +204,7 @@ export function useTextToSpeech() {
     const profile = VOICE_PROFILES[lang];
     return speakSequence([{ text: question, lang, context: 'QUESTION', pauseAfterMs: options.length ? profile.questionPauseMs : 0 }, ...options.map((text, index) => ({ text, lang, context: 'ANSWER_OPTION' as const, pauseAfterMs: index === options.length - 1 ? 0 : profile.optionPauseMs }))], rate / 0.9);
   }, [platformLang, speakSequence]);
-  return { speak, speakQuestion, speakSequence, stop, isSpeaking: state.isSpeaking, isSupported: true, speechMode: state.mode };
+  return { speak, speakQuestion, speakSequence, stop, isSpeaking: state.isSpeaking, isSupported: true, speechMode: state.mode, speechError: state.error };
 }
 /** Text-to-speech with an explicit language override control ("auto" follows the text/platform). */
 export function useTextToSpeechWithLanguage() {

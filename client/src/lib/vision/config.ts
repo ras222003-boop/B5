@@ -2,6 +2,8 @@ export interface VisionConfig {
   frameAnalysisRate: number;
   maxFPS: number;
   inputResolution: { width: number; height: number };
+  /** Preferred camera stream size. Detection still uses inputResolution. */
+  photoResolution: { width: number; height: number };
   detectionThreshold: number;
   depthRefreshRate: number;
   OCRRefreshRate: number;
@@ -16,6 +18,7 @@ export const DEFAULT_VISION_CONFIG: VisionConfig = {
   frameAnalysisRate: 2,
   maxFPS: 15,
   inputResolution: { width: 640, height: 480 },
+  photoResolution: { width: 1920, height: 1080 },
   detectionThreshold: 0.45,
   depthRefreshRate: 1000,
   OCRRefreshRate: 8000,

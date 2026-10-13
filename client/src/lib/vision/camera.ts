@@ -22,7 +22,9 @@ export class CameraService {
     if (!navigator.mediaDevices?.getUserMedia || !window.isSecureContext) throw new CameraServiceError('UNAVAILABLE');
     let previousPermission: PermissionState | 'unavailable' = 'prompt';
     try { previousPermission = (await navigator.permissions?.query({ name: 'camera' as PermissionName }))?.state ?? 'prompt'; } catch { /* unsupported permission query */ }
-    const base = { width: { ideal: this.config.inputResolution.width }, height: { ideal: this.config.inputResolution.height }, frameRate: { ideal: this.config.maxFPS, max: this.config.maxFPS } };
+    // Ask for a real high-resolution stream; the detector is downsampled separately.
+    // "ideal" lets Safari select its supported size without inventing pixels.
+    const base = { width: { ideal: this.config.photoResolution.width }, height: { ideal: this.config.photoResolution.height }, frameRate: { ideal: this.config.maxFPS, max: this.config.maxFPS } };
     let stream: MediaStream;
     try { stream = await navigator.mediaDevices.getUserMedia({ video: { ...base, facingMode: { ideal: 'environment' } }, audio: false }); }
     catch (error) {
@@ -47,6 +49,10 @@ export class CameraService {
     if (video) { video.pause(); video.srcObject = null; }
   }
   get active() { return this.stream?.getVideoTracks().some(track => track.readyState === 'live') ?? false; }
+  get frameSize() {
+    const settings=this.stream?.getVideoTracks()[0]?.getSettings();
+    return settings?.width&&settings.height?{width:settings.width,height:settings.height}:null;
+  }
 }
 
 /** Frames exist only for one OCR call; no blob is persisted or uploaded. */
@@ -64,4 +70,18 @@ export async function captureFrame(video: HTMLVideoElement, config: VisionConfig
   context.clearRect(0, 0, canvas.width, canvas.height);
   canvas.width = canvas.height = 0;
   return blob ? {blob,width,height} : null;
+}
+
+/** Give the real-time detector a small frame while the camera retains photo pixels. */
+export function detectionFrame(video:HTMLVideoElement,config:VisionConfig):HTMLVideoElement|HTMLCanvasElement{
+  if(!video.videoWidth||!video.videoHeight)return video;
+  const scale=Math.min(1,config.inputResolution.width/video.videoWidth,config.inputResolution.height/video.videoHeight);
+  if(scale>=1)return video;
+  const canvas=document.createElement('canvas');
+  canvas.width=Math.max(1,Math.round(video.videoWidth*scale));
+  canvas.height=Math.max(1,Math.round(video.videoHeight*scale));
+  const context=canvas.getContext('2d');
+  if(!context)throw new Error('detector_canvas_unavailable');
+  context.drawImage(video,0,0,canvas.width,canvas.height);
+  return canvas;
 }

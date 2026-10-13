@@ -21,7 +21,7 @@ export function saveSpeechPreferences(value: SpeechPreferences) {
   window.dispatchEvent(new Event('basira-speech-preferences'));
 }
 
-export type SpeechState = { mode: 'PREMIUM' | 'LOCAL' | 'MUTED'; isSpeaking: boolean };
+export type SpeechState = { mode: 'PREMIUM' | 'LOCAL' | 'MUTED'; isSpeaking: boolean; error?: 'PLAYBACK_BLOCKED' | 'NO_VOICE' };
 export type SpeechMetrics = { requests: number; firstAudioMs: number[]; synthesisMs: number[]; playbackStartMs: number[]; fallbacks: number };
 export interface TtsProvider {
   isAvailable(): boolean;
@@ -57,10 +57,11 @@ export class AudioPlaybackManager {
   subscribe(listener: (state: SpeechState) => void) { this.listeners.add(listener); listener(this.state); return () => { this.listeners.delete(listener); }; }
   private update(state: SpeechState) { this.state = state; this.listeners.forEach(listener => listener(state)); }
   get status() { return this.state; }
+  get busy() { return this.current!==null||this.queue.length>0; }
   get cancellationEpoch() { return this.cancellations; }
   private muted() { return typeof localStorage !== 'undefined' && getSpeechPreferences().screenReaderMode; }
-  enqueue(input: SpeechRequest, priority: SpeechPriority = 'INFORMATION', pauseAfterMs = 0, key?: string) {
-    if (!input.text.trim() || this.muted()) { this.update({ mode: 'MUTED', isSpeaking: false }); return Promise.resolve(); }
+  enqueue(input: SpeechRequest, priority: SpeechPriority = 'INFORMATION', pauseAfterMs = 0, key?: string, manualTest = false) {
+    if (!input.text.trim() || (this.muted() && !manualTest)) { this.update({ mode: 'MUTED', isSpeaking: false }); return Promise.resolve(); }
     return new Promise<void>(resolve => {
       const item = { input, priority, pauseAfterMs, key, resolve };
       if (this.current && priorityRank[priority] > priorityRank[this.current.priority]) {
@@ -150,22 +151,31 @@ export class AudioPlaybackManager {
   }
   private browserFallback(input: SpeechRequest, generation: number, signal: AbortSignal) {
     return new Promise<void>(resolve => {
-      if (typeof window === 'undefined' || !window.speechSynthesis || typeof SpeechSynthesisUtterance === 'undefined') { resolve(); return; }
+      if (typeof window === 'undefined' || !window.speechSynthesis || typeof SpeechSynthesisUtterance === 'undefined') { this.update({mode:'LOCAL',isSpeaking:false,error:'NO_VOICE'});resolve(); return; }
       const utterance = new SpeechSynthesisUtterance(input.text);
       utterance.lang = input.language === 'ar' ? (input.arabicStyle === 'SAUDI' ? 'ar-SA' : 'ar') : input.language === 'en' ? 'en-US' : 'zh-CN';
       utterance.rate = input.rate;
       const voices = window.speechSynthesis.getVoices();
       utterance.voice = voices.find(v => v.lang.toLowerCase() === utterance.lang.toLowerCase()) ?? voices.find(v => v.lang.toLowerCase().startsWith(input.language.slice(0, 2))) ?? null;
-      utterance.onstart = () => { if (generation === this.generation) this.update({ mode: 'LOCAL', isSpeaking: true }); };
-      utterance.onend = () => resolve(); utterance.onerror = () => resolve();
-      signal.addEventListener('abort', () => resolve(), { once: true });
-      try { window.speechSynthesis.speak(utterance); } catch { resolve(); }
+      let started=false;
+      const timer=setTimeout(()=>{if(!started&&generation===this.generation){this.update({mode:'LOCAL',isSpeaking:false,error:'PLAYBACK_BLOCKED'});window.speechSynthesis.cancel();}resolve();},8000);
+      const finish=()=>{clearTimeout(timer);resolve();};
+      utterance.onstart = () => { started=true;clearTimeout(timer);if (generation === this.generation) this.update({ mode: 'LOCAL', isSpeaking: true,error:undefined }); };
+      utterance.onend = finish;
+      utterance.onerror = () => {if(generation===this.generation)this.update({mode:'LOCAL',isSpeaking:false,error:'PLAYBACK_BLOCKED'});finish();};
+      signal.addEventListener('abort',finish,{ once: true });
+      try { window.speechSynthesis.resume?.();window.speechSynthesis.speak(utterance); } catch {this.update({mode:'LOCAL',isSpeaking:false,error:'PLAYBACK_BLOCKED'});finish();}
     });
   }
   private record(series: number[], value: number) { series.push(value); if (series.length > 100) series.shift(); }
 }
 
 export const speechEngine = new AudioPlaybackManager();
+/** A deliberate tap may preview audio even while automatic speech is muted for VoiceOver. */
+export function testSpeech(text: string, language: SpeechLanguage) {
+  speechEngine.replaceAtPriority('INFORMATION');
+  return speechEngine.enqueue(speechInput(text, language, 'GENERAL'), 'INFORMATION', 0, undefined, true);
+}
 export function speechInput(text: string, language: SpeechLanguage, context: SpeechContext = 'GENERAL', rate = 1): SpeechRequest {
   const preferences = getSpeechPreferences();
   const arabicStyle = preferences.arabicStyle;
@@ -178,5 +188,5 @@ export function voicePreview() {
   const p = getSpeechPreferences();
   const text = p.language === 'ar' ? previewText[p.arabicStyle] : previewText[p.language];
   speechEngine.replaceAtPriority('INFORMATION');
-  return speechEngine.enqueue(speechInput(text, p.language, 'GENERAL'));
+  return speechEngine.enqueue(speechInput(text, p.language, 'GENERAL'), 'INFORMATION', 0, undefined, true);
 }

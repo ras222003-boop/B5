@@ -17,6 +17,19 @@ describe('audio playback manager', () => {
     expect(manager.metrics.fallbacks).toBe(1);
     expect(JSON.stringify(manager.metrics)).not.toContain(input.text);
   });
+  it('keeps automatic speech muted for VoiceOver but permits a deliberate Safari audio test', async () => {
+    const speak = vi.fn((utterance: { onend?: () => void }) => queueMicrotask(() => utterance.onend?.()));
+    const resume = vi.fn();
+    vi.stubGlobal('localStorage',{getItem:()=>JSON.stringify({screenReaderMode:true})});
+    vi.stubGlobal('window',{speechSynthesis:{speak,resume,getVoices:()=>[],cancel:vi.fn()}});
+    vi.stubGlobal('SpeechSynthesisUtterance',class{lang='';rate=1;voice=null;onend?:()=>void;constructor(public text:string){}});
+    const manager=new AudioPlaybackManager({isAvailable:()=>false,synthesize:vi.fn(),stop:vi.fn()});
+    await manager.enqueue(input);
+    expect(speak).not.toHaveBeenCalled();
+    await manager.enqueue(input,'INFORMATION',0,undefined,true);
+    expect(speak).toHaveBeenCalledOnce();
+    expect(resume).toHaveBeenCalledOnce();
+  });
   it('interrupts a lower priority request and plays safety next', async () => {
     class FakeAudio {
       src = ''; onended?: () => void; onerror?: () => void;

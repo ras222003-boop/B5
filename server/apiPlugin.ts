@@ -5,12 +5,13 @@
 import type { Plugin, ViteDevServer } from "vite";
 import express, { type Request, type Response } from "express";
 import { registerOcrRoute } from "./ocr";
+import { registerVisionDescribeRoute } from "./visionDescribe";
 import { escapeHtml } from "./locale";
 
-const FORGE_API_URL = (process.env.BUILT_IN_FORGE_API_URL || "https://forge.manus.ai").replace(/\/+$/, "");
-const FORGE_API_KEY = process.env.BUILT_IN_FORGE_API_KEY || "";
+const FORGE_API_URL = (process.env.MANUS_API_URL || process.env.BUILT_IN_FORGE_API_URL || "https://forge.manus.ai").replace(/\/+$/, "");
+const FORGE_API_KEY = process.env.MANUS_API_KEY || process.env.BUILT_IN_FORGE_API_KEY || "";
 
-async function invokeLLM(messages: Array<{ role: string; content: any }>, options?: { response_format?: any; model?: string }) {
+async function invokeLLM(messages: Array<{ role: string; content: any }>, options?: { response_format?: any; model?: string; signal?: AbortSignal; max_tokens?: number }) {
   const url = `${FORGE_API_URL}/v1/chat/completions`;
   const body: any = {
     messages,
@@ -19,6 +20,7 @@ async function invokeLLM(messages: Array<{ role: string; content: any }>, option
   if (options?.response_format) {
     body.response_format = options.response_format;
   }
+  if (options?.max_tokens) body.max_tokens = options.max_tokens;
 
   const resp = await fetch(url, {
     method: "POST",
@@ -27,7 +29,7 @@ async function invokeLLM(messages: Array<{ role: string; content: any }>, option
       Authorization: `Bearer ${FORGE_API_KEY}`,
     },
     body: JSON.stringify(body),
-    signal: options?.model ? AbortSignal.timeout(60_000) : undefined,
+    signal: options?.model ? AbortSignal.any([AbortSignal.timeout(60_000),...(options.signal?[options.signal]:[])]) : options?.signal,
   });
 
   if (!resp.ok) {
@@ -99,12 +101,25 @@ export function vitePluginApiProxy(): Plugin {
       // Use the same bounded parser, image pipeline and response contract as
       // production. The former development-only OCR implementation used an old
       // two-language schema and returned no quality report to the exam page.
-      const ocrApp = express();
-      ocrApp.use(express.json({ limit: "20mb" }));
-      registerOcrRoute(ocrApp, invokeLLM);
+      const imageApp = express();
+      imageApp.use('/api/ocr',express.json({ limit: "20mb" }));
+      registerOcrRoute(imageApp, invokeLLM);
+      let visionApp:Promise<express.Express>|null=null;
       server.middlewares.use((req, res, next) => {
-        if (req.url?.split("?")[0] !== "/api/ocr") return next();
-        ocrApp(req as Request, res as Response, next);
+        const path=req.url?.split('?')[0];
+        if(path==='/api/ocr')return imageApp(req as Request,res as Response,next);
+        if(path!=='/api/vision/describe-frame')return next();
+        visionApp??=(async()=>{
+          const {ensureSchema}=await import('./migrations');
+          await ensureSchema();
+          const app=express();
+          registerVisionDescribeRoute(app,invokeLLM);
+          return app;
+        })().catch(error=>{visionApp=null;throw error;});
+        visionApp.then(app=>app(req as Request,res as Response,next)).catch(()=>{
+          res.writeHead(503,{'Content-Type':'application/json','Cache-Control':'no-store'});
+          res.end(JSON.stringify({code:'unavailable'}));
+        });
       });
 
       // Grade endpoint

@@ -31,7 +31,7 @@ export default function VoiceSettings() {
     <label className="block">{labels.speed}<select className={field} value={value.rate} onChange={e => update({ rate: Number(e.target.value) })}><option value={0.85}>{labels.slow}</option><option value={1}>{labels.normal}</option><option value={1.15}>{labels.fast}</option></select></label>
     <label className="flex items-center gap-3"><input type="checkbox" checked={value.screenReaderMode} onChange={e => { update({ screenReaderMode: e.target.checked }); if (e.target.checked) speechEngine.stop(); }}/>{labels.screenReader}</label>
     <div className="flex gap-3"><button className="min-h-12 rounded-lg bg-amber-300 px-4 font-bold text-stone-950" onClick={() => void voicePreview()}>{labels.preview}</button><button className="min-h-12 rounded-lg border border-amber-300 px-4" onClick={() => speechEngine.stop()}>{labels.stop}</button></div>
-    <p role="status" aria-live="polite">{mode === 'PREMIUM' ? labels.premium : mode === 'MUTED' ? labels.muted : labels.local}</p>
+    <p role="status" aria-live="polite">{value.screenReaderMode || mode === 'MUTED' ? labels.muted : mode === 'PREMIUM' ? labels.premium : labels.local}</p>
     <Link href="/settings/voice-validation" className="inline-flex min-h-12 items-center text-amber-200 underline">Human listening validation / اختبار الاستماع البشري</Link>
   </main></Layout>;
 }
