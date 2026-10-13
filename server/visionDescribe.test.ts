@@ -1,12 +1,14 @@
-import {describe,expect,it,vi} from 'vitest';
+import {afterEach,beforeEach,describe,expect,it,vi} from 'vitest';
 import express from 'express';
 import type {AddressInfo} from 'node:net';
 import sharp from 'sharp';
-import {prepareDescriptionImage,registerVisionDescribeRoute} from './visionDescribe';
+import {descriptionPrompt,descriptionSystem,descriptionTokenLimit,prepareDescriptionImage,registerVisionDescribeRoute} from './visionDescribe';
 import {VisionQuotaError,type VisionQuotaStore} from './visionQuota';
 
 const image=async()=>`data:image/png;base64,${(await sharp({create:{width:320,height:240,channels:3,background:'#777777'}}).png().toBuffer()).toString('base64')}`;
 const response=()=>({choices:[{message:{content:'كرسي أمامك وشخص على اليسار.'}}]});
+beforeEach(()=>vi.stubEnv('BASIRA_VISION_DETAILED_MAX_TOKENS',''));
+afterEach(()=>vi.unstubAllEnvs());
 
 async function serverFor(options:{user?:string|null;quota?:VisionQuotaStore;available?:boolean}={}){
   const app=express();
@@ -56,7 +58,7 @@ describe('single-frame description API',()=>{
       expect(test.reserve).not.toHaveBeenCalled();
       const result=await test.post({imageBase64:frame,mode:'detailed',consent:true});
       expect(result.status).toBe(200);
-      expect(await result.json()).toEqual({description:'كرسي أمامك وشخص على اليسار.',mode:'detailed'});
+      expect(await result.json()).toMatchObject({description:'كرسي أمامك وشخص على اليسار.',mode:'detailed',diagnostics:{requestedModel:'gemini-3.1-pro-preview',providerModel:null,promptTokens:null,completionTokens:null}});
       expect(result.headers.get('cache-control')).toBe('no-store');
       expect(test.reserve).toHaveBeenCalledOnce();
       expect(test.reserve.mock.calls[0][0]).toBe('user-one');
@@ -65,6 +67,26 @@ describe('single-frame description API',()=>{
       expect(test.invoke.mock.calls[0][1].model).toBeTruthy();
       expect(test.invoke.mock.calls[0][1].max_tokens).toBe(1200);
     }finally{test.server.close();}
+  });
+  it('accepts one explicit inspection call and bounds its output without a second model request',async()=>{
+    const test=await serverFor();
+    try{
+      const result=await test.post({imageBase64:await image(),mode:'inspect',consent:true});
+      expect(result.status).toBe(200);
+      expect(test.invoke).toHaveBeenCalledTimes(1);
+      expect(test.invoke.mock.calls[0][1].max_tokens).toBe(1200);
+      expect(test.reserve).toHaveBeenCalledOnce();
+    }finally{test.server.close();}
+  });
+  it('gives the comprehensive and inspection modes distinct grounded instructions and bounded token budgets',()=>{
+    expect(descriptionSystem).toContain('لا تعطِ أوامر مشي');
+    expect(descriptionSystem).toContain('ميّز الملاحظة المباشرة عن الاحتمال');
+    expect(descriptionPrompt('detailed')).toContain('علاقاتها');
+    expect(descriptionPrompt('inspect')).toContain('مقتطعة');
+    expect(descriptionTokenLimit('brief')).toBeLessThan(descriptionTokenLimit('detailed'));
+    expect(descriptionTokenLimit('detailed')).toBe(1200);
+    vi.stubEnv('BASIRA_VISION_DETAILED_MAX_TOKENS','1800');
+    expect(descriptionTokenLimit('detailed')).toBe(1800);
   });
   it('does not invoke Forge when the provider is unconfigured or an account is disabled',async()=>{
     const missing=await serverFor({available:false});

@@ -1,7 +1,7 @@
 import type { DepthProvider, DepthReading, EstimatedMetricDepthProvider, MetricDepthMap, MetricDepthProvider, OCRDetection, OCRProvider, PlaceCandidate, RecognizedPlace, RelativeDepthMap, RelativeDepthProvider, SceneDescription, SceneSegmentationProvider, SegmentationGrid, VisionDetection, VisionMode, VisionProvider, WalkableAreaResult } from '@shared/vision';
 import type { VisionConfig } from './config';
 import type { Place } from '@shared/navigation';
-import { captureFrame } from './camera';
+import { captureFrame,detectionFrame as smallDetectionFrame } from './camera';
 import { BasiraSafetyEngine, classifyDirection, classifyVertical } from './safety';
 import { isNavigationText, normalizePlaceText, signTypeForText, VisualPlaceRecognitionService } from './placeRecognition';
 import { SceneUnderstandingService, VisionAnnouncementService, type VisionCopy } from './scene';
@@ -377,6 +377,8 @@ export class VisionPipeline {
         }
         else metricFrame=null;
       }
+      if(!this.options.nativeFrames&&detectionFrame instanceof HTMLVideoElement)
+        detectionFrame=smallDetectionFrame(detectionFrame,this.options.config);
       const detections=await this.options.vision.detect(detectionFrame,detectorTimestamp);
       if(!this.running||generation!==this.generation)return;
       const frameId=this.options.nativeFrames?nativeFrameId:`web-${detectorTimestamp}`;

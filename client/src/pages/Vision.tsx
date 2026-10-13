@@ -16,7 +16,7 @@ import { SegFormerSceneProvider } from '@/lib/vision/modelProviders';
 import { WorkerMetricDepthProvider } from '@/lib/vision/workerMetricModel';
 import { detectVisionCapabilities, type VisionCapabilities } from '@/lib/vision/capabilities';
 import { VisionPipeline } from '@/lib/vision/pipeline';
-import {captureDescriptionFrame,requestFrameDescription,type DescriptionMode} from '@/lib/vision/frameDescription';
+import {captureDescriptionFrame,cropDescriptionFrame,requestFrameDescription,type DescriptionFrame,type DescriptionMode,type InspectionRegion} from '@/lib/vision/frameDescription';
 import {getObjectSpeechEnabled,saveObjectSpeechEnabled} from '@/lib/vision/objectSpeech';
 import type { LiveDetectionFrame, PinnedMetricFrame } from '@/lib/vision/pipeline';
 import { LiveVisionOverlay } from '@/components/vision/LiveVisionOverlay';
@@ -99,7 +99,11 @@ export default function Vision() {
   const [screenReaderMode,setScreenReaderMode]=useState(()=>getSpeechPreferences().screenReaderMode);
   const [descriptionConsent,setDescriptionConsent]=useState(false);
   const descriptionConsentRef=useRef(false);
-  const [descriptionImage,setDescriptionImage]=useState<string|null>(null);
+  const [descriptionImage,setDescriptionImage]=useState<DescriptionFrame|null>(null);
+  const [descriptionSentFrame,setDescriptionSentFrame]=useState<DescriptionFrame|null>(null);
+  const [inspectionRegion,setInspectionRegion]=useState<InspectionRegion>('full');
+  const [cameraSize,setCameraSize]=useState<{width:number;height:number}|null>(null);
+  const [descriptionDiagnostics,setDescriptionDiagnostics]=useState('');
   const [descriptionText,setDescriptionText]=useState('');
   const [descriptionError,setDescriptionError]=useState('');
   const [descriptionBusy,setDescriptionBusy]=useState(false);
@@ -126,7 +130,7 @@ export default function Vision() {
     cameraRef.current.stop(videoRef.current??undefined);
     setVideoPaused(false);
     stopSpeaking();
-    setState('STOPPED');setMetricInfo({status:'UNAVAILABLE',source:null});setMeterDiagnostic('OFF');setMeterSnapshot(null);setOverlayFrame(null);setPinnedFrame(null);setMeterRequestBusy(false);setMeterSpokenStatus('');setMetricTiming({load:null,inference:null});speechPacerRef.current.reset();setScene(null);setCandidates([]);setRecognized(null);setDescriptionImage(null);setDescriptionText('');setDescriptionBusy(false);
+    setState('STOPPED');setMetricInfo({status:'UNAVAILABLE',source:null});setMeterDiagnostic('OFF');setMeterSnapshot(null);setOverlayFrame(null);setPinnedFrame(null);setMeterRequestBusy(false);setMeterSpokenStatus('');setMetricTiming({load:null,inference:null});speechPacerRef.current.reset();setScene(null);setCandidates([]);setRecognized(null);setDescriptionImage(null);setDescriptionSentFrame(null);setDescriptionText('');setDescriptionDiagnostics('');setCameraSize(null);setDescriptionBusy(false);
     localizationRef.current=new BasiraLocalizationEngine();setLocationEstimate(null);graphNodesRef.current=[];
     if(pipeline)await pipeline.stop();
   },[stopSpeaking]);
@@ -151,7 +155,8 @@ export default function Vision() {
       const nativeFrames=window.BasiraNativeFrames;
       if(!nativeFrames)await cameraRef.current.start(videoRef.current);
       if(run!==generation.current){cameraRef.current.stop(videoRef.current);return;}
-      if(!nativeFrames)setCameraPermission('allowed');
+      if(!nativeFrames){setCameraPermission('allowed');setCameraSize(videoRef.current.videoWidth&&videoRef.current.videoHeight?{width:videoRef.current.videoWidth,height:videoRef.current.videoHeight}:cameraRef.current.frameSize);}
+      else setCameraSize({width:nativeCanvasRef.current.width,height:nativeCanvasRef.current.height});
       const provider=await MediaPipeVisionProvider.open(visionConfig);
       if(run!==generation.current){await provider.close();cameraRef.current.stop(videoRef.current);return;}
       const currentBuildingId=sessionStorage.getItem('basira-current-building');
@@ -259,11 +264,15 @@ export default function Vision() {
         ?await captureDescriptionFrame(videoRef.current,nativeCanvasRef.current,Boolean(window.BasiraNativeFrames))
         :descriptionImage;
       if(run!==generation.current||controller.signal.aborted||!descriptionConsentRef.current)return;
-      if(recapture)setDescriptionImage(image);
-      const result=await requestFrameDescription(image,mode,question,controller.signal);
+      if(recapture||!descriptionImage)setDescriptionImage(image);
+      const sent=mode==='inspect'?await cropDescriptionFrame(image,inspectionRegion):image;
       if(run!==generation.current||controller.signal.aborted||!descriptionConsentRef.current)return;
-      setDescriptionText(result);
-      if(!getSpeechPreferences().screenReaderMode)speak(result,0.9,'ar','ENVIRONMENT');
+      setDescriptionSentFrame(sent);
+      const result=await requestFrameDescription(sent.imageBase64,mode,question,controller.signal);
+      if(run!==generation.current||controller.signal.aborted||!descriptionConsentRef.current)return;
+      setDescriptionText(result.description);
+      setDescriptionDiagnostics(result.diagnostics?assistant.requestDiagnostics(result.diagnostics.requestedModel,result.diagnostics.providerModel,result.diagnostics.latencyMs,result.diagnostics.promptTokens,result.diagnostics.completionTokens):'');
+      if(!getSpeechPreferences().screenReaderMode)speak(result.description,0.9,'ar','ENVIRONMENT');
     }catch(error){
       if(run!==generation.current)return;
       if(controller.signal.aborted&&!timedOut)return;
@@ -351,7 +360,7 @@ export default function Vision() {
     <div className="flex flex-wrap gap-3">{state==='STOPPED'?<button type="button" className={button} onClick={start}>{t.start}</button>:<button type="button" className={button} onClick={()=>void stop()}>{t.stop}</button>}</div>
     <section aria-label={t.preview} className="relative mx-auto w-full max-w-2xl overflow-hidden rounded-xl bg-stone-950"
       style={{aspectRatio:previewFrame?`${previewFrame.width}/${previewFrame.height}`:hasNativeFrames?'3/4':'4/3'}}>
-      <video ref={videoRef} muted playsInline aria-hidden="true" onPause={()=>{if(cameraRef.current.active&&!document.hidden)setVideoPaused(true);}} onPlay={()=>setVideoPaused(false)} className={`absolute inset-0 size-full object-contain ${hasNativeFrames||currentPinnedFrame?'hidden':''}`} />
+      <video ref={videoRef} muted playsInline aria-hidden="true" onLoadedMetadata={event=>setCameraSize({width:event.currentTarget.videoWidth,height:event.currentTarget.videoHeight})} onPause={()=>{if(cameraRef.current.active&&!document.hidden)setVideoPaused(true);}} onPlay={()=>setVideoPaused(false)} className={`absolute inset-0 size-full object-contain ${hasNativeFrames||currentPinnedFrame?'hidden':''}`} />
       <canvas ref={nativeCanvasRef} width={480} height={640} aria-hidden="true" className={`absolute inset-0 size-full object-contain ${hasNativeFrames&&!currentPinnedFrame?'':'hidden'}`} />
       {currentPinnedFrame&&<><img src={currentPinnedFrame.imageDataUrl} alt="" aria-hidden="true" data-testid="pinned-metric-image" data-frame-id={currentPinnedFrame.frame.frameId} className="absolute inset-0 size-full object-contain" />
         <p className="absolute bottom-2 left-2 right-2 z-10 rounded-lg bg-stone-950/90 px-3 py-2 text-sm text-amber-100" role="status">{lang==='ar'?'لقطة قياس ثابتة؛ الصورة ليست بثًا حيًا.':lang==='zh-CN'?'测距静止画面；并非实时视频。':'Measurement still; this is not live video.'}</p></>}
@@ -367,11 +376,24 @@ export default function Vision() {
     <section className="rounded-2xl border border-amber-300/50 bg-stone-900 p-5" aria-label={assistant.title}>
       <h2 className="text-xl font-bold">{assistant.title}</h2>
       <p className="mt-2 text-stone-300">{assistant.privacy}</p>
-      <label className="mt-4 flex min-h-14 items-center gap-3"><input type="checkbox" className="size-6" checked={descriptionConsent} onChange={event=>{const checked=event.target.checked;descriptionConsentRef.current=checked;setDescriptionConsent(checked);if(!checked){descriptionAbort.current?.abort();setDescriptionImage(null);setDescriptionText('');}}}/>{assistant.consent}</label>
-      <div className="mt-3 flex flex-wrap gap-3"><button type="button" className={button} disabled={state==='STOPPED'||state==='STARTING'||descriptionBusy} aria-busy={descriptionBusy} onClick={()=>void describeCaptured('brief',true)}>{descriptionBusy?assistant.busy:assistant.capture}</button>
-        <button type="button" className={secondary} disabled={!descriptionImage||descriptionBusy} onClick={()=>void describeCaptured('brief')}>{assistant.again}</button>
+      {cameraSize&&<p className="mt-2 text-sm text-stone-300" role="status">{assistant.cameraResolution(cameraSize.width,cameraSize.height)}</p>}
+      <label className="mt-4 flex min-h-14 items-center gap-3"><input type="checkbox" className="size-6" checked={descriptionConsent} onChange={event=>{const checked=event.target.checked;descriptionConsentRef.current=checked;setDescriptionConsent(checked);if(!checked){descriptionAbort.current?.abort();setDescriptionImage(null);setDescriptionSentFrame(null);setDescriptionText('');setDescriptionDiagnostics('');}}}/>{assistant.consent}</label>
+      <div className="mt-3 flex flex-wrap gap-3"><button type="button" className={button} disabled={state==='STOPPED'||state==='STARTING'||descriptionBusy} aria-busy={descriptionBusy} onClick={()=>void describeCaptured('detailed',true)}>{descriptionBusy?assistant.busy:assistant.capture}</button>
+        <button type="button" className={secondary} disabled={!descriptionImage||descriptionBusy} onClick={()=>void describeCaptured('brief')}>{assistant.quick}</button>
         <button type="button" className={secondary} disabled={!descriptionImage||descriptionBusy} onClick={()=>void describeCaptured('detailed')}>{assistant.more}</button>
         <button type="button" className={secondary} disabled={!descriptionImage||descriptionBusy} onClick={()=>void describeCaptured('read_text')}>{assistant.readText}</button></div>
+      {descriptionImage&&<div className="mt-4 rounded-xl border border-amber-200/30 p-3">
+        <label className="block" htmlFor="vision-inspection-region">{assistant.inspectRegion}</label>
+        <select id="vision-inspection-region" className="mt-2 min-h-14 rounded-xl bg-stone-950 px-4" value={inspectionRegion} onChange={event=>setInspectionRegion(event.target.value as InspectionRegion)}>
+          {(['full','left','center','right','top','bottom'] as const).map(region=><option key={region} value={region}>{assistant.regions[region]}</option>)}
+        </select>
+        <button type="button" className={`${secondary} ml-2`} disabled={descriptionBusy} onClick={()=>void describeCaptured('inspect')}>{assistant.inspect}</button>
+        <p className="mt-2 text-sm text-stone-300">{assistant.inspectNote}</p>
+      </div>}
+      {descriptionSentFrame&&<figure className="mt-4 rounded-xl border border-amber-200/30 p-3">
+        <img src={descriptionSentFrame.imageBase64} alt={assistant.sentPreviewAlt} className="max-h-80 w-full object-contain" />
+        <figcaption className="mt-2 text-sm text-stone-300">{assistant.sentPreview(descriptionSentFrame.sourceWidth,descriptionSentFrame.sourceHeight,descriptionSentFrame.width,descriptionSentFrame.height,descriptionSentFrame.source)}</figcaption>
+      </figure>}
       <div className="mt-4 flex flex-wrap items-end gap-3"><label className="flex-1">{assistant.question}<input className="mt-1 min-h-14 w-full rounded-xl border border-amber-200/40 bg-stone-950 px-4" value={question} maxLength={500} onChange={event=>setQuestion(event.target.value)}/></label>
         <button type="button" className={secondary} onClick={()=>dictation.isListening?dictation.stopListening():dictation.startListening()}>{dictation.isListening?assistant.listening:assistant.listen}</button>
         <button type="button" className={secondary} disabled={!descriptionImage||!question.trim()||descriptionBusy} onClick={()=>void describeCaptured('ask')}>{assistant.ask}</button></div>
@@ -380,6 +402,7 @@ export default function Vision() {
       {descriptionError===assistant.signIn&&<Link href="/account" className="mt-2 inline-block text-amber-200 underline">{assistant.openAccount}</Link>}
       <p role="status" aria-live="polite" className="mt-3">{descriptionBusy?assistant.busy:''}</p>
       <p role={screenReaderMode?'status':undefined} aria-live={screenReaderMode?'polite':'off'} className="mt-3 whitespace-pre-wrap text-lg">{descriptionText||assistant.empty}</p>
+      {descriptionDiagnostics&&<p className="mt-2 text-sm text-stone-300">{descriptionDiagnostics}</p>}
       <button type="button" className={`${secondary} mt-3`} onClick={stopSpeaking}>{assistant.stopVoice}</button>
     </section>
     <section className="rounded-2xl border border-amber-200/30 bg-stone-900 p-5" aria-label={t.autoMeterTitle}>
