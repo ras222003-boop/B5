@@ -1,0 +1,7 @@
+{
+  "commit": "c52b755b9c18ad2fb08163e4ff329fdcf6384415",
+  "command": "node node_modules/vitest/vitest.mjs run --maxWorkers=2 --minWorkers=1",
+  "exitCode": 0,
+  "elapsedMs": 39545,
+  "capturedAt": "2026-10-13T12:58:54.0122239+03:00"
+}

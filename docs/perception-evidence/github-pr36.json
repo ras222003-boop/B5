@@ -1,0 +1,11 @@
+{
+  "number": 36,
+  "state": "open",
+  "title": "رؤية بصيرة: نطق الأجسام تلقائيًا ووصف الصورة بالذكاء الاصطناعي",
+  "head": "codex/basira-voice-vision-ai-description",
+  "sha": "c52b755b9c18ad2fb08163e4ff329fdcf6384415",
+  "base": "main",
+  "updated_at": "2026-10-13T03:40:01Z",
+  "merged": false,
+  "url": "https://github.com/ras222003-boop/B5/pull/36"
+}
