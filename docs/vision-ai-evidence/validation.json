@@ -1,0 +1,78 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-10-14",
+  "branch": "codex/basira-vision-ai-phase1",
+  "referenceCommit": "f4ca09149898704f71d4dc5d76223521b9768540",
+  "scope": "local-tooling-and-regression-validation",
+  "checks": {
+    "visionAiNode": {
+      "passed": 27,
+      "failed": 0
+    },
+    "pythonPreparation": {
+      "passed": 4,
+      "failed": 0
+    },
+    "existingVitest": {
+      "files": 82,
+      "passed": 461,
+      "failed": 0
+    },
+    "existingMetrics": {
+      "passed": 17,
+      "failed": 0
+    },
+    "typecheck": "passed",
+    "build": "passed; pre-existing chunks-over-500kB warning",
+    "browserMain": "passed on synthetic inputs",
+    "browserWorker": "passed on synthetic inputs",
+    "browserOnnx": "passed on constant synthetic contract fixture",
+    "comparison": "passed on synthetic reports",
+    "gitDiffCheck": "passed",
+    "githubCI": "not run; branch not pushed"
+  },
+  "notExecuted": [
+    "training on real data",
+    "trained SSDLite ONNX export/parity",
+    "real FFmpeg video extraction",
+    "physical phone benchmarks",
+    "ground/tracking/approach field accuracy",
+    "production activation or deployment"
+  ],
+  "environment": {
+    "node": "v24.19.0",
+    "pythonPreparation": "3.12 in existing metric venv; training requires separate pinned environment",
+    "trainingDependenciesInstalledForThisTask": false
+  },
+  "initialEnvironmentFailures": "Windows sandbox denied realpath/dependency/temp access; tests rerun successfully outside isolation without weakening validation.",
+  "sourceFiles": {
+    "scripts/vision-ai/benchmark.mjs": "7b305d3dc8144f6aa59809a2d48748864690e17a9c9a9b927dc99879a1bf3aa5",
+    "scripts/vision-ai/browser-runner.mjs": "e586003801e2b9f3f95c909a1022ad44033e44307802e5164f0769ea14b00b57",
+    "scripts/vision-ai/cli.mjs": "a52d775fcd3e9e502ee4d835ed91ad042fd98f8c628485979aed5aa994b72e1e",
+    "scripts/vision-ai/common.mjs": "bfebabe9845805be4dc476a0ecb9ff767d395e190cd449277de2bfbf5779cf8e",
+    "scripts/vision-ai/create-smoke-fixture.mjs": "eca4da093376b1a1ef9fc4d0c7537a664ca47546cd1c2c87bc139e9d8f0df8e5",
+    "scripts/vision-ai/create-smoke-model.py": "83348bfe4c936fc4d833c57c7036905501595620681cf7f6eaa26368ac625472",
+    "scripts/vision-ai/data.mjs": "a3e23842605a54b9e85d9b6e18c0f87d4761de5f7ce41663966a446d478c2997",
+    "scripts/vision-ai/evaluation.mjs": "49fba172f11214e5692e4cfc8f1d99b16b2dff8e728e760528c27fce3404efc2",
+    "scripts/vision-ai/extract-frames.mjs": "a927aabc17a0939d4172f154c1f1baada297ae42ac1946eedabfa27e83bb9c8d",
+    "scripts/vision-ai/registry.mjs": "d93e23590508ca1bf162c9024f440abf2c6e49ee8f8b73a578efabb6e2a09787",
+    "scripts/vision-ai/test_training.py": "f34d023e0885894ca85ecd49590f7f8f82e7d09f1dc813b44c0d9b48a0a24234",
+    "scripts/vision-ai/train.py": "b116692f56164704923b3431564fb0f680a30f1ac183a1dd749e9c44b3b3c6f5",
+    "scripts/vision-ai/vision-ai.test.mjs": "152e2b175ed37f9cb4b4061e76b54c47a81afef1357dc2a357e77170e84063a6",
+    "ml/vision/experiment.json": "af79bf1874026cb69539a1d4af62f34971bd9f8920b65f35056ac84a02f73c15",
+    "ml/vision/requirements-training.txt": "790e22eaf5928a30f5798cbbfcc287e38256eb9739318828aa1f6727133b3c5d",
+    "ml/vision/taxonomy.v1.json": "cb467eba7be5741cf75c51d8ac6ca0d72259a5ad42cf05d78227c024c16a9975"
+  },
+  "logSha256": {
+    "vision-ai-tools-final.txt": "b9d10b49cb2b1427abb3156d6ca95f40dc07bfd16abaf82130e4bf215e6940c3",
+    "vision-ai-python-final.txt": "7ad63baae1099db39d1476abbe8c7dff0e04fd2957b0e07f8eaa9a1eef0e50be",
+    "vision-ai-vitest-final.txt": "581268f6d9260aa89ff90a164ecbf6f466bde1362d266f9970f4aaa55cac3d71",
+    "vision-ai-typecheck.txt": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "vision-ai-build.txt": "2bb09cf9fc193694a3f10d5ce9c7d13634e0a5addf1984bc6e1493e8ee9d3a78"
+  },
+  "realTrainingDataAvailable": false,
+  "trainingPerformed": false,
+  "accuracyImprovement": null,
+  "userDataCollected": false,
+  "productionChanged": false
+}

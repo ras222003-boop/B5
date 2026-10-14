@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "scope": "static-artifact-audit",
+  "referenceCommit": "f4ca09149898704f71d4dc5d76223521b9768540",
+  "inspectedCommit": "f4ca09149898704f71d4dc5d76223521b9768540",
+  "models": [
+    {
+      "path": "client/public/vision/efficientdet_lite0_int8.tflite",
+      "sha256": "0720bf247bd76e6594ea28fa9c6f7c5242be774818997dbbeffc4da460c723bb",
+      "bytes": 4602795
+    },
+    {
+      "path": "client/public/vision/models/Xenova/segformer-b0-finetuned-ade-512-512/onnx/model_quantized.onnx",
+      "sha256": "9a98d6daf3d926869ab8cc4c2ed7374a2bc23b889bb7ca3b0915d15e3c4756bb",
+      "bytes": 4418863
+    },
+    {
+      "path": "client/public/vision/models/onnx-community/depth-anything-v2-small/onnx/model_quantized.onnx",
+      "sha256": "fcf51f1b230362b28690bb9d1809bf0431f29cad20534e3f589bd7285547f20d",
+      "bytes": 27258801
+    }
+  ],
+  "taxonomySha256": "cb467eba7be5741cf75c51d8ac6ca0d72259a5ad42cf05d78227c024c16a9975",
+  "trainingPerformed": false,
+  "phoneMeasured": false,
+  "accuracy": null
+}
