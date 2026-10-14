@@ -1,0 +1,91 @@
+{
+  "checkedOn": "2026-10-14",
+  "url": "https://github.com/ras222003-boop/B5/actions/runs/38462130309",
+  "headRevision": "dfe49f0a532cb7a6b7791d715325d42b2f6c359a",
+  "status": "completed",
+  "conclusion": "success",
+  "jobs": [
+    {
+      "name": "check-test-build-and-mysql",
+      "conclusion": "success",
+      "steps": [
+        {
+          "name": "Set up job",
+          "conclusion": "success"
+        },
+        {
+          "name": "Initialize containers",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run actions/checkout@v4",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run pnpm/action-setup@v4",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run actions/setup-node@v4",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run pnpm install --frozen-lockfile",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run node scripts/metric-depth/verify-artifact.mjs",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run pnpm check",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run pnpm test",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run pnpm test:perception-metrics",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run node --test scripts/auto-meter-report.test.mjs",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run pnpm build",
+          "conclusion": "success"
+        },
+        {
+          "name": "Validate fresh MySQL migrations",
+          "conclusion": "success"
+        },
+        {
+          "name": "Validate B5 to B6 MySQL upgrade",
+          "conclusion": "success"
+        },
+        {
+          "name": "Post Run actions/setup-node@v4",
+          "conclusion": "success"
+        },
+        {
+          "name": "Post Run pnpm/action-setup@v4",
+          "conclusion": "success"
+        },
+        {
+          "name": "Post Run actions/checkout@v4",
+          "conclusion": "success"
+        },
+        {
+          "name": "Stop containers",
+          "conclusion": "success"
+        },
+        {
+          "name": "Complete job",
+          "conclusion": "success"
+        }
+      ]
+    }
+  ]
+}

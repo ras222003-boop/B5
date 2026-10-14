@@ -1,11 +1,11 @@
 {
-  "date": "2026-10-13",
+  "date": "2026-10-14",
   "baseRevision": "c52b755b9c18ad2fb08163e4ff329fdcf6384415",
-  "implementationRevision": "d994d2a",
+  "implementationRevision": "5eb4095",
   "vitest": {
     "files": 82,
-    "passed": 455,
-    "durationSeconds": 37.89,
+    "passed": 461,
+    "durationSeconds": 49.08,
     "failed": 0
   },
   "metricsTests": {
@@ -27,5 +27,12 @@
   "realScreenReader": "not run",
   "liveForge": "not run; key not configured",
   "annotatedAccuracy": "not measured",
-  "databaseMigrations": "not rerun locally; no schema changes"
+  "databaseMigrations": "passed in isolated GitHub CI on preceding dfe49f0; latest revision runs separately",
+  "targetedFinalTests": {
+    "failed": 0,
+    "passed": 23,
+    "files": 4
+  },
+  "precedingCiEvidence": "ci-dfe49f0.json",
+  "localFullSuitePhase": "After six lifecycle regressions; before final capture-time callback and speech expiry wiring, covered by targetedFinalTests."
 }
