@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "checkedAt": "2026-10-14T09:59:20.5263054Z",
+  "method": "Read-only public GitHub REST API; gh had no authenticated session",
+  "repository": "https://github.com/ras222003-boop/B5",
+  "pr37": {
+    "state": "open",
+    "head": "f4ca09149898704f71d4dc5d76223521b9768540",
+    "headRef": "codex/basira-perception-reliability",
+    "baseRef": "codex/basira-voice-vision-ai-description",
+    "updatedAt": "2026-10-14T02:56:14Z"
+  },
+  "pr36": {
+    "state": "open",
+    "head": "c52b755b9c18ad2fb08163e4ff329fdcf6384415",
+    "headRef": "codex/basira-voice-vision-ai-description",
+    "baseRef": "main"
+  },
+  "main": "2456a4604d7dbe0c40e76d100b81aeacf048f69e",
+  "referenceComparedToMain": {
+    "status": "diverged",
+    "aheadBy": 9,
+    "behindBy": 1,
+    "mergeBase": "a0d2b77c244e2e6799f6eb8cb2ca39ff1e050240",
+    "mainTreeDiffFromMergeBase": "empty; extra main commit is PR #35 merge",
+    "readOnlyMergeTreePreview": "no conflicts/output; no merge performed"
+  },
+  "mostRecentlyUpdatedOpenPR": 37,
+  "remoteWrites": false
+}

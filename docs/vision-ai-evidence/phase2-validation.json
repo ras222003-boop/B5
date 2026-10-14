@@ -1,0 +1,74 @@
+{
+  "date": "2026-10-14",
+  "scope": "phase-two-preparation-not-real-training",
+  "phaseOneCommit": "f3e03d699c433a3b4c50ccc6628c15fc1fe63e6d",
+  "baseCommit": "f4ca09149898704f71d4dc5d76223521b9768540",
+  "localTests": {
+    "nodeToolkit": 43,
+    "pythonPreparation": 6,
+    "application": 461,
+    "perception": 17,
+    "total": 527,
+    "typecheck": "passed",
+    "build": "passed-existing-chunk-size-warning"
+  },
+  "gpuCheck": {
+    "torch": "2.5.1+cpu",
+    "torchvision": "0.20.1+cpu",
+    "cudaRuntime": null,
+    "cudaAvailable": false,
+    "pinnedVersions": false,
+    "ready": false,
+    "trainingPerformed": false,
+    "python": "3.12.14"
+  },
+  "storage": {
+    "created": true,
+    "outsideGit": true,
+    "mediaFiles": 0,
+    "cloudProvisioned": false,
+    "accessAndEncryptionReview": "pending"
+  },
+  "realTrainingPerformed": false,
+  "realVideoExtractionPerformed": false,
+  "phoneMeasured": false,
+  "accuracyImprovement": null,
+  "metricDistanceAccuracy": null,
+  "productionModified": false,
+  "phaseOneCI": {
+    "status": "success",
+    "url": "https://github.com/ras222003-boop/B5/actions/runs/38550187566"
+  },
+  "sources": {
+    "scripts/vision-ai/benchmark.mjs": "7b305d3dc8144f6aa59809a2d48748864690e17a9c9a9b927dc99879a1bf3aa5",
+    "scripts/vision-ai/browser-runner.mjs": "e586003801e2b9f3f95c909a1022ad44033e44307802e5164f0769ea14b00b57",
+    "scripts/vision-ai/cli.mjs": "83039c9dcf41278cc550e8302d08f032753ec319293765a97044878cc29bae36",
+    "scripts/vision-ai/common.mjs": "bfebabe9845805be4dc476a0ecb9ff767d395e190cd449277de2bfbf5779cf8e",
+    "scripts/vision-ai/create-smoke-fixture.mjs": "eca4da093376b1a1ef9fc4d0c7537a664ca47546cd1c2c87bc139e9d8f0df8e5",
+    "scripts/vision-ai/create-smoke-model.py": "83348bfe4c936fc4d833c57c7036905501595620681cf7f6eaa26368ac625472",
+    "scripts/vision-ai/data-needs.mjs": "2d3c9b7244be78e7d814d0dded7fd51bbb6c71131b6994429579ac157dfc3af4",
+    "scripts/vision-ai/data.mjs": "d0119523a54c7919c4dc4af85ef8de1bc29295fb57e25e232b8aec24ac4ae197",
+    "scripts/vision-ai/evaluation.mjs": "49fba172f11214e5692e4cfc8f1d99b16b2dff8e728e760528c27fce3404efc2",
+    "scripts/vision-ai/extract-frames.mjs": "a927aabc17a0939d4172f154c1f1baada297ae42ac1946eedabfa27e83bb9c8d",
+    "scripts/vision-ai/proximity-evaluation.mjs": "1314cf3ec8cb8c6d3d92bcef4184b75293f681c49a16ea0d87cdd1297687b471",
+    "scripts/vision-ai/publication-audit.mjs": "63844f9d650ec75dcdfc3b0ff96272c1d63c8f9b4c9af57eab61a0951b0cda37",
+    "scripts/vision-ai/registry.mjs": "d93e23590508ca1bf162c9024f440abf2c6e49ee8f8b73a578efabb6e2a09787",
+    "scripts/vision-ai/spatial.mjs": "cb12944b3978f3e87c3e32ea67a9add1c7f2cbc513b9f7a63d0e85c2a36e7dc1",
+    "scripts/vision-ai/storage.mjs": "606ff5f7becc8b149423828f269fcb75973fa0994136ee19a895030bbb41bb29",
+    "scripts/vision-ai/test_training.py": "b3dfd748b1efeb934643db47613f4eefa340f23f67125770d5d812f4656b158c",
+    "scripts/vision-ai/train.py": "ab40d28a62b233b9d8874220d13ff3c6b29e40e51463a9b7ea7cc72c81805ece",
+    "scripts/vision-ai/vision-ai.test.mjs": "16f6f1e475bf9064f69a5f80bf1a9c6008650ca6ab6df74c0298a22506363e57",
+    "ml/vision/experiment.json": "af79bf1874026cb69539a1d4af62f34971bd9f8920b65f35056ac84a02f73c15",
+    "ml/vision/proximity-policy.v1.json": "e0f7b7ffe1630e00a9a985a49ceb447f9548bf14dd2fbb6ad4853ec4e4b6a465",
+    "ml/vision/requirements-training.txt": "790e22eaf5928a30f5798cbbfcc287e38256eb9739318828aa1f6727133b3c5d",
+    "ml/vision/taxonomy.v1.json": "cb467eba7be5741cf75c51d8ac6ca0d72259a5ad42cf05d78227c024c16a9975"
+  },
+  "logs": {
+    ".basira-evidence/phase2-node-final.txt": "61c665c14b95d75a0acef75cfd03daf08862d0447e33832fd34a4e3488a7a059",
+    ".basira-evidence/phase2-python-final.txt": "7c3ad0b4bf435908056401925c91423f3accb330d37f42daf759926aef095c0d",
+    ".basira-evidence/phase2-typecheck.txt": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    ".basira-evidence/phase2-vitest.txt": "8955bba574dda027f8e1860827b291a82be3641f6afa6e0669d0a4aab7d5552d",
+    ".basira-evidence/phase2-perception.txt": "7219f917ec5b8a6b8c9c8465cd5ce14ba1bfca72d471f4d2d80258688c241696",
+    ".basira-evidence/phase2-build.txt": "697ef30400b144e6e170c9bc32742b19ab14df4664b14b3afd8992450a645367"
+  }
+}

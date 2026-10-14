@@ -122,3 +122,10 @@ client/public/vision/models/depth-anything/Depth-Anything-V2-Metric-Hypersim-Sma
 client/public/vision/models/depth-anything/Depth-Anything-V2-Metric-Hypersim-Small/onnx/model_quantized.onnx
 scripts/vision-quality/output/
 .basira-evidence/
+
+# Offline Vision AI: datasets, rights/consent files, labels, checkpoints and lab registry
+.vision-ai/
+.vision-ai-venv/
+Basira-Vision-Datasets/
+__pycache__/
+*.pyc

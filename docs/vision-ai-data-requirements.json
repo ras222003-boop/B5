@@ -1,0 +1,858 @@
+{
+  "schemaVersion": 1,
+  "status": "PLANNING_TARGETS_NOT_ACCEPTANCE_OR_ACCURACY_EVIDENCE",
+  "classes": [
+    {
+      "classId": 1,
+      "key": "person",
+      "ar": "شخص",
+      "kind": "object",
+      "annotation": "box-and-attributes",
+      "examples": "standing/walking; occlusion; different clothing",
+      "targets": {
+        "train": 300,
+        "validation": 75,
+        "test": 100
+      },
+      "observedAnnotations": {
+        "train": 0,
+        "validation": 0,
+        "test": 0
+      },
+      "missingAnnotations": {
+        "train": 300,
+        "validation": 75,
+        "test": 100
+      }
+    },
+    {
+      "classId": 2,
+      "key": "chair",
+      "ar": "كرسي",
+      "kind": "object",
+      "annotation": "box-and-attributes",
+      "examples": "legs/arms; occupied/empty; low contrast",
+      "targets": {
+        "train": 300,
+        "validation": 75,
+        "test": 100
+      },
+      "observedAnnotations": {
+        "train": 0,
+        "validation": 0,
+        "test": 0
+      },
+      "missingAnnotations": {
+        "train": 300,
+        "validation": 75,
+        "test": 100
+      }
+    },
+    {
+      "classId": 3,
+      "key": "table",
+      "ar": "طاولة",
+      "kind": "object",
+      "annotation": "box-and-attributes",
+      "examples": "edges/legs; glass and low tables",
+      "targets": {
+        "train": 300,
+        "validation": 75,
+        "test": 100
+      },
+      "observedAnnotations": {
+        "train": 0,
+        "validation": 0,
+        "test": 0
+      },
+      "missingAnnotations": {
+        "train": 300,
+        "validation": 75,
+        "test": 100
+      }
+    },
+    {
+      "classId": 4,
+      "key": "bicycle",
+      "ar": "دراجة",
+      "kind": "object",
+      "annotation": "box-and-attributes",
+      "examples": "parked/moving; partial wheels",
+      "targets": {
+        "train": 300,
+        "validation": 75,
+        "test": 100
+      },
+      "observedAnnotations": {
+        "train": 0,
+        "validation": 0,
+        "test": 0
+      },
+      "missingAnnotations": {
+        "train": 300,
+        "validation": 75,
+        "test": 100
+      }
+    },
+    {
+      "classId": 5,
+      "key": "car",
+      "ar": "سيارة",
+      "kind": "object",
+      "annotation": "box-and-attributes",
+      "examples": "parked/crossing; front/side/rear",
+      "targets": {
+        "train": 300,
+        "validation": 75,
+        "test": 100
+      },
+      "observedAnnotations": {
+        "train": 0,
+        "validation": 0,
+        "test": 0
+      },
+      "missingAnnotations": {
+        "train": 300,
+        "validation": 75,
+        "test": 100
+      }
+    },
+    {
+      "classId": 6,
+      "key": "bus",
+      "ar": "حافلة",
+      "kind": "object",
+      "annotation": "box-and-attributes",
+      "examples": "bus body/doors; parked/moving",
+      "targets": {
+        "train": 300,
+        "validation": 75,
+        "test": 100
+      },
+      "observedAnnotations": {
+        "train": 0,
+        "validation": 0,
+        "test": 0
+      },
+      "missingAnnotations": {
+        "train": 300,
+        "validation": 75,
+        "test": 100
+      }
+    },
+    {
+      "classId": 7,
+      "key": "truck",
+      "ar": "شاحنة",
+      "kind": "object",
+      "annotation": "box-and-attributes",
+      "examples": "large body; partial view",
+      "targets": {
+        "train": 300,
+        "validation": 75,
+        "test": 100
+      },
+      "observedAnnotations": {
+        "train": 0,
+        "validation": 0,
+        "test": 0
+      },
+      "missingAnnotations": {
+        "train": 300,
+        "validation": 75,
+        "test": 100
+      }
+    },
+    {
+      "classId": 8,
+      "key": "motorcycle",
+      "ar": "دراجة نارية",
+      "kind": "object",
+      "annotation": "box-and-attributes",
+      "examples": "parked/moving; rider present/absent",
+      "targets": {
+        "train": 300,
+        "validation": 75,
+        "test": 100
+      },
+      "observedAnnotations": {
+        "train": 0,
+        "validation": 0,
+        "test": 0
+      },
+      "missingAnnotations": {
+        "train": 300,
+        "validation": 75,
+        "test": 100
+      }
+    },
+    {
+      "classId": 9,
+      "key": "traffic_sign",
+      "ar": "إشارة مرور",
+      "kind": "object",
+      "annotation": "box-and-attributes",
+      "examples": "traffic lights/stop signs; glare; do not infer right of way",
+      "targets": {
+        "train": 300,
+        "validation": 75,
+        "test": 100
+      },
+      "observedAnnotations": {
+        "train": 0,
+        "validation": 0,
+        "test": 0
+      },
+      "missingAnnotations": {
+        "train": 300,
+        "validation": 75,
+        "test": 100
+      }
+    },
+    {
+      "classId": 10,
+      "key": "sofa",
+      "ar": "أريكة",
+      "kind": "object",
+      "annotation": "box-and-attributes",
+      "examples": "low edges/feet; clutter",
+      "targets": {
+        "train": 300,
+        "validation": 75,
+        "test": 100
+      },
+      "observedAnnotations": {
+        "train": 0,
+        "validation": 0,
+        "test": 0
+      },
+      "missingAnnotations": {
+        "train": 300,
+        "validation": 75,
+        "test": 100
+      }
+    },
+    {
+      "classId": 11,
+      "key": "bed",
+      "ar": "سرير",
+      "kind": "object",
+      "annotation": "box-and-attributes",
+      "examples": "bed frames; low furniture",
+      "targets": {
+        "train": 300,
+        "validation": 75,
+        "test": 100
+      },
+      "observedAnnotations": {
+        "train": 0,
+        "validation": 0,
+        "test": 0
+      },
+      "missingAnnotations": {
+        "train": 300,
+        "validation": 75,
+        "test": 100
+      }
+    },
+    {
+      "classId": 12,
+      "key": "backpack",
+      "ar": "حقيبة ظهر",
+      "kind": "object",
+      "annotation": "box-and-attributes",
+      "examples": "on floor/carried",
+      "targets": {
+        "train": 300,
+        "validation": 75,
+        "test": 100
+      },
+      "observedAnnotations": {
+        "train": 0,
+        "validation": 0,
+        "test": 0
+      },
+      "missingAnnotations": {
+        "train": 300,
+        "validation": 75,
+        "test": 100
+      }
+    },
+    {
+      "classId": 13,
+      "key": "handbag",
+      "ar": "حقيبة يد",
+      "kind": "object",
+      "annotation": "box-and-attributes",
+      "examples": "on floor/carried",
+      "targets": {
+        "train": 300,
+        "validation": 75,
+        "test": 100
+      },
+      "observedAnnotations": {
+        "train": 0,
+        "validation": 0,
+        "test": 0
+      },
+      "missingAnnotations": {
+        "train": 300,
+        "validation": 75,
+        "test": 100
+      }
+    },
+    {
+      "classId": 14,
+      "key": "suitcase",
+      "ar": "حقيبة سفر",
+      "kind": "object",
+      "annotation": "box-and-attributes",
+      "examples": "standing/lying; extended handle",
+      "targets": {
+        "train": 300,
+        "validation": 75,
+        "test": 100
+      },
+      "observedAnnotations": {
+        "train": 0,
+        "validation": 0,
+        "test": 0
+      },
+      "missingAnnotations": {
+        "train": 300,
+        "validation": 75,
+        "test": 100
+      }
+    },
+    {
+      "classId": 15,
+      "key": "bottle",
+      "ar": "زجاجة",
+      "kind": "object",
+      "annotation": "box-and-attributes",
+      "examples": "upright/lying; transparent/opaque",
+      "targets": {
+        "train": 300,
+        "validation": 75,
+        "test": 100
+      },
+      "observedAnnotations": {
+        "train": 0,
+        "validation": 0,
+        "test": 0
+      },
+      "missingAnnotations": {
+        "train": 300,
+        "validation": 75,
+        "test": 100
+      }
+    },
+    {
+      "classId": 16,
+      "key": "dog",
+      "ar": "كلب",
+      "kind": "object",
+      "annotation": "box-and-attributes",
+      "examples": "standing/lying/moving; scale variation",
+      "targets": {
+        "train": 300,
+        "validation": 75,
+        "test": 100
+      },
+      "observedAnnotations": {
+        "train": 0,
+        "validation": 0,
+        "test": 0
+      },
+      "missingAnnotations": {
+        "train": 300,
+        "validation": 75,
+        "test": 100
+      }
+    },
+    {
+      "classId": 17,
+      "key": "cat",
+      "ar": "قط",
+      "kind": "object",
+      "annotation": "box-and-attributes",
+      "examples": "standing/lying/moving; low contrast",
+      "targets": {
+        "train": 300,
+        "validation": 75,
+        "test": 100
+      },
+      "observedAnnotations": {
+        "train": 0,
+        "validation": 0,
+        "test": 0
+      },
+      "missingAnnotations": {
+        "train": 300,
+        "validation": 75,
+        "test": 100
+      }
+    },
+    {
+      "classId": 18,
+      "key": "door",
+      "ar": "باب",
+      "kind": "object",
+      "annotation": "box-and-attributes",
+      "examples": "open/closed/ajar; glass",
+      "targets": {
+        "train": 300,
+        "validation": 75,
+        "test": 100
+      },
+      "observedAnnotations": {
+        "train": 0,
+        "validation": 0,
+        "test": 0
+      },
+      "missingAnnotations": {
+        "train": 300,
+        "validation": 75,
+        "test": 100
+      }
+    },
+    {
+      "classId": 19,
+      "key": "pole_column",
+      "ar": "عمود",
+      "kind": "object",
+      "annotation": "box-and-attributes",
+      "examples": "thin/wide; low contrast; partial occlusion",
+      "targets": {
+        "train": 300,
+        "validation": 75,
+        "test": 100
+      },
+      "observedAnnotations": {
+        "train": 0,
+        "validation": 0,
+        "test": 0
+      },
+      "missingAnnotations": {
+        "train": 300,
+        "validation": 75,
+        "test": 100
+      }
+    },
+    {
+      "classId": 20,
+      "key": "barrier",
+      "ar": "حاجز",
+      "kind": "object",
+      "annotation": "box-and-attributes",
+      "examples": "temporary/permanent; reflective",
+      "targets": {
+        "train": 300,
+        "validation": 75,
+        "test": 100
+      },
+      "observedAnnotations": {
+        "train": 0,
+        "validation": 0,
+        "test": 0
+      },
+      "missingAnnotations": {
+        "train": 300,
+        "validation": 75,
+        "test": 100
+      }
+    },
+    {
+      "classId": 21,
+      "key": "cart",
+      "ar": "عربة",
+      "kind": "object",
+      "annotation": "box-and-attributes",
+      "examples": "stationary/moving; different loads",
+      "targets": {
+        "train": 300,
+        "validation": 75,
+        "test": 100
+      },
+      "observedAnnotations": {
+        "train": 0,
+        "validation": 0,
+        "test": 0
+      },
+      "missingAnnotations": {
+        "train": 300,
+        "validation": 75,
+        "test": 100
+      }
+    },
+    {
+      "classId": 22,
+      "key": "box",
+      "ar": "صندوق",
+      "kind": "object",
+      "annotation": "box-and-attributes",
+      "examples": "low/tall; floor clutter",
+      "targets": {
+        "train": 300,
+        "validation": 75,
+        "test": 100
+      },
+      "observedAnnotations": {
+        "train": 0,
+        "validation": 0,
+        "test": 0
+      },
+      "missingAnnotations": {
+        "train": 300,
+        "validation": 75,
+        "test": 100
+      }
+    },
+    {
+      "classId": 23,
+      "key": "stairs_visible",
+      "ar": "درج مرئي غير محدد الاتجاه",
+      "kind": "ground_hazard",
+      "annotation": "box-and-attributes",
+      "examples": "visible edges; oblique view; no ascent/descent inference",
+      "targets": {
+        "train": 600,
+        "validation": 150,
+        "test": 200
+      },
+      "observedAnnotations": {
+        "train": 0,
+        "validation": 0,
+        "test": 0
+      },
+      "missingAnnotations": {
+        "train": 600,
+        "validation": 150,
+        "test": 200
+      }
+    },
+    {
+      "classId": 24,
+      "key": "curb_step_edge",
+      "ar": "حافة رصيف أو درجة مرئية",
+      "kind": "ground_hazard",
+      "annotation": "box-and-attributes",
+      "examples": "low/high visible edges; curb versus painted line",
+      "targets": {
+        "train": 600,
+        "validation": 150,
+        "test": 200
+      },
+      "observedAnnotations": {
+        "train": 0,
+        "validation": 0,
+        "test": 0
+      },
+      "missingAnnotations": {
+        "train": 600,
+        "validation": 150,
+        "test": 200
+      }
+    },
+    {
+      "classId": 25,
+      "key": "pothole_visible",
+      "ar": "تجويف أرضي مرئي",
+      "kind": "ground_hazard",
+      "annotation": "box-and-attributes",
+      "examples": "shallow/deep appearance; dry/wet; shadows",
+      "targets": {
+        "train": 600,
+        "validation": 150,
+        "test": 200
+      },
+      "observedAnnotations": {
+        "train": 0,
+        "validation": 0,
+        "test": 0
+      },
+      "missingAnnotations": {
+        "train": 600,
+        "validation": 150,
+        "test": 200
+      }
+    },
+    {
+      "classId": 26,
+      "key": "open_hole_visible",
+      "ar": "فتحة أرضية مرئية",
+      "kind": "ground_hazard",
+      "annotation": "box-and-attributes",
+      "examples": "guarded staged sites; lids/shadows as negatives",
+      "targets": {
+        "train": 600,
+        "validation": 150,
+        "test": 200
+      },
+      "observedAnnotations": {
+        "train": 0,
+        "validation": 0,
+        "test": 0
+      },
+      "missingAnnotations": {
+        "train": 600,
+        "validation": 150,
+        "test": 200
+      }
+    },
+    {
+      "classId": 27,
+      "key": "raised_tile",
+      "ar": "بلاطة مرتفعة مرئية",
+      "kind": "ground_hazard",
+      "annotation": "box-and-attributes",
+      "examples": "subtle height edges; tile patterns as negatives",
+      "targets": {
+        "train": 600,
+        "validation": 150,
+        "test": 200
+      },
+      "observedAnnotations": {
+        "train": 0,
+        "validation": 0,
+        "test": 0
+      },
+      "missingAnnotations": {
+        "train": 600,
+        "validation": 150,
+        "test": 200
+      }
+    },
+    {
+      "classId": 28,
+      "key": "cable_hose",
+      "ar": "سلك أو خرطوم",
+      "kind": "ground_hazard",
+      "annotation": "box-and-attributes",
+      "examples": "thin/thick; floor contrast; shadows as negatives",
+      "targets": {
+        "train": 600,
+        "validation": 150,
+        "test": 200
+      },
+      "observedAnnotations": {
+        "train": 0,
+        "validation": 0,
+        "test": 0
+      },
+      "missingAnnotations": {
+        "train": 600,
+        "validation": 150,
+        "test": 200
+      }
+    },
+    {
+      "classId": 29,
+      "key": "debris_rock",
+      "ar": "ركام أو حجر",
+      "kind": "ground_hazard",
+      "annotation": "box-and-attributes",
+      "examples": "small/large; irregular clusters",
+      "targets": {
+        "train": 600,
+        "validation": 150,
+        "test": 200
+      },
+      "observedAnnotations": {
+        "train": 0,
+        "validation": 0,
+        "test": 0
+      },
+      "missingAnnotations": {
+        "train": 600,
+        "validation": 150,
+        "test": 200
+      }
+    },
+    {
+      "classId": 30,
+      "key": "surface_crack",
+      "ar": "تشقّق سطحي مرئي",
+      "kind": "ground_hazard",
+      "annotation": "box-and-attributes",
+      "examples": "thin/wide visible cracks; grout as negatives",
+      "targets": {
+        "train": 600,
+        "validation": 150,
+        "test": 200
+      },
+      "observedAnnotations": {
+        "train": 0,
+        "validation": 0,
+        "test": 0
+      },
+      "missingAnnotations": {
+        "train": 600,
+        "validation": 150,
+        "test": 200
+      }
+    },
+    {
+      "classId": 31,
+      "key": "overhanging_obstacle",
+      "ar": "جسم بارز أو متدلٍ",
+      "kind": "object",
+      "annotation": "box-and-attributes",
+      "examples": "head/torso height; branches/signs/open doors",
+      "targets": {
+        "train": 600,
+        "validation": 150,
+        "test": 200
+      },
+      "observedAnnotations": {
+        "train": 0,
+        "validation": 0,
+        "test": 0
+      },
+      "missingAnnotations": {
+        "train": 600,
+        "validation": 150,
+        "test": 200
+      }
+    },
+    {
+      "classId": 101,
+      "key": "floor",
+      "ar": "أرضية",
+      "kind": "surface",
+      "annotation": "polygon-not-used-by-SSDLite",
+      "examples": "tile/carpet; transitions; polygon masks",
+      "targets": {
+        "train": 300,
+        "validation": 75,
+        "test": 100
+      },
+      "observedAnnotations": {
+        "train": 0,
+        "validation": 0,
+        "test": 0
+      },
+      "missingAnnotations": {
+        "train": 300,
+        "validation": 75,
+        "test": 100
+      }
+    },
+    {
+      "classId": 102,
+      "key": "road",
+      "ar": "طريق",
+      "kind": "surface",
+      "annotation": "polygon-not-used-by-SSDLite",
+      "examples": "asphalt/concrete; markings; polygon masks",
+      "targets": {
+        "train": 300,
+        "validation": 75,
+        "test": 100
+      },
+      "observedAnnotations": {
+        "train": 0,
+        "validation": 0,
+        "test": 0
+      },
+      "missingAnnotations": {
+        "train": 300,
+        "validation": 75,
+        "test": 100
+      }
+    },
+    {
+      "classId": 103,
+      "key": "sidewalk",
+      "ar": "رصيف",
+      "kind": "surface",
+      "annotation": "polygon-not-used-by-SSDLite",
+      "examples": "paving/curbs; polygon masks",
+      "targets": {
+        "train": 300,
+        "validation": 75,
+        "test": 100
+      },
+      "observedAnnotations": {
+        "train": 0,
+        "validation": 0,
+        "test": 0
+      },
+      "missingAnnotations": {
+        "train": 300,
+        "validation": 75,
+        "test": 100
+      }
+    },
+    {
+      "classId": 104,
+      "key": "path",
+      "ar": "ممر خارجي",
+      "kind": "surface",
+      "annotation": "polygon-not-used-by-SSDLite",
+      "examples": "dirt/gravel/paving; polygon masks",
+      "targets": {
+        "train": 300,
+        "validation": 75,
+        "test": 100
+      },
+      "observedAnnotations": {
+        "train": 0,
+        "validation": 0,
+        "test": 0
+      },
+      "missingAnnotations": {
+        "train": 300,
+        "validation": 75,
+        "test": 100
+      }
+    }
+  ],
+  "minimumIndependentSessionsPerClass": {
+    "train": 10,
+    "validation": 3,
+    "test": 5
+  },
+  "requiredSlices": [
+    "daylight",
+    "indoor",
+    "low_light",
+    "moving",
+    "static",
+    "occlusion",
+    "small objects",
+    "hard negatives"
+  ],
+  "motion": {
+    "labels": [
+      "approaching",
+      "receding",
+      "lateral_left",
+      "lateral_right",
+      "stationary",
+      "uncertain"
+    ],
+    "cameraControls": [
+      "rotation",
+      "zoom",
+      "translation",
+      "mixed"
+    ],
+    "targetIndependentClipsPerLabel": {
+      "train": 50,
+      "validation": 20,
+      "test": 30
+    },
+    "requirement": "Persistent track IDs; presentation timestamps; measured endpoints for approach/recede; object rotation separately labeled."
+  },
+  "proximity": {
+    "targetMeasuredObjectsPerBandAndPilotClass": {
+      "train": 100,
+      "validation": 30,
+      "test": 50
+    },
+    "requirement": "Five metric bands plus deliberate uncertain cases; count by independent sessions, not adjacent duplicate frames."
+  },
+  "noDataAvailable": true,
+  "trainingPerformed": false
+}

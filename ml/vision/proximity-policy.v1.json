@@ -1,0 +1,14 @@
+{
+  "version": "basira-proximity-pilot-1",
+  "status": "experimental-requires-mobility-review",
+  "reference": "camera-optical-center-to-nearest-visible-object-surface",
+  "units": "meters",
+  "boundariesMeters": [1, 2, 3.5, 5],
+  "classes": ["very_near", "near", "medium", "far", "very_far"],
+  "labelsAr": ["قريب جدًا", "قريب", "متوسط", "بعيد", "بعيد جدًا"],
+  "uncertainClass": "distance_uncertain",
+  "uncertainLabelAr": "المسافة غير مؤكدة",
+  "maxVideoSyncErrorMs": 50,
+  "priorityMaxAgeMs": 800,
+  "productionActivation": false
+}

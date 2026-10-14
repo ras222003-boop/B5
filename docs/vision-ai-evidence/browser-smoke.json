@@ -1,0 +1,52 @@
+{
+  "schemaVersion": 1,
+  "runs": [
+    {
+      "name": "smoke-baseline",
+      "runSha256": "8db95d0544c7dde396105e9875b663c6675d07c24d020a67af28cdbc0a805858",
+      "reportSha256": "f9a6e08eba4cf8d6a405da0d6c89ec7bfd2f038a6a38903a312514f988d5f7b5",
+      "frames": 2,
+      "scope": "synthetic-arithmetic-only",
+      "backend": "mediapipe-wasm-main",
+      "modelSha256": "0720bf247bd76e6594ea28fa9c6f7c5242be774818997dbbeffc4da460c723bb",
+      "browser": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/155.0.0.0 Safari/537.36",
+      "accuracy": null,
+      "phoneMeasured": false,
+      "trainingPerformed": false
+    },
+    {
+      "name": "smoke-worker",
+      "runSha256": "1171213751bed44632e379be7a004d05d2a1bc800ef23bebf662af68cdf9203e",
+      "reportSha256": "74ad380eb1b8cd29870c6d566562ea749300e9c2e65839168169384999ca0f27",
+      "frames": 2,
+      "scope": "synthetic-arithmetic-only",
+      "backend": "mediapipe-wasm-worker",
+      "modelSha256": "0720bf247bd76e6594ea28fa9c6f7c5242be774818997dbbeffc4da460c723bb",
+      "browser": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/155.0.0.0 Safari/537.36",
+      "accuracy": null,
+      "phoneMeasured": false,
+      "trainingPerformed": false
+    },
+    {
+      "name": "smoke-onnx-final",
+      "runSha256": "111b5cf8dfb987ad6c9f2bed274165fc2e3bda1e97d1232f00967cf9e252df7e",
+      "reportSha256": "869576413c0687321d172678af037e4386b68d68c2e6900902fc1ffb30c98ba0",
+      "frames": 2,
+      "scope": "synthetic-arithmetic-only",
+      "backend": "onnx-wasm-main",
+      "modelSha256": "08970ec261bc56dc69dc2c333c92c30bec064589a13e9dc7fdbfd3728a913f3a",
+      "browser": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/155.0.0.0 Safari/537.36",
+      "accuracy": null,
+      "phoneMeasured": false,
+      "trainingPerformed": false
+    }
+  ],
+  "caveat": "Real baseline inference on solid-color synthetic images and constant ONNX contract fixture only. No accuracy/performance improvement claim.",
+  "onnxContractAssertions": [
+    "class ID mapping",
+    "normalized xywh conversion",
+    "score conversion",
+    "both frames returned"
+  ],
+  "initialFailure": "ORT dynamic module URL had ?import; middleware matched full URL. Fixed to parse pathname and rerun successfully."
+}
