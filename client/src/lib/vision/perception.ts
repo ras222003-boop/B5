@@ -4,6 +4,7 @@ import type {VisualApproachObservation} from './visualApproach';
 
 /** All timestamps here use performance.now(), including producer timestamps. */
 export const PERCEPTION_TTL_MS=1250;
+export const APPROACH_TTL_MS=800;
 export const freshTimestamp=(capturedAt:number,now:number,ttl=PERCEPTION_TTL_MS)=>
   Number.isFinite(capturedAt)&&Number.isFinite(now)&&now>=capturedAt&&now-capturedAt<=ttl;
 export interface PerceptionObservation {
@@ -26,7 +27,7 @@ export function currentPerception(snapshot:PerceptionSnapshot|null,now:number){
   if(!snapshot||!freshTimestamp(snapshot.capturedAt,now))return null;
   // An asynchronous semantic observation can be older than its enclosing detector frame.
   const ground=snapshot.ground.observations.filter(item=>freshTimestamp(item.lastSeenAt,now));
-  const approach=snapshot.approach.filter(item=>freshTimestamp(item.capturedAt,now,800));
+  const approach=snapshot.approach.filter(item=>freshTimestamp(item.capturedAt,now,APPROACH_TTL_MS));
   return ground.length===snapshot.ground.observations.length&&approach.length===snapshot.approach.length?snapshot:
     {...snapshot,ground:{...snapshot.ground,observations:ground},approach};
 }

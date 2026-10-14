@@ -13,7 +13,7 @@ import { DEFAULT_VISION_CONFIG } from '@/lib/vision/config';
 import { CameraService, CameraServiceError } from '@/lib/vision/camera';
 import { TesseractOCRProvider, UnavailableDepthProvider } from '@/lib/vision/providers';
 import {openObjectProvider} from '@/lib/vision/workerObjectProvider';
-import {currentPerception,PERCEPTION_TTL_MS,type PerceptionSnapshot} from '@/lib/vision/perception';
+import {currentPerception,freshTimestamp,PERCEPTION_TTL_MS,APPROACH_TTL_MS,type PerceptionSnapshot} from '@/lib/vision/perception';
 import {answerLocalQuestion,localVoiceCommand} from '@/lib/vision/localQuestions';
 import {VisualRadar} from '@/components/vision/VisualRadar';
 import { SegFormerSceneProvider } from '@/lib/vision/modelProviders';
@@ -129,7 +129,7 @@ export default function Vision() {
       if(perceptionRef.current&&!currentPerception(perceptionRef.current,now)){
         perceptionRef.current=null;setPerception(null);setOverlayFrame(null);setScene(null);setLastObjectText('');setLastAlert('');setRisk(null);
         setAnalysisNotice('توقّف وصول إطارات حديثة؛ لا تتوفر قراءة مباشرة.');
-        speechEngine.replaceAtPriority('INFORMATION');
+        speechEngine.stop();
         if(!getSpeechPreferences().screenReaderMode)void speechEngine.enqueue(speechInput('توقف وصول إطارات حديثة؛ لا تتوفر قراءة مباشرة.',lang,'ENVIRONMENT'),'INFORMATION',0,undefined,false,now+1500);
       }
     },250);
@@ -200,13 +200,13 @@ export default function Vision() {
         config:visionConfig,copy:t,mode:'EXPLORATION',buildingId:currentBuildingId,floorId:null,announcement,safetyFlags,
         callbacks:{
           perception:snapshot=>{if(run===generation.current){perceptionRef.current=snapshot;setPerception(snapshot);setObservationClock(performance.now());}},
-          analysisState:status=>{if(run===generation.current){setAnalysisNotice(status==='PAUSED'?'الكاميرا متوقفة أو مفقودة؛ توقفت الملاحظات المباشرة.':status==='STALE'?'لا تتوفر إطارات حديثة؛ توقفت الملاحظات المباشرة.':status==='SLOW'?'موثوقية التتبع منخفضة؛ التحليل بطيء أو الإضاءة ضعيفة.':'');if(status==='PAUSED'||status==='STALE'){setOverlayFrame(null);setScene(null);setLastObjectText('');setLastAlert('');setRisk(null);speechEngine.replaceAtPriority('INFORMATION');if(!getSpeechPreferences().screenReaderMode)void speechEngine.enqueue(speechInput('توقف تحليل الكاميرا؛ لا تتوفر قراءة مباشرة.',lang,'ENVIRONMENT'),'INFORMATION',0,undefined,false,performance.now()+1500);}}},
+          analysisState:status=>{if(run===generation.current){setAnalysisNotice(status==='PAUSED'?'الكاميرا متوقفة أو مفقودة؛ توقفت الملاحظات المباشرة.':status==='STALE'?'لا تتوفر إطارات حديثة؛ توقفت الملاحظات المباشرة.':status==='SLOW'?'موثوقية التتبع منخفضة؛ التحليل بطيء أو الإضاءة ضعيفة.':'');if(status==='PAUSED'||status==='STALE'){setOverlayFrame(null);setScene(null);setLastObjectText('');setLastAlert('');setRisk(null);speechEngine.stop();if(!getSpeechPreferences().screenReaderMode)void speechEngine.enqueue(speechInput('توقف تحليل الكاميرا؛ لا تتوفر قراءة مباشرة.',lang,'ENVIRONMENT'),'INFORMATION',0,undefined,false,performance.now()+1500);}}},
           scene:description=>{if(run===generation.current){setScene(description);setState('ANALYZING');}},
           detectionFrame:frame=>{if(run===generation.current)setOverlayFrame(frame);},
           approachSpeech:text=>{
             if(run!==generation.current||!experimentalAlertsRef.current)return false;
             setLastObjectText(text);setLastOutput(text);
-            if(!getSpeechPreferences().screenReaderMode)void speechEngine.enqueue(speechInput(text,lang,'ENVIRONMENT'),'HIGH_SAFETY',0,undefined,false,(perceptionRef.current?.capturedAt??performance.now())+PERCEPTION_TTL_MS);
+            if(!getSpeechPreferences().screenReaderMode)void speechEngine.enqueue(speechInput(text,lang,'ENVIRONMENT'),'HIGH_SAFETY',0,undefined,false,(perceptionRef.current?.capturedAt??performance.now())+APPROACH_TTL_MS);
             return true;
           },
           alert:(text,level)=>{if(run===generation.current){setLastAlert(text);setRisk(level);}},
@@ -219,9 +219,10 @@ export default function Vision() {
             return true;
           },
           candidate:candidate=>{if(run===generation.current)setCandidates(previous=>[candidate,...previous].slice(0,10));},
-          recognized:place=>{if(run===generation.current){setRecognized(place);void navigationRequest<{place:Place}>(`/places/${place.placeId}`).then(result=>{
-            if(run!==generation.current)return;
-            const anchor=localizationRef.current.visualAnchor(result.place,graphNodesRef.current,place.confidence,Date.now());
+          recognized:(place,capturedAt)=>{if(run===generation.current){setRecognized(place);void navigationRequest<{place:Place}>(`/places/${place.placeId}`).then(result=>{
+            if(run!==generation.current||!freshTimestamp(capturedAt,performance.now())||!currentPerception(perceptionRef.current,performance.now()))return;
+            const sourceWallTime=Date.now()-(performance.now()-capturedAt);
+            const anchor=localizationRef.current.visualAnchor(result.place,graphNodesRef.current,place.confidence,sourceWallTime);
             if(anchor)setLocationEstimate(localizationRef.current.fusion.current(Date.now()));
           }).catch(()=>{});}},
           OCRFailure:()=>{if(run===generation.current)setOCRWarning(t.ocrFailure);},
