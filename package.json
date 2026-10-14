@@ -15,7 +15,10 @@
     "preview:perception": "node scripts/perception-preview.mjs",
     "test:perception-browser": "node scripts/perception-browser-e2e.mjs",
     "vision-ai": "node scripts/vision-ai/cli.mjs",
-    "test:vision-ai": "node --test scripts/vision-ai/vision-ai.test.mjs"
+    "test:vision-ai": "node --test scripts/vision-ai/vision-ai.test.mjs",
+    "vision-studio": "node scripts/vision-ai/studio/server.mjs",
+    "test:vision-studio": "node --test scripts/vision-ai/studio/studio.test.mjs",
+    "test:vision-studio-browser": "node scripts/vision-ai/studio/browser-test.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",

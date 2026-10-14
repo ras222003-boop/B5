@@ -1,0 +1,49 @@
+{
+  "at": "2026-10-14T21:44:23.616Z",
+  "contentKind": "synthetic-ui-only",
+  "checks": [
+    "12 synthetic images decode and display bounding boxes",
+    "Arabic search and class/source filters",
+    "UI saves versioned boxes; contributor cannot approve",
+    "existing importBundle adds new synthetic batch automatically without HTML regeneration",
+    "synthetic reference video decodes through authenticated ranged endpoint",
+    "experiment area has no training trigger",
+    "390px RTL viewport has no horizontal overflow",
+    "axe accessibility scan passes on library"
+  ],
+  "autoUpdate": {
+    "before": 12,
+    "after": 13,
+    "observedMs": 1696,
+    "timeoutMs": 10000,
+    "importStatus": "IMPORTED_PENDING_PRIVACY_AND_INDEPENDENT_LABEL_REVIEW",
+    "recreatedHtml": false
+  },
+  "externalRequests": [],
+  "pageErrors": [],
+  "accessibilityViolations": 0,
+  "screenshots": [
+    {
+      "path": "docs/vision-ai-evidence/studio/desktop-synthetic.png",
+      "sha256": "968b0c86fc281ab23057ddabb35b7dc8223a1ca9a906310887ff2b1cdf0fc10c",
+      "contentKind": "synthetic-ui-only"
+    },
+    {
+      "path": "docs/vision-ai-evidence/studio/editor-synthetic.png",
+      "sha256": "1bc64d86a54a773a7ca802acfc0b5cfac74def34d2ac98a88e84b4a6aa6c6403",
+      "contentKind": "synthetic-ui-only"
+    },
+    {
+      "path": "docs/vision-ai-evidence/studio/experiments-synthetic.png",
+      "sha256": "d02614db97f6cf3adab3bd06adb8436d3e84747aa2f1aeb5ce23fe263c6e40e0",
+      "contentKind": "synthetic-ui-only"
+    },
+    {
+      "path": "docs/vision-ai-evidence/studio/mobile-synthetic.png",
+      "sha256": "e79f88b3c44106e02855396d3c5104bb91dfa837a4ccc5f50cbbda39c071c2f8",
+      "contentKind": "synthetic-ui-only"
+    }
+  ],
+  "trainingPerformed": false,
+  "limitation": "All identities, rights approvals, images and video are fictional fixtures. An import flag of real is required by the existing file importer, and is not a claim that fixture content is real training data."
+}
