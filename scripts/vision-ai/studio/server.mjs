@@ -6,6 +6,8 @@ import { randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
 import { createInterface } from "node:readline/promises";
 import { StudioWorkspace } from "./workspace.mjs";
 import { requireValue as check, fileHash } from "../common.mjs";
+import * as assistant from "./assistant.mjs";
+import { modelRuntime, assetMime } from "./model-runtime.mjs";
 
 const ui = resolve(dirname(fileURLToPath(import.meta.url)), "ui");
 const secret = () => randomBytes(32).toString("hex");
@@ -13,25 +15,36 @@ export const passwordHash = (password, salt) =>
   scryptSync(password, salt, 64).toString("hex");
 export async function createStudio(root, { port = 0 } = {}) {
   const workspace = await new StudioWorkspace(root).init();
+  const runtime = await modelRuntime();
   const sessions = new Map(),
     failures = new Map();
   let cached,
     cacheAt = 0,
+    catalogEpoch = 0,
     pendingCatalog;
+  const invalidateCatalog = () => {
+    catalogEpoch++;
+    cached = null;
+    cacheAt = 0;
+    pendingCatalog = null;
+  };
   const catalog = async () => {
     if (cached && Date.now() - cacheAt < 500) return cached;
     if (pendingCatalog) return pendingCatalog;
-    pendingCatalog = workspace
+    const epoch = catalogEpoch;
+    const request = workspace
       .catalog()
       .then(c => {
+        if (epoch !== catalogEpoch) return catalog();
         cached = c;
         cacheAt = Date.now();
         return c;
       })
       .finally(() => {
-        pendingCatalog = null;
+        if (pendingCatalog === request) pendingCatalog = null;
       });
-    return pendingCatalog;
+    pendingCatalog = request;
+    return request;
   };
   const server = http.createServer(async (req, res) => {
     let fd;
@@ -62,13 +75,13 @@ export async function createStudio(root, { port = 0 } = {}) {
       res.setHeader("Referrer-Policy", "no-referrer");
       res.setHeader(
         "Content-Security-Policy",
-        "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' blob:; media-src 'self' blob:; connect-src 'self'; font-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'"
+        "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self'; style-src 'self'; img-src 'self' blob:; media-src 'self' blob:; connect-src 'self'; font-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'"
       );
       const url = new URL(req.url, origin),
         pathname = url.pathname;
       if (
         req.method === "GET" &&
-        ["/", "/app.mjs", "/styles.css"].includes(pathname)
+        ["/", "/app.mjs", "/assistant-ui.mjs", "/styles.css"].includes(pathname)
       ) {
         if (pathname === "/") {
           const id = secret();
@@ -176,6 +189,87 @@ export async function createStudio(root, { port = 0 } = {}) {
         return;
       }
       check(session.actor, "Local account login required");
+      if (req.method === "GET" && pathname === "/local-models.mjs") {
+        res.setHeader("Content-Type", "text/javascript");
+        res.end(runtime.script);
+        return;
+      }
+      if (req.method === "GET" && runtime.assets.has(pathname)) {
+        const asset = runtime.assets.get(pathname);
+        check(
+          (await fileHash(asset.path)) === asset.sha256,
+          "Bundled model asset changed"
+        );
+        res.setHeader("Content-Type", assetMime(pathname));
+        res.end(await readFile(asset.path));
+        return;
+      }
+      if (pathname === "/api/assistant/capabilities" && req.method === "GET") {
+        json(200, runtime.manifest);
+        return;
+      }
+      if (pathname === "/api/assistant/reports" && req.method === "GET") {
+        json(200, {
+          reports: await assistant.reports(
+            workspace,
+            url.searchParams.get("key")
+          ),
+        });
+        return;
+      }
+      if (pathname === "/api/assistant/analyze" && req.method === "POST") {
+        const p = await body();
+        json(200, await assistant.analyze(workspace, p.key, session.actor));
+        return;
+      }
+      if (
+        pathname === "/api/assistant/model-results" &&
+        req.method === "POST"
+      ) {
+        json(
+          200,
+          await assistant.saveModelReport(
+            workspace,
+            await body(),
+            session.actor,
+            runtime.manifest
+          )
+        );
+        return;
+      }
+      if (pathname === "/api/assistant/scan" && req.method === "POST") {
+        json(200, await assistant.scan(workspace));
+        return;
+      }
+      if (pathname === "/api/assistant/review-pair" && req.method === "POST") {
+        json(
+          200,
+          await assistant.reviewPair(workspace, await body(), session.actor)
+        );
+        return;
+      }
+      if (pathname === "/api/assistant/redact" && req.method === "POST") {
+        const p = await body();
+        json(200, await assistant.redact(workspace, p.key, p, session.actor));
+        invalidateCatalog();
+        return;
+      }
+      if (pathname === "/api/assistant/synthetic" && req.method === "POST") {
+        json(
+          200,
+          await assistant.importSynthetic(
+            workspace,
+            await body(),
+            session.actor
+          )
+        );
+        invalidateCatalog();
+        return;
+      }
+      if (pathname === "/api/assistant/packet" && req.method === "POST") {
+        json(200, await assistant.needsPacket(workspace, session.actor));
+        return;
+      }
       if (pathname === "/api/catalog" && req.method === "GET") {
         const c = await catalog();
         json(200, { ...c, items: c.items.map(({ data, ...item }) => item) });
@@ -197,7 +291,7 @@ export async function createStudio(root, { port = 0 } = {}) {
           await body(),
           session.actor
         );
-        cacheAt = 0;
+        invalidateCatalog();
         json(200, result);
         return;
       }
@@ -227,11 +321,16 @@ export async function createStudio(root, { port = 0 } = {}) {
         check(item, "Unknown media");
         const path =
           media[1] === "image"
-            ? await workspace.mediaPath(item)
+            ? await workspace.mediaPath(
+                item,
+                url.searchParams.get("original") === "1"
+              )
             : await workspace.safe(item.path);
         const expected =
           media[1] === "image"
-            ? (item.activeSha256 ?? item.sample.sha256)
+            ? url.searchParams.get("original") === "1"
+              ? item.sample.sha256
+              : (item.activeSha256 ?? item.sample.sha256)
             : item.sha256;
         check(
           expected && (await fileHash(path)) === expected,

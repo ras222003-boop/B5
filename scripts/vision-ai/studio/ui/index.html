@@ -15,6 +15,7 @@
       </div>
       <p class="sidebar-label">مساحة العمل</p>
       <nav>
+        <button class="nav" data-tab="assistant">✦ المساعد المحلي</button>
         <button class="nav active" data-tab="gallery">▦ مكتبة البيانات</button
         ><button class="nav" data-tab="experiments">◷ تجارب التدريب</button>
       </nav>
@@ -108,6 +109,12 @@
                 <option value="basira_team">فريق بصيرة</option>
               </select></label
             ><label
+              >نوع البيانات<select id="content-filter">
+                <option value="">الحقيقية والاصطناعية</option>
+                <option value="real">حقيقية فقط</option>
+                <option value="synthetic">اصطناعية فقط</option>
+              </select></label
+            ><label
               >حالة المراجعة<select id="status-filter">
                 <option value="">كل الحالات</option>
                 <option value="approved">مكتملة المراجعة</option>
@@ -117,6 +124,7 @@
               </select></label
             >
           </div>
+          <p id="content-counts" class="muted"></p>
           <div class="class-strip" id="class-counts"></div>
           <div class="snapshot panel">
             <div>
@@ -146,6 +154,101 @@
             </p>
             <div id="videos" class="grid"></div>
           </section>
+        </section>
+        <section id="assistant-panel" hidden>
+          <div class="section-heading">
+            <div>
+              <h2>مشكلات تحتاج معالجة</h2>
+              <p>اقتراحات محلية مسجلة، والاعتماد النهائي بشري مستقل.</p>
+            </div>
+            <span class="badge pending">السحابة معطلة</span>
+          </div>
+          <p id="assistant-capabilities" class="panel"></p>
+          <div class="button-row">
+            <button id="batch-models" class="quiet">
+              اقتراحات الكشف للمكتبة</button
+            ><label class="check"
+              ><input id="batch-ocr" type="checkbox" />قراءة النصوص محليًا
+              أيضًا</label
+            ><button id="batch-quality" class="primary">فحص جودة المكتبة</button
+            ><button id="scan-similarity" class="quiet">
+              فحص التكرار والتشابه</button
+            ><button id="export-chatgpt" class="quiet">
+              احتياجات البيانات وتقرير ChatGPT
+            </button>
+          </div>
+          <p id="batch-progress" role="status"></p>
+          <div id="issue-summary"></div>
+          <div id="similarity-results"></div>
+          <section id="packet-panel" class="panel" hidden>
+            <h3>معاينة التقرير قبل مشاركته</h3>
+            <p>
+              لا صور أو أسماء ملفات أو نص OCR أو بيانات قياس. افحص الأعداد
+              والتفاصيل قبل إرسال الملف بنفسك إلى ChatGPT. لن يُرسل تلقائيًا.
+            </p>
+            <button id="download-packet" class="quiet">
+              تنزيل التقرير النصي
+            </button>
+            <pre id="packet-preview" tabindex="0" aria-label="حزمة المراجعة النصية القابلة للتمرير"></pre>
+          </section>
+          <details class="panel">
+            <summary>استيراد صورة اصطناعية مستقلة</summary>
+            <p>
+              لم تُجهز خدمة توليد. ارفع صورة أنشأتها بصورة مستقلة، وسجل المصدر
+              والموديل والإعدادات وحقوق الاستخدام. لا تنسخ صورة مرفوضة الحقوق
+              ولا تغير اسمها إلى اصطناعية.
+            </p>
+            <form id="synthetic-form">
+              <label
+                >الصورة<input
+                  id="synthetic-file"
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp"
+                  required /></label
+              ><label>أداة التوليد<input name="generator" required /></label
+              ><label
+                >اسم/إصدار النموذج (أو غير معلن)<input
+                  name="model"
+                  required /></label
+              ><label
+                >وصف التوليد<textarea name="prompt" required></textarea></label
+              ><label
+                >الإعدادات بصيغة JSON (بدون أسرار)<textarea
+                  name="settings"
+                  required
+                >
+{}</textarea
+                ></label
+              ><label>Seed إن توفر<input name="seed" /></label
+              ><label
+                >وقت التوليد بتوقيت ISO<input
+                  name="generatedAt"
+                  placeholder="2026-10-15T10:00:00Z"
+                  required /></label
+              ><label>مرجع المصدر<input name="origin" required /></label
+              ><label
+                >الترخيص/شروط الاستخدام المعلنة<input
+                  name="license"
+                  required /></label
+              ><label
+                >نص دليل الحقوق أو الشروط<textarea
+                  name="rightsText"
+                  required
+                ></textarea></label
+              ><label class="check"
+                ><input
+                  name="independentCreation"
+                  type="checkbox"
+                  required
+                />الصورة جديدة ومستقلة، وليست تعديلًا لأصل مرفوض الحقوق</label
+              ><label class="check"
+                ><input name="noUserData" type="checkbox" required />لم تستخدم
+                صور المستخدمين أو بياناتهم</label
+              ><button class="primary">
+                استيراد اصطناعي — بانتظار المراجعة
+              </button>
+            </form>
+          </details>
         </section>
         <section id="experiments-panel" hidden>
           <div class="section-heading">
@@ -187,6 +290,12 @@
               viewBox="0 0 1000 1000"
               preserveAspectRatio="none"
               aria-label="مربعات الأجسام القابلة للتعديل"
+            ></svg
+            ><svg
+              id="redaction-overlay"
+              viewBox="0 0 1000 1000"
+              preserveAspectRatio="none"
+              aria-hidden="true"
             ></svg>
           </div>
           <p class="muted">
@@ -194,6 +303,47 @@
             والارتفاع (بين 0 و1).
           </p>
           <div id="spatial" class="panel"></div>
+          <section class="panel assistant-tools">
+            <h3>المساعد المحلي</h3>
+            <div class="button-row">
+              <button id="analyze-quality" class="quiet">
+                تحليل الجودة والوسوم</button
+              ><button id="analyze-models" class="primary">
+                اقتراح كشف وOCR محلي
+              </button>
+            </div>
+            <label class="check"
+              ><input id="use-ocr" type="checkbox" checked />استخدام OCR المحلي
+              للنصوص (قد يستغرق وقتًا)</label
+            >
+            <div id="assistant-result"></div>
+            <label class="check"
+              ><input id="redaction-mode" type="checkbox" />السحب فوق الصورة
+              يحدد منطقة تنقيح بدل إضافة جسم</label
+            >
+            <div id="redaction-regions"></div>
+            <label class="check"
+              ><input id="confirm-redaction" type="checkbox" />راجعت المناطق
+              وأطلب تغطيتها في نسخة مستقلة، دون اعتماد الخصوصية</label
+            >
+            <div class="button-row">
+              <button id="apply-redaction" class="quiet">
+                تجهيز نسخة منقحة</button
+              ><button id="compare-versions" class="quiet">
+                مقارنة الأصل بالنسخة
+              </button>
+            </div>
+            <div id="comparison" class="comparison" hidden>
+              <figure>
+                <img id="compare-before" alt="الأصل دون تعديل" />
+                <figcaption>الأصل</figcaption>
+              </figure>
+              <figure>
+                <img id="compare-after" alt="النسخة الحالية المنفصلة" />
+                <figcaption>النسخة الحالية</figcaption>
+              </figure>
+            </div>
+          </section>
           <label class="file-label"
             >إرفاق نسخة منقحة من الصورة<input
               id="derivative"

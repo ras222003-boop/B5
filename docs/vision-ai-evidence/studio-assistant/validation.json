@@ -1,0 +1,115 @@
+{
+  "at": "2026-10-14T22:43:24.628Z",
+  "base": "bd5b0b7f482884eed70c06d7119037641e01fa24",
+  "branch": "codex/basira-studio-local-assistant",
+  "nodeTests": {
+    "passed": 78,
+    "failed": 0,
+    "toolkit": 43,
+    "studio": 20,
+    "assistant": 15,
+    "syntheticOnly": true
+  },
+  "typecheck": {
+    "passed": true
+  },
+  "build": {
+    "passed": true,
+    "existingChunkSizeWarnings": true
+  },
+  "assistantBrowser": {
+    "report": "docs/vision-ai-evidence/studio-assistant/browser-validation.json",
+    "sha256": "10c175e5d9ff6b9cc521644abf7ac42b617ee822d874c1d81c7ff4de49fa17c7",
+    "externalRequests": 0,
+    "pageErrors": 0,
+    "accessibilityViolations": 0,
+    "autoUpdate": {
+      "before": 2,
+      "after": 3,
+      "observedMs": 384,
+      "recreatedHtml": false
+    }
+  },
+  "studioRegression": {
+    "checks": [
+      "12 synthetic images decode and display bounding boxes",
+      "Arabic search and class/source filters",
+      "UI saves versioned boxes; contributor cannot approve",
+      "existing importBundle adds new synthetic batch automatically without HTML regeneration",
+      "synthetic reference video decodes through authenticated ranged endpoint",
+      "experiment area has no training trigger",
+      "390px RTL viewport has no horizontal overflow",
+      "axe accessibility scan passes on library"
+    ],
+    "autoUpdate": {
+      "before": 12,
+      "after": 13,
+      "observedMs": 1541,
+      "timeoutMs": 10000,
+      "importStatus": "IMPORTED_PENDING_PRIVACY_AND_INDEPENDENT_LABEL_REVIEW",
+      "recreatedHtml": false
+    },
+    "externalRequests": 0,
+    "pageErrors": 0,
+    "accessibilityViolations": 0
+  },
+  "publicationAudit": {
+    "passed": true,
+    "findings": []
+  },
+  "privateOriginalIntegrity": {
+    "filesVerified": 211,
+    "allUnchanged": true,
+    "writesPerformed": false
+  },
+  "sourceFiles": [
+    {
+      "path": "scripts/vision-ai/studio/assistant.mjs",
+      "sha256": "8e47a60f0421a114575bfae49ba78ec7ee1e7a023225f7b06425d8e3639ac295"
+    },
+    {
+      "path": "scripts/vision-ai/studio/assistant.test.mjs",
+      "sha256": "32047a0eb9b6e7263a1e244ad719aa642be3a75ee9173fc51657e1a3d2d62715"
+    },
+    {
+      "path": "scripts/vision-ai/studio/studio.test.mjs",
+      "sha256": "f1dbcfa0fe3b5a3c9d9f5d5abf9cd4a48e02d33fa318753f31dfb8f323ecef4f"
+    },
+    {
+      "path": "scripts/vision-ai/studio/server.mjs",
+      "sha256": "5546957c60e01fa404437c90a9790e248e14dd27799d60429493063231924ceb"
+    },
+    {
+      "path": "scripts/vision-ai/studio/workspace.mjs",
+      "sha256": "eac5d9ef43ed49bb35e4f5f857366b62295e9fac247afe2405e403851c329fda"
+    },
+    {
+      "path": "scripts/vision-ai/studio/model-runtime.mjs",
+      "sha256": "33176da662039f9f99ab0c1bedab5e22aa140b28317de38c1417e98e719e1ca1"
+    },
+    {
+      "path": "scripts/vision-ai/studio/ui/assistant-ui.mjs",
+      "sha256": "43e5c57b14dec464342194f86f79610301a8c76f1581a69616ac44eb377ed687"
+    },
+    {
+      "path": "scripts/vision-ai/studio/ui/model-entry.mjs",
+      "sha256": "652061792d998f8196e894b515482fd57e3e538650946d9d83f2fa5abdfae116"
+    },
+    {
+      "path": "scripts/vision-ai/studio/ui/app.mjs",
+      "sha256": "990f2c21621d938abc8077887289deaba81d2af296420abfbbd36ce87b114976"
+    },
+    {
+      "path": "scripts/vision-ai/studio/ui/index.html",
+      "sha256": "57c5e20710633cda4a7993468b3376209b13c86b1d2b449d2caed1c981447d1e"
+    },
+    {
+      "path": "scripts/vision-ai/studio/ui/styles.css",
+      "sha256": "7762173525338272253674e784e2edd2a9f885938fb2fe8cba5558893ed9722c"
+    }
+  ],
+  "realDataApproved": 0,
+  "trainingPerformed": false,
+  "cloudUploadPerformed": false,
+  "limitation": "Functional synthetic checks only; no model accuracy or privacy recall, metric-distance or real training claim. Independent final human review remains mandatory."
+}

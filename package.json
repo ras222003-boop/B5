@@ -17,7 +17,8 @@
     "vision-ai": "node scripts/vision-ai/cli.mjs",
     "test:vision-ai": "node --test scripts/vision-ai/vision-ai.test.mjs",
     "vision-studio": "node scripts/vision-ai/studio/server.mjs",
-    "test:vision-studio": "node --test scripts/vision-ai/studio/studio.test.mjs",
+    "test:vision-studio": "node --test scripts/vision-ai/studio/studio.test.mjs scripts/vision-ai/studio/assistant.test.mjs",
+    "test:vision-assistant-browser": "node scripts/vision-ai/studio/assistant-browser-test.mjs",
     "test:vision-studio-browser": "node scripts/vision-ai/studio/browser-test.mjs"
   },
   "dependencies": {

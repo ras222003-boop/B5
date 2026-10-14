@@ -23,6 +23,10 @@ export async function validateDataset(data, root, { verifyFiles = true, requireS
   check(data?.schemaVersion === 1 && nonempty(data.id) && nonempty(data.annotationRevision), 'dataset identity/revision required');
   check(data.taxonomyVersion === taxonomy.version, 'taxonomy version mismatch');
   check(data.contentKind === 'real' || allowSynthetic && data.contentKind === 'synthetic', 'real approved data required; synthetic fixtures cannot train');
+  const hasSynthetic = data.sources?.some(s => s.originKind === 'synthetic') ||
+    data.samples?.some(s => s.originKind === 'synthetic' || s.generation);
+  check(!hasSynthetic || data.contentKind === 'synthetic' && allowSynthetic,
+    'synthetic provenance cannot enter real evaluation, training export or metric calibration');
   const spatialEnabled = data.spatialPolicyVersion !== undefined;
   if (spatialEnabled) check(data.spatialPolicyVersion === proximityPolicy.version, 'spatial policy version mismatch');
   else check(data.motionSegments === undefined && data.samples?.every(s => s.annotation?.objects?.every(o => o.spatial === undefined)),
