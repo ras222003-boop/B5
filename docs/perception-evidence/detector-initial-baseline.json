@@ -1,0 +1,14 @@
+{
+  "sourceRevision": "c52b755b9c18ad2fb08163e4ff329fdcf6384415",
+  "phase": "Initial measurement before implementation; restored from the recorded tool output",
+  "scope": "Desktop Chrome, one existing chair still repeated; 5 warmup + 20 timed iterations. Not accuracy, camera, motion, or mobile validation.",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/155.0.0.0 Safari/537.36",
+  "loadMs": 2116.7999999821186,
+  "medianMs": 106.69999998807907,
+  "p95Ms": 121.09999999403954,
+  "samples": 20,
+  "observedClass": "CHAIR",
+  "score": 0.85546875,
+  "accuracy": null,
+  "mobile": null
+}

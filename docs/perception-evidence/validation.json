@@ -1,0 +1,38 @@
+{
+  "date": "2026-10-14",
+  "baseRevision": "c52b755b9c18ad2fb08163e4ff329fdcf6384415",
+  "implementationRevision": "5eb4095",
+  "vitest": {
+    "files": 82,
+    "passed": 461,
+    "durationSeconds": 49.08,
+    "failed": 0
+  },
+  "metricsTests": {
+    "failed": 0,
+    "passed": 13
+  },
+  "autoMeterReportTests": {
+    "failed": 0,
+    "passed": 4
+  },
+  "typecheck": "passed",
+  "clientBuild": "passed; existing chunk-size warning",
+  "serverBuild": "passed",
+  "metricArtifactIntegrity": "passed",
+  "browserScenarios": 2,
+  "browserEvidence": "browser-e2e.json",
+  "physicalPhone": "not run",
+  "audibleSpeech": "not run; browser synthesis stub only",
+  "realScreenReader": "not run",
+  "liveForge": "not run; key not configured",
+  "annotatedAccuracy": "not measured",
+  "databaseMigrations": "passed in isolated GitHub CI on preceding dfe49f0; latest revision runs separately",
+  "targetedFinalTests": {
+    "failed": 0,
+    "passed": 23,
+    "files": 4
+  },
+  "precedingCiEvidence": "ci-dfe49f0.json",
+  "localFullSuitePhase": "After six lifecycle regressions; before final capture-time callback and speech expiry wiring, covered by targetedFinalTests."
+}

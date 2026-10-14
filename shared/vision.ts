@@ -4,6 +4,7 @@ export const VISION_OBJECT_TYPES = [
   'STAIRS_DOWN', 'STAIRS_UNCERTAIN', 'ELEVATOR', 'VEHICLE', 'CAR', 'BUS', 'TRUCK', 'MOTORCYCLE', 'BICYCLE',
   'CART', 'BOX', 'BARRIER', 'SIGN', 'CORRIDOR', 'ENTRANCE', 'EXIT',
   'UNKNOWN_OBSTACLE', 'DROP_OFF', 'DROP_OFF_UNCERTAIN',
+  'SOFA', 'BED', 'BACKPACK', 'HANDBAG', 'SUITCASE', 'BOTTLE', 'DOG', 'CAT',
 ] as const;
 export type VisionObjectType = typeof VISION_OBJECT_TYPES[number];
 export type HorizontalDirection = 'LEFT' | 'FRONT_LEFT' | 'FRONT' | 'FRONT_RIGHT' | 'RIGHT';
@@ -12,6 +13,14 @@ export type RiskLevel = 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'INFORMATION';
 export type DistanceBand = 'VERY_CLOSE' | 'CLOSE' | 'MEDIUM' | 'FAR' | 'UNKNOWN';
 export type VisionMode = 'EXPLORATION' | 'NAVIGATION';
 export interface BoundingBox { x: number; y: number; width: number; height: number }
+/** Association quality, not a claim about world motion or identity beyond this camera session. */
+export interface ObjectTracking {
+  state: 'TENTATIVE' | 'TRACKED' | 'AMBIGUOUS' | 'REACQUIRED';
+  observations: number;
+  firstSeenAt: number;
+  lastSeenAt: number;
+  gapMs: number;
+}
 export interface DepthReading {
   distanceMeters: number;
   confidence: number;
@@ -29,6 +38,10 @@ export interface VisionDetection {
   source: 'OBJECT_DETECTOR' | 'SEGMENTATION' | 'DEPTH_FUSION' | 'OCR_SIGN' | 'NATIVE' | 'CLOUD';
   /** Native/custom providers can establish a stable ID across frames. */
   trackId?: string;
+  tracking?: ObjectTracking;
+  /** A model score is not calibrated probability; region heuristics are not class scores. */
+  confidenceKind?: 'MODEL_SCORE' | 'REGION_HEURISTIC' | 'UNSPECIFIED';
+  evidence?: readonly string[];
 }
 export interface ObstacleDetection extends VisionDetection {
   riskLevel: RiskLevel;
@@ -92,7 +105,7 @@ export interface MetricDepthMap { width: number; height: number; values: Float32
 export interface EstimatedMetricDepthMap { width: number; height: number; values: Float32Array; source: 'MONOCULAR_METRIC'; timestamp: number }
 
 /** Frame input is ephemeral; providers must never retain or upload it implicitly. */
-export interface VisionProvider { detect(frame: HTMLVideoElement | HTMLCanvasElement, timestamp: number): Promise<VisionDetection[]>; close(): Promise<void> }
+export interface VisionProvider { detect(frame: HTMLVideoElement | HTMLCanvasElement | OffscreenCanvas, timestamp: number): Promise<VisionDetection[]>; close(): Promise<void> }
 export interface SceneSegmentationProvider { segment(frame: Blob, timestamp: number): Promise<SegmentationGrid>; close(): Promise<void> }
 export interface RelativeDepthProvider { estimate(frame: Blob, timestamp: number): Promise<RelativeDepthMap>; close(): Promise<void> }
 export interface MetricDepthProvider { capture(timestamp: number): Promise<MetricDepthMap | null>; close(): Promise<void> }

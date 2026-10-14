@@ -11,7 +11,11 @@ import {authClient} from '@/lib/auth-client';
 import { permissionService, type PermissionState } from '@/lib/permissionService';
 import { DEFAULT_VISION_CONFIG } from '@/lib/vision/config';
 import { CameraService, CameraServiceError } from '@/lib/vision/camera';
-import { MediaPipeVisionProvider, TesseractOCRProvider, UnavailableDepthProvider } from '@/lib/vision/providers';
+import { TesseractOCRProvider, UnavailableDepthProvider } from '@/lib/vision/providers';
+import {openObjectProvider} from '@/lib/vision/workerObjectProvider';
+import {currentPerception,freshTimestamp,PERCEPTION_TTL_MS,APPROACH_TTL_MS,type PerceptionSnapshot} from '@/lib/vision/perception';
+import {answerLocalQuestion,localVoiceCommand} from '@/lib/vision/localQuestions';
+import {VisualRadar} from '@/components/vision/VisualRadar';
 import { SegFormerSceneProvider } from '@/lib/vision/modelProviders';
 import { WorkerMetricDepthProvider } from '@/lib/vision/workerMetricModel';
 import { detectVisionCapabilities, type VisionCapabilities } from '@/lib/vision/capabilities';
@@ -108,6 +112,29 @@ export default function Vision() {
   const [descriptionError,setDescriptionError]=useState('');
   const [descriptionBusy,setDescriptionBusy]=useState(false);
   const [question,setQuestion]=useState('');
+  const [perception,setPerception]=useState<PerceptionSnapshot|null>(null);
+  const perceptionRef=useRef<PerceptionSnapshot|null>(null);
+  const lastAskedPerceptionRef=useRef<PerceptionSnapshot|null>(null);
+  const [radarVisible,setRadarVisible]=useState(true);
+  const [experimentalAlerts,setExperimentalAlerts]=useState(false);
+  const experimentalAlertsRef=useRef(false);
+  const [analysisNotice,setAnalysisNotice]=useState('');
+  const [observationClock,setObservationClock]=useState(()=>performance.now());
+  const [lastOutput,setLastOutput]=useState('');
+  const current=currentPerception(perception,observationClock);
+  useEffect(()=>{
+    if(state==='STOPPED')return;
+    const timer=window.setInterval(()=>{
+      const now=performance.now();setObservationClock(now);
+      if(perceptionRef.current&&!currentPerception(perceptionRef.current,now)){
+        perceptionRef.current=null;setPerception(null);setOverlayFrame(null);setScene(null);setLastObjectText('');setLastAlert('');setRisk(null);
+        setAnalysisNotice('توقّف وصول إطارات حديثة؛ لا تتوفر قراءة مباشرة.');
+        speechEngine.stop();
+        if(!getSpeechPreferences().screenReaderMode)void speechEngine.enqueue(speechInput('توقف وصول إطارات حديثة؛ لا تتوفر قراءة مباشرة.',lang,'ENVIRONMENT'),'INFORMATION',0,undefined,false,now+1500);
+      }
+    },250);
+    return()=>window.clearInterval(timer);
+  },[state==='STOPPED']);
   useEffect(()=>{if(dictation.transcript)setQuestion(dictation.transcript);},[dictation.transcript]);
   useEffect(()=>{const changed=()=>setScreenReaderMode(getSpeechPreferences().screenReaderMode);window.addEventListener('basira-speech-preferences',changed);return()=>window.removeEventListener('basira-speech-preferences',changed);},[]);
   useEffect(()=>{permissionService.status('camera').then(setCameraPermission).catch(()=>{});const update=()=>setOnline(navigator.onLine);window.addEventListener('online',update);window.addEventListener('offline',update);return()=>{window.removeEventListener('online',update);window.removeEventListener('offline',update);};},[]);
@@ -130,6 +157,7 @@ export default function Vision() {
     cameraRef.current.stop(videoRef.current??undefined);
     setVideoPaused(false);
     stopSpeaking();
+    perceptionRef.current=null;lastAskedPerceptionRef.current=null;setPerception(null);setLastObjectText('');setLastOutput('');setAnalysisNotice('توقف تحليل الكاميرا.');
     setState('STOPPED');setMetricInfo({status:'UNAVAILABLE',source:null});setMeterDiagnostic('OFF');setMeterSnapshot(null);setOverlayFrame(null);setPinnedFrame(null);setMeterRequestBusy(false);setMeterSpokenStatus('');setMetricTiming({load:null,inference:null});speechPacerRef.current.reset();setScene(null);setCandidates([]);setRecognized(null);setDescriptionImage(null);setDescriptionSentFrame(null);setDescriptionText('');setDescriptionDiagnostics('');setCameraSize(null);setDescriptionBusy(false);
     localizationRef.current=new BasiraLocalizationEngine();setLocationEstimate(null);graphNodesRef.current=[];
     if(pipeline)await pipeline.stop();
@@ -157,32 +185,44 @@ export default function Vision() {
       if(run!==generation.current){cameraRef.current.stop(videoRef.current);return;}
       if(!nativeFrames){setCameraPermission('allowed');setCameraSize(videoRef.current.videoWidth&&videoRef.current.videoHeight?{width:videoRef.current.videoWidth,height:videoRef.current.videoHeight}:cameraRef.current.frameSize);}
       else setCameraSize({width:nativeCanvasRef.current.width,height:nativeCanvasRef.current.height});
-      const provider=await MediaPipeVisionProvider.open(visionConfig);
+      const {provider,execution}=await openObjectProvider(visionConfig);
+      if(execution==='MAIN_THREAD')setAnalysisNotice('يستخدم هذا المتصفح التحليل على خيط الواجهة؛ قد تتأخر الاستجابة.');
       if(run!==generation.current){await provider.close();cameraRef.current.stop(videoRef.current);return;}
       const currentBuildingId=sessionStorage.getItem('basira-current-building');
       graphNodesRef.current=currentBuildingId?(await navApi.graph(currentBuildingId).then(result=>result.nodes).catch(()=>[])):[];
       if(run!==generation.current){await provider.close();cameraRef.current.stop(videoRef.current);return;}
-      const announcement=new VisionAnnouncementService(t,(text,priority)=>{void speechEngine.enqueue(speechInput(text,lang,'ENVIRONMENT'),priority??'HIGH_SAFETY');},new BrowserHapticFeedbackProvider(),visionConfig.alertCooldownMs);
+      const announcement=new VisionAnnouncementService(t,(text,priority)=>{void speechEngine.enqueue(speechInput(text,lang,'ENVIRONMENT'),priority??'HIGH_SAFETY',0,undefined,false,(perceptionRef.current?.capturedAt??performance.now())+PERCEPTION_TTL_MS);},new BrowserHapticFeedbackProvider(),visionConfig.alertCooldownMs);
       const pipeline=new VisionPipeline({video:videoRef.current,nativeCanvas:nativeCanvasRef.current,nativeFrames,
         autoMeterEnabled:autoMeterEnabledRef.current,objectSpeechEnabled:objectSpeechRef.current,approachPhrase:assistant.approach,vision:provider,ocr:new TesseractOCRProvider(),depth:new UnavailableDepthProvider(),
+        experimentalApproachEnabled:experimentalAlertsRef.current,
         estimatedMetricModel:nativeFrames?undefined:signal=>WorkerMetricDepthProvider.open(signal),
         segmentationIntervalMs:detected.segmentationIntervalMs,depthIntervalMs:detected.depthIntervalMs,
         config:visionConfig,copy:t,mode:'EXPLORATION',buildingId:currentBuildingId,floorId:null,announcement,safetyFlags,
         callbacks:{
+          perception:snapshot=>{if(run===generation.current){perceptionRef.current=snapshot;setPerception(snapshot);setObservationClock(performance.now());}},
+          analysisState:status=>{if(run===generation.current){setAnalysisNotice(status==='PAUSED'?'الكاميرا متوقفة أو مفقودة؛ توقفت الملاحظات المباشرة.':status==='STALE'?'لا تتوفر إطارات حديثة؛ توقفت الملاحظات المباشرة.':status==='SLOW'?'موثوقية التتبع منخفضة؛ التحليل بطيء أو الإضاءة ضعيفة.':'');if(status==='PAUSED'||status==='STALE'){setOverlayFrame(null);setScene(null);setLastObjectText('');setLastAlert('');setRisk(null);speechEngine.stop();if(!getSpeechPreferences().screenReaderMode)void speechEngine.enqueue(speechInput('توقف تحليل الكاميرا؛ لا تتوفر قراءة مباشرة.',lang,'ENVIRONMENT'),'INFORMATION',0,undefined,false,performance.now()+1500);}}},
           scene:description=>{if(run===generation.current){setScene(description);setState('ANALYZING');}},
           detectionFrame:frame=>{if(run===generation.current)setOverlayFrame(frame);},
+          approachSpeech:text=>{
+            if(run!==generation.current||!experimentalAlertsRef.current)return false;
+            setLastObjectText(text);setLastOutput(text);
+            if(!getSpeechPreferences().screenReaderMode)void speechEngine.enqueue(speechInput(text,lang,'ENVIRONMENT'),'HIGH_SAFETY',0,undefined,false,(perceptionRef.current?.capturedAt??performance.now())+APPROACH_TTL_MS);
+            return true;
+          },
           alert:(text,level)=>{if(run===generation.current){setLastAlert(text);setRisk(level);}},
           objectSpeech:text=>{
             if(run!==generation.current||!objectSpeechRef.current)return false;
             if(!getSpeechPreferences().screenReaderMode&&speechEngine.busy)return false;
             setLastObjectText(text);
-            if(!getSpeechPreferences().screenReaderMode)void speechEngine.enqueue(speechInput(text,lang,'ENVIRONMENT'),'INFORMATION');
+            setLastOutput(text);
+            if(!getSpeechPreferences().screenReaderMode)void speechEngine.enqueue(speechInput(text,lang,'ENVIRONMENT'),'INFORMATION',0,undefined,false,(perceptionRef.current?.capturedAt??performance.now())+PERCEPTION_TTL_MS);
             return true;
           },
           candidate:candidate=>{if(run===generation.current)setCandidates(previous=>[candidate,...previous].slice(0,10));},
-          recognized:place=>{if(run===generation.current){setRecognized(place);void navigationRequest<{place:Place}>(`/places/${place.placeId}`).then(result=>{
-            if(run!==generation.current)return;
-            const anchor=localizationRef.current.visualAnchor(result.place,graphNodesRef.current,place.confidence,Date.now());
+          recognized:(place,capturedAt)=>{if(run===generation.current){setRecognized(place);void navigationRequest<{place:Place}>(`/places/${place.placeId}`).then(result=>{
+            if(run!==generation.current||!freshTimestamp(capturedAt,performance.now())||!currentPerception(perceptionRef.current,performance.now()))return;
+            const sourceWallTime=Date.now()-(performance.now()-capturedAt);
+            const anchor=localizationRef.current.visualAnchor(result.place,graphNodesRef.current,place.confidence,sourceWallTime);
             if(anchor)setLocationEstimate(localizationRef.current.fusion.current(Date.now()));
           }).catch(()=>{});}},
           OCRFailure:()=>{if(run===generation.current)setOCRWarning(t.ocrFailure);},
@@ -216,7 +256,7 @@ export default function Vision() {
       await pipeline.start();
       if(run===generation.current){setState('WORKING');if(nativeFrames)setCameraPermission('allowed');}
       // Optional segmentation loads after the detector is live and cannot hold startup hostage.
-      window.setTimeout(()=>{if(run!==generation.current)return;void SegFormerSceneProvider.open().then(model=>{
+      if(import.meta.env.VITE_BASIRA_RESEARCH_SEGMENTATION==='true')window.setTimeout(()=>{if(run!==generation.current)return;void SegFormerSceneProvider.open().then(model=>{
         if(run===generation.current)pipeline.setSegmentation(model);else void model.close();
       }).catch(()=>{if(run===generation.current)setModelWarning(t.segmentationFailure);});},2500);
     } catch(caught) {
@@ -232,8 +272,31 @@ export default function Vision() {
     }
   };
   const report=(detail:boolean)=>{
-    const value=scene?(detail?scene.detailedText:scene.shortText):t.noDetections;
-    setSpokenSummary(value);speak(value,0.9,lang);
+    const snapshot=currentPerception(perceptionRef.current,performance.now());
+    const answer=answerLocalQuestion('ماذا يوجد أمام الكاميرا؟',snapshot,performance.now(),t);
+    const value=detail&&snapshot&&scene?scene.detailedText:answer.route==='LOCAL'?answer.text:t.noDetections;
+    setSpokenSummary(value);setLastOutput(value);
+    if(!getSpeechPreferences().screenReaderMode)void speechEngine.enqueue(speechInput(value,lang,'ENVIRONMENT'),'INFORMATION',0,undefined,false,snapshot?snapshot.capturedAt+PERCEPTION_TTL_MS:performance.now()+PERCEPTION_TTL_MS);
+  };
+  const setAlerts=(enabled:boolean)=>{experimentalAlertsRef.current=enabled;setExperimentalAlerts(enabled);pipelineRef.current?.setExperimentalApproachEnabled(enabled);};
+  const repeatLast=()=>{const value=lastOutput?`إعادة الوصف السابق، وقد لا يمثل المشهد الحالي: ${lastOutput}`:'لا يوجد وصف سابق لإعادته.';setSpokenSummary(value);if(!getSpeechPreferences().screenReaderMode)speak(value,0.9,lang);};
+  useEffect(()=>{
+    const command=localVoiceCommand(dictation.transcript);
+    if(!command)return;
+    if(command==='OBJECTS_ON'||command==='OBJECTS_OFF'){const enabled=command==='OBJECTS_ON';objectSpeechRef.current=enabled;setObjectSpeechEnabled(saveObjectSpeechEnabled(enabled));pipelineRef.current?.setObjectSpeechEnabled(enabled);}
+    else if(command==='ALERTS_ON'||command==='ALERTS_OFF')setAlerts(command==='ALERTS_ON');
+    else if(command==='RADAR_ON'||command==='RADAR_OFF')setRadarVisible(command==='RADAR_ON');
+    else if(command==='STOP')void stop();else repeatLast();
+    setQuestion('');
+  },[dictation.transcript]);
+  const askQuestion=async()=>{
+    const snapshot=currentPerception(perceptionRef.current,performance.now());
+    const answer=answerLocalQuestion(question,snapshot,performance.now(),t,lastAskedPerceptionRef.current);
+    if(answer.route==='LOCAL'){
+      setDescriptionError('');setDescriptionText(answer.text);setLastOutput(answer.text);setDescriptionDiagnostics('إجابة من الملاحظات المحلية؛ لم تُرسل صورة إلى السحابة.');
+      lastAskedPerceptionRef.current=snapshot;
+      if(!getSpeechPreferences().screenReaderMode)void speechEngine.enqueue(speechInput(answer.text,lang,'ENVIRONMENT'),'INFORMATION',0,undefined,false,snapshot?snapshot.capturedAt+PERCEPTION_TTL_MS:performance.now()+PERCEPTION_TTL_MS);
+    }else await describeCaptured('ask',true);
   };
   const toggleObjectSpeech=()=>{
     const enabled=!objectSpeechRef.current;
@@ -249,6 +312,7 @@ export default function Vision() {
     if(descriptionBusyRef.current)return;
     if(!descriptionConsentRef.current){setDescriptionError(assistant.needsConsent);return;}
     if(!videoRef.current){setDescriptionError(assistant.noFrame);return;}
+    if((recapture||!descriptionImage)&&(!currentPerception(perceptionRef.current,performance.now())||(!window.BasiraNativeFrames&&videoRef.current.paused))){setDescriptionError(assistant.noFrame);return;}
     if(window.BasiraNativeFrames&&!overlayFrame){setDescriptionError(assistant.noFrame);return;}
     const run=generation.current;
     descriptionBusyRef.current=true;setDescriptionBusy(true);setDescriptionError('');
@@ -260,6 +324,7 @@ export default function Vision() {
       if(session.error)throw new Error('unavailable');
       if(!session.data?.user)throw new Error('sign_in_required');
       if(run!==generation.current||controller.signal.aborted||!descriptionConsentRef.current)return;
+      if((recapture||!descriptionImage)&&(!currentPerception(perceptionRef.current,performance.now())||(!window.BasiraNativeFrames&&videoRef.current.paused)))throw new Error('camera_frame_unavailable');
       const image=recapture||!descriptionImage
         ?await captureDescriptionFrame(videoRef.current,nativeCanvasRef.current,Boolean(window.BasiraNativeFrames))
         :descriptionImage;
@@ -271,6 +336,7 @@ export default function Vision() {
       const result=await requestFrameDescription(sent.imageBase64,mode,question,controller.signal);
       if(run!==generation.current||controller.signal.aborted||!descriptionConsentRef.current)return;
       setDescriptionText(result.description);
+      setLastOutput(result.description);
       setDescriptionDiagnostics(result.diagnostics?assistant.requestDiagnostics(result.diagnostics.requestedModel,result.diagnostics.providerModel,result.diagnostics.latencyMs,result.diagnostics.promptTokens,result.diagnostics.completionTokens):'');
       if(!getSpeechPreferences().screenReaderMode)speak(result.description,0.9,'ar','ENVIRONMENT');
     }catch(error){
@@ -367,8 +433,12 @@ export default function Vision() {
       <LiveVisionOverlay frame={previewFrame} snapshot={currentPinnedFrame?currentMeterSnapshot:null} pinned={Boolean(currentPinnedFrame)} names={t.object} directions={t.direction} metersLabel={t.autoMeterMeters} experimentalLabel={t.autoMeterExperimental} rtl={lang==='ar'} />
     </section>
     {videoPaused&&<div role="alert" className="rounded-xl border border-amber-300 bg-stone-900 p-4"><p>{assistant.cameraPaused}</p><button type="button" className={`${secondary} mt-2`} onClick={()=>void resumeCamera()}>{assistant.resumeCamera}</button></div>}
+    <p role="status" aria-live="polite" className="text-amber-200">{analysisNotice}</p>
+    <VisualRadar snapshot={current} copy={t} visible={radarVisible} onToggle={()=>setRadarVisible(value=>!value)} onDescribe={()=>report(false)}/>
     <section className="rounded-2xl border border-amber-300/50 bg-stone-900 p-5" aria-label={assistant.objectSpeech}>
       <button type="button" className={secondary} aria-pressed={objectSpeechEnabled} onClick={toggleObjectSpeech}>{assistant.objectSpeech}: {objectSpeechEnabled?assistant.objectSpeechOn:assistant.objectSpeechOff}</button>
+      <div className="mt-3 flex flex-wrap gap-3"><button type="button" className={secondary} aria-pressed={experimentalAlerts} onClick={()=>setAlerts(!experimentalAlerts)}>{experimentalAlerts?'إيقاف مؤشرات الاقتراب التجريبية':'تشغيل مؤشرات الاقتراب التجريبية'}</button><button type="button" className={secondary} onClick={repeatLast}>إعادة آخر وصف</button></div>
+      <p className="mt-2 text-stone-300">مؤشرات الاقتراب تتطلب تتبعًا مستقرًا وأدلة حركة متعددة. قد تتوقف عند بطء الجهاز أو دوران الكاميرا أو التكبير؛ لا تثبت احتمال اصطدام أو سلامة المشي.</p>
       <p className="mt-3 min-h-6" role={screenReaderMode?'status':undefined} aria-live={screenReaderMode?'polite':'off'}>{lastObjectText}</p>
       <p className="mt-2" role="status" aria-live="off">{assistant.speechStatus}: {screenReaderMode?assistant.speechMuted:speechError==='PLAYBACK_BLOCKED'?assistant.speechBlocked:speechError==='NO_VOICE'?assistant.speechNoVoice:speechMode==='PREMIUM'?assistant.speechPremium:assistant.speechLocal}</p>
       <div className="mt-3 flex flex-wrap gap-2"><button type="button" className={secondary} onClick={()=>void testSpeech(assistant.testPhrase,lang)}>{assistant.testVoice}</button><button type="button" className={secondary} onClick={stopSpeaking}>{assistant.stopVoice}</button></div>
@@ -376,6 +446,7 @@ export default function Vision() {
     <section className="rounded-2xl border border-amber-300/50 bg-stone-900 p-5" aria-label={assistant.title}>
       <h2 className="text-xl font-bold">{assistant.title}</h2>
       <p className="mt-2 text-stone-300">{assistant.privacy}</p>
+      <p className="mt-2">أسئلة الأسماء والاتجاهات والملاحظات الحالية تُجاب محليًا. الأسئلة التفصيلية تلتقط صورة جديدة بعد موافقتك. يمكنك الإملاء ثم الضغط على زر السؤال، أو قول «أوقف وصف الأشياء»، «شغّل الخريطة»، «أعد آخر وصف».</p>
       {cameraSize&&<p className="mt-2 text-sm text-stone-300" role="status">{assistant.cameraResolution(cameraSize.width,cameraSize.height)}</p>}
       <label className="mt-4 flex min-h-14 items-center gap-3"><input type="checkbox" className="size-6" checked={descriptionConsent} onChange={event=>{const checked=event.target.checked;descriptionConsentRef.current=checked;setDescriptionConsent(checked);if(!checked){descriptionAbort.current?.abort();setDescriptionImage(null);setDescriptionSentFrame(null);setDescriptionText('');setDescriptionDiagnostics('');}}}/>{assistant.consent}</label>
       <div className="mt-3 flex flex-wrap gap-3"><button type="button" className={button} disabled={state==='STOPPED'||state==='STARTING'||descriptionBusy} aria-busy={descriptionBusy} onClick={()=>void describeCaptured('detailed',true)}>{descriptionBusy?assistant.busy:assistant.capture}</button>
@@ -396,7 +467,7 @@ export default function Vision() {
       </figure>}
       <div className="mt-4 flex flex-wrap items-end gap-3"><label className="flex-1">{assistant.question}<input className="mt-1 min-h-14 w-full rounded-xl border border-amber-200/40 bg-stone-950 px-4" value={question} maxLength={500} onChange={event=>setQuestion(event.target.value)}/></label>
         <button type="button" className={secondary} onClick={()=>dictation.isListening?dictation.stopListening():dictation.startListening()}>{dictation.isListening?assistant.listening:assistant.listen}</button>
-        <button type="button" className={secondary} disabled={!descriptionImage||!question.trim()||descriptionBusy} onClick={()=>void describeCaptured('ask')}>{assistant.ask}</button></div>
+        <button type="button" className={secondary} disabled={!question.trim()||descriptionBusy} onClick={()=>void askQuestion()}>{assistant.ask}</button></div>
       {dictation.error&&<p role="status" className="mt-2 text-amber-200">{dictation.error}</p>}
       {descriptionError&&<p role="alert" className="mt-3 text-red-200">{descriptionError}</p>}
       {descriptionError===assistant.signIn&&<Link href="/account" className="mt-2 inline-block text-amber-200 underline">{assistant.openAccount}</Link>}
@@ -416,7 +487,7 @@ export default function Vision() {
       {(metricTiming.load!==null||metricTiming.inference!==null)&&<p data-testid="metric-timing" className="mt-2 text-sm text-stone-300">{t.autoMeterTiming(metricTiming.load,metricTiming.inference)}</p>}
     </section>
     <div className="flex flex-wrap gap-3"><button className={secondary} type="button" disabled={state==='STOPPED'||state==='STARTING'} onClick={()=>report(false)}>{t.whatAhead}</button><button className={secondary} type="button" disabled={state==='STOPPED'||state==='STARTING'} onClick={()=>report(true)}>{t.describe}</button></div>
-    <p aria-live="polite" role="status" className="min-h-6">{spokenSummary}</p>
+    <p aria-live={screenReaderMode?'polite':'off'} role={screenReaderMode?'status':undefined} className="min-h-6">{spokenSummary}</p>
     <section aria-label={t.status} className="rounded-2xl border border-amber-200/20 bg-stone-900 p-5">
       <p role="status" aria-live="polite">{t.status}: <strong>{cameraState}</strong></p>
       <p className="mt-2">{nav.permissionCamera}: {({not_requested:nav.notRequested,allowed:nav.allowed,denied:nav.denied,device_settings:nav.deviceSettings,unavailable:nav.unavailable} as const)[cameraPermission]}</p>

@@ -46,6 +46,10 @@ describe('raw ONNX Runtime module serving in Vite private preview',()=>{
     const wasm=await fetch(`${url}/vision/onnx/ort-wasm-simd-threaded.jsep.wasm`,{method:'HEAD'});
     expect(wasm.status).toBe(200);
     expect(wasm.headers.get('content-type')).toBe('application/wasm');
+    const workerModule=await fetch(`${url}/vision/mediapipe/vision_wasm_module_internal.js?import`);
+    expect(workerModule.status).toBe(200);
+    expect(workerModule.headers.get('content-type')).toContain('text/javascript');
+    expect(await workerModule.text()).toContain('export default ModuleFactory');
   });
   it('does not bypass HTTP Basic for ORT modules in the private Manus preview',async()=>{
     process.env.BASIRA_PREVIEW_ACCESS_USERNAME='basira-protected-ci';
@@ -60,5 +64,6 @@ describe('raw ONNX Runtime module serving in Vite private preview',()=>{
     const valid=await fetch(asset,{headers:{Authorization:'Basic '+Buffer.from('basira-protected-ci:not-a-real-secret-for-test-only').toString('base64')}});
     expect(valid.status).toBe(200);
     expect(valid.headers.get('content-type')).toContain('text/javascript');
+    expect((await fetch(`${url}/vision/mediapipe/vision_wasm_module_internal.js`)).status).toBe(401);
   });
 });

@@ -1,0 +1,24 @@
+{
+  "scope": "Desktop Chrome, one existing chair still repeated; 5 warmup + 20 timed iterations, 25ms yielding between calls, 10ms UI timer probe. Not accuracy, camera, motion, or mobile validation.",
+  "execution": "WORKER",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/155.0.0.0 Safari/537.36",
+  "loadMs": 1608.800000011921,
+  "medianMs": 126.69999998807907,
+  "p95Ms": 155.60000002384186,
+  "samples": 20,
+  "maxMainThreadTimerGapMs": 45.40000003576279,
+  "detections": [
+    {
+      "type": "CHAIR",
+      "confidence": 0.85546875,
+      "boundingBox": {
+        "x": 0.259375,
+        "y": 0.03958333333333333,
+        "width": 0.45781249999999996,
+        "height": 0.9166666666666667
+      }
+    }
+  ],
+  "accuracy": null,
+  "mobile": null
+}

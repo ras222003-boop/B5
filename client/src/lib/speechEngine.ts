@@ -39,7 +39,7 @@ export class PremiumTtsProvider implements TtsProvider {
   stop() { /* Fetch cancellation is owned by the playback manager. */ }
 }
 
-type Item = { input: SpeechRequest; priority: SpeechPriority; pauseAfterMs: number; key?: string; resolve: () => void };
+type Item = { input: SpeechRequest; priority: SpeechPriority; pauseAfterMs: number; key?: string; expiresAt?:number; manualTest:boolean; resolve: () => void };
 export class AudioPlaybackManager {
   private queue: Item[] = [];
   private current: Item | null = null;
@@ -60,10 +60,10 @@ export class AudioPlaybackManager {
   get busy() { return this.current!==null||this.queue.length>0; }
   get cancellationEpoch() { return this.cancellations; }
   private muted() { return typeof localStorage !== 'undefined' && getSpeechPreferences().screenReaderMode; }
-  enqueue(input: SpeechRequest, priority: SpeechPriority = 'INFORMATION', pauseAfterMs = 0, key?: string, manualTest = false) {
+  enqueue(input: SpeechRequest, priority: SpeechPriority = 'INFORMATION', pauseAfterMs = 0, key?: string, manualTest = false, expiresAt?:number) {
     if (!input.text.trim() || (this.muted() && !manualTest)) { this.update({ mode: 'MUTED', isSpeaking: false }); return Promise.resolve(); }
     return new Promise<void>(resolve => {
-      const item = { input, priority, pauseAfterMs, key, resolve };
+      const item = { input, priority, pauseAfterMs, key, expiresAt, manualTest, resolve };
       if (this.current && priorityRank[priority] > priorityRank[this.current.priority]) {
         this.cancelCurrent();
         this.queue = this.queue.filter(old => { if (priorityRank[old.priority] < priorityRank[priority]) { old.resolve(); return false; } return true; });
@@ -111,15 +111,20 @@ export class AudioPlaybackManager {
   private async next() {
     if (this.current || !this.queue.length) return;
     const item = this.queue.shift()!; this.current = item;
+    const expired=()=>item.expiresAt!==undefined&&(!Number.isFinite(item.expiresAt)||performance.now()>=item.expiresAt);
+    const muted=()=>this.muted()&&!item.manualTest;
+    if(expired()){this.current=null;item.resolve();void this.next();return;}
     const generation = ++this.generation;
     const abort = new AbortController(); this.abort = abort;
     const start = performance.now(); this.metrics.requests++;
+    const expiryTimer=item.expiresAt===undefined?undefined:setTimeout(()=>abort.abort(),Math.max(0,item.expiresAt-performance.now()));
     try {
       if (!this.premium.isAvailable()) throw new Error('offline');
       const prepared = item.key ? this.prepared.get(item.key) : undefined;
       const usedPrepared = Boolean(prepared && JSON.stringify(prepared.input) === JSON.stringify(item.input));
       const blob = usedPrepared ? await prepared!.promise : await this.premium.synthesize(item.input, abort.signal);
       if (generation !== this.generation) return;
+      if(expired()||abort.signal.aborted||muted())throw new Error('speech_expired');
       if (item.key) { if (!usedPrepared) prepared?.abort.abort(); this.prepared.delete(item.key); }
       const synthesizedAt = usedPrepared ? prepared!.readyAt ?? performance.now() : performance.now();
       const requestStart = usedPrepared ? prepared!.startedAt : start;
@@ -133,6 +138,8 @@ export class AudioPlaybackManager {
           abort.signal.addEventListener('abort', () => resolve(), { once: true });
           audio.play().then(() => {
             if (generation !== this.generation) return;
+            if(expired()||abort.signal.aborted||muted()){audio.pause();resolve();return;}
+            if(expiryTimer!==undefined)clearTimeout(expiryTimer);
             this.record(this.metrics.playbackStartMs, performance.now() - start);
             this.update({ mode: 'PREMIUM', isSpeaking: true });
           }).catch(reject);
@@ -140,8 +147,13 @@ export class AudioPlaybackManager {
       } finally { URL.revokeObjectURL(url); this.audio = null; }
     } catch {
       if (generation !== this.generation) return;
-      this.metrics.fallbacks++;
-      await this.browserFallback(item.input, generation, abort.signal);
+      if(!expired()&&!abort.signal.aborted&&!muted()){
+        if(expiryTimer!==undefined)clearTimeout(expiryTimer);
+        this.metrics.fallbacks++;
+        await this.browserFallback(item.input, generation, abort.signal, item.expiresAt);
+      }
+    } finally {
+      if(expiryTimer!==undefined)clearTimeout(expiryTimer);
     }
     if (generation !== this.generation) return;
     this.current = null; this.abort = null; item.resolve();
@@ -149,7 +161,7 @@ export class AudioPlaybackManager {
     if (item.pauseAfterMs) await new Promise<void>(resolve => { this.timerResolve = resolve; this.timer = setTimeout(() => { this.timer = null; this.timerResolve = null; resolve(); }, item.pauseAfterMs); });
     if (generation === this.generation) void this.next();
   }
-  private browserFallback(input: SpeechRequest, generation: number, signal: AbortSignal) {
+  private browserFallback(input: SpeechRequest, generation: number, signal: AbortSignal, expiresAt?:number) {
     return new Promise<void>(resolve => {
       if (typeof window === 'undefined' || !window.speechSynthesis || typeof SpeechSynthesisUtterance === 'undefined') { this.update({mode:'LOCAL',isSpeaking:false,error:'NO_VOICE'});resolve(); return; }
       const utterance = new SpeechSynthesisUtterance(input.text);
@@ -158,9 +170,17 @@ export class AudioPlaybackManager {
       const voices = window.speechSynthesis.getVoices();
       utterance.voice = voices.find(v => v.lang.toLowerCase() === utterance.lang.toLowerCase()) ?? voices.find(v => v.lang.toLowerCase().startsWith(input.language.slice(0, 2))) ?? null;
       let started=false;
+      const expired=()=>expiresAt!==undefined&&performance.now()>=expiresAt;
+      const expiry=expiresAt===undefined?undefined:setTimeout(()=>{
+        if(!started&&generation===this.generation){window.speechSynthesis.cancel();finish();}
+      },Math.max(0,expiresAt-performance.now()));
       const timer=setTimeout(()=>{if(!started&&generation===this.generation){this.update({mode:'LOCAL',isSpeaking:false,error:'PLAYBACK_BLOCKED'});window.speechSynthesis.cancel();}resolve();},8000);
-      const finish=()=>{clearTimeout(timer);resolve();};
-      utterance.onstart = () => { started=true;clearTimeout(timer);if (generation === this.generation) this.update({ mode: 'LOCAL', isSpeaking: true,error:undefined }); };
+      const finish=()=>{clearTimeout(timer);if(expiry!==undefined)clearTimeout(expiry);resolve();};
+      utterance.onstart = () => {
+        if(expired()||signal.aborted||generation!==this.generation){window.speechSynthesis.cancel();finish();return;}
+        started=true;clearTimeout(timer);if(expiry!==undefined)clearTimeout(expiry);
+        this.update({ mode: 'LOCAL', isSpeaking: true,error:undefined });
+      };
       utterance.onend = finish;
       utterance.onerror = () => {if(generation===this.generation)this.update({mode:'LOCAL',isSpeaking:false,error:'PLAYBACK_BLOCKED'});finish();};
       signal.addEventListener('abort',finish,{ once: true });

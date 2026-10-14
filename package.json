@@ -10,7 +10,10 @@
     "preview": "vite preview --host",
     "check": "tsc --noEmit",
     "format": "prettier --write .",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:perception-metrics": "node --test scripts/perception-evaluation.test.mjs",
+    "preview:perception": "node scripts/perception-preview.mjs",
+    "test:perception-browser": "node scripts/perception-browser-e2e.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",

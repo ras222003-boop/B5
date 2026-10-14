@@ -1,54 +1,69 @@
 import type { HorizontalDirection, VisionDetection, VisionObjectType } from '@shared/vision';
 import type { VisionCopy } from './scene';
+import { validNormalizedBox } from './objectTracking';
+import type { VisualApproachObservation } from './visualApproach';
 
-const speechKey='basira-vision-object-speech-v1';
-export function getObjectSpeechEnabled(){try{return localStorage.getItem(speechKey)!=='false';}catch{return true;}}
-export function saveObjectSpeechEnabled(value:boolean){try{localStorage.setItem(speechKey,String(value));}catch{/* Storage is optional. */}return value;}
+const speechKey = 'basira-vision-object-speech-v1';
+export function getObjectSpeechEnabled() { try { return localStorage.getItem(speechKey) !== 'false'; } catch { return true; } }
+export function saveObjectSpeechEnabled(value: boolean) { try { localStorage.setItem(speechKey, String(value)); } catch { /* Storage is optional. */ } return value; }
 
-type Track={type:VisionObjectType;direction:HorizontalDirection;x:number;y:number;area:number;firstArea:number;firstAt:number;lastAt:number;seen:number;announcedDirection:HorizontalDirection|null;announcedAt:number;approachAt:number};
-const excluded=new Set<VisionObjectType>(['STAIRS_UP','STAIRS_DOWN','STAIRS_UNCERTAIN','DROP_OFF','DROP_OFF_UNCERTAIN','UNKNOWN_OBSTACLE']);
-const central=(direction:HorizontalDirection)=>direction==='FRONT'?2:direction==='FRONT_LEFT'||direction==='FRONT_RIGHT'?1:0;
+interface SpokenTrack { detection: VisionDetection; announcedDirection: HorizontalDirection | null; announcedAt: number; approachAt: number }
+const excluded = new Set<VisionObjectType>(['STAIRS_UP', 'STAIRS_DOWN', 'STAIRS_UNCERTAIN', 'DROP_OFF', 'DROP_OFF_UNCERTAIN', 'UNKNOWN_OBSTACLE']);
+const central = (direction: HorizontalDirection) => direction === 'FRONT' ? 2 : direction === 'FRONT_LEFT' || direction === 'FRONT_RIGHT' ? 1 : 0;
 
-/** Frame-to-frame identity and speech pacing are independent of metric depth. */
+/** Speech consumes the shared tracker identity. Box growth alone never creates an approach cue. */
 export class ObjectSpeechTracker {
-  private tracks:Track[]=[];
-  private lastSpeech=Number.NEGATIVE_INFINITY;
-  constructor(private readonly copy:VisionCopy,private readonly minimumGapMs=4500,private readonly approachPhrase=(name:string,direction:string)=>`${name} ${direction} يبدو أكبر في الصورة، وقد تكون تقترب منه.`){}
-  reset(){this.tracks=[];this.lastSpeech=Number.NEGATIVE_INFINITY;}
-  observe(detections:readonly VisionDetection[],now:number,announce:(text:string)=>boolean):string|null {
-    this.tracks=this.tracks.filter(track=>now-track.lastAt<5000);
-    const used=new Set<Track>();
-    for(const detection of detections){
-      if(detection.confidence<.65||excluded.has(detection.type)||detection.source==='SEGMENTATION')continue;
-      const box=detection.boundingBox,x=box.x+box.width/2,y=box.y+box.height/2,area=box.width*box.height;
-      if(area<=0)continue;
-      const track=this.tracks.filter(item=>!used.has(item)&&item.type===detection.type&&now-item.lastAt<3000)
-        .sort((a,b)=>Math.hypot(a.x-x,a.y-y)-Math.hypot(b.x-x,b.y-y))[0];
-      if(track&&Math.hypot(track.x-x,track.y-y)<.23){
-        track.x=x;track.y=y;track.area=area;track.direction=detection.horizontalDirection;track.lastAt=now;track.seen++;used.add(track);
-      }else{
-        const created:Track={type:detection.type,direction:detection.horizontalDirection,x,y,area,firstArea:area,firstAt:now,lastAt:now,seen:1,announcedDirection:null,announcedAt:Number.NEGATIVE_INFINITY,approachAt:Number.NEGATIVE_INFINITY};
-        this.tracks.push(created);used.add(created);
-      }
+  private tracks = new Map<string, SpokenTrack>();
+  private lastSpeech = -Infinity;
+  constructor(private readonly copy: VisionCopy, private readonly minimumGapMs = 4500,
+    private readonly approachPhrase = copy.approachPossible) {}
+  reset() { this.tracks.clear(); this.lastSpeech = -Infinity; }
+  observe(detections: readonly VisionDetection[], now: number, announce: (text: string) => boolean,
+    approaches: readonly VisualApproachObservation[] = [],ordinaryEnabled=true,
+    announceApproach:(text:string)=>boolean=announce): string | null {
+    if (!Number.isFinite(now)) return null;
+    const current = new Map<string, SpokenTrack>();
+    for (const detection of detections) {
+      if (!detection.trackId || detection.tracking?.state !== 'TRACKED' || detection.tracking.observations < 2 ||
+        !Number.isFinite(detection.confidence) || detection.confidence < .65 || detection.confidence > 1 ||
+        excluded.has(detection.type) || detection.source === 'SEGMENTATION' || !validNormalizedBox(detection.boundingBox) ||
+        !Number.isFinite(detection.timestamp) || now - detection.timestamp > 800 || detection.timestamp > now + 5) continue;
+      const previous = this.tracks.get(detection.trackId);
+      // Repeated snapshots are not new observations and cannot trigger delayed speech.
+      if (previous && detection.timestamp <= previous.detection.timestamp) continue;
+      current.set(detection.trackId, previous && previous.detection.type === detection.type
+        ? { ...previous, detection }
+        : { detection, announcedDirection: null, announcedAt: -Infinity, approachAt: -Infinity });
     }
-    if(now-this.lastSpeech<this.minimumGapMs)return null;
-    const candidates=this.tracks.filter(track=>track.seen>=2&&now-track.lastAt<1200&&track.announcedDirection!==track.direction&&now-track.announcedAt>=9000)
-      .sort((a,b)=>central(b.direction)-central(a.direction)||b.area-a.area);
-    if(candidates.length){
-      const selected=candidates.slice(0,2);
-      const text=`${selected.map(track=>`${this.copy.object[track.type]} ${this.copy.direction[track.direction]}`).join('، ')}.`;
-      if(!announce(text))return null;
-      for(const track of selected){track.announcedDirection=track.direction;track.announcedAt=now;}
-      this.lastSpeech=now;return text;
+    // Retain pacing state for briefly repeated snapshots, but only current observations can speak.
+    for (const [id, track] of Array.from(this.tracks)) if (now - track.detection.timestamp > 1200 ||
+      !detections.some(d => d.trackId === id)) this.tracks.delete(id);
+    for (const [id, track] of Array.from(current)) this.tracks.set(id, track);
+    if (now - this.lastSpeech < this.minimumGapMs) return null;
+
+    const approaching = Array.from(current.values()).map(track => ({ track, approach: approaches.find(a =>
+      a.trackId === track.detection.trackId && a.type === track.detection.type && a.capturedAt === track.detection.timestamp &&
+      a.experimental === true && a.reasons.length === 0 && a.evidence.includes('COMPENSATED_OPTICAL_FLOW') &&
+      a.evidence.includes('BOX_EXPANSION') && a.evidence.includes('TRACKING') &&
+      (a.state === 'POSSIBLE_APPROACH' || a.state === 'STRONG_APPROACH')) }))
+      .filter(item => item.approach && now - item.track.approachAt >= 20000)
+      .sort((a, b) => Number(b.approach!.state === 'STRONG_APPROACH') - Number(a.approach!.state === 'STRONG_APPROACH'))[0];
+    if (approaching) {
+      const { track, approach } = approaching, name = this.copy.object[track.detection.type], direction = this.copy.direction[track.detection.horizontalDirection];
+      const text = approach!.state === 'STRONG_APPROACH' ? this.copy.approachStrong(name, direction) : this.approachPhrase(name, direction);
+      if (!announceApproach(text)) return null;
+      track.approachAt = now; this.lastSpeech = now;
+      return text;
     }
-    // Apparent growth is only a visual cue. Camera motion and zoom are unknown.
-    const growing=this.tracks.find(track=>track.seen>=3&&track.announcedDirection!==null&&central(track.direction)>0&&
-      now-track.firstAt>=1500&&track.area>=track.firstArea*1.8&&now-track.approachAt>=20000);
-    if(growing){
-      const text=this.approachPhrase(this.copy.object[growing.type],this.copy.direction[growing.direction]);
-      if(!announce(text))return null;
-      growing.approachAt=now;growing.firstArea=growing.area;this.lastSpeech=now;return text;
-    }
-    return null;
+    if(!ordinaryEnabled)return null;
+    const candidates = Array.from(current.values()).filter(track => track.announcedDirection !== track.detection.horizontalDirection && now - track.announcedAt >= 9000)
+      .sort((a, b) => central(b.detection.horizontalDirection) - central(a.detection.horizontalDirection) ||
+        b.detection.boundingBox.width * b.detection.boundingBox.height - a.detection.boundingBox.width * a.detection.boundingBox.height).slice(0, 2);
+    if (!candidates.length) return null;
+    const text = `${candidates.map(track => `${this.copy.object[track.detection.type]} ${this.copy.direction[track.detection.horizontalDirection]}`).join('، ')}.`;
+    if (!announce(text)) return null;
+    for (const track of candidates) { track.announcedDirection = track.detection.horizontalDirection; track.announcedAt = now; }
+    this.lastSpeech = now;
+    return text;
   }
 }

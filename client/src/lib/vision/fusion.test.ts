@@ -52,11 +52,11 @@ describe('local semantic vision and fusion',()=>{
     const values=new Float32Array(30*30).fill(1.2);
     const metric:MetricDepthMap={width:30,height:30,values,confidence:.9,source:'LIDAR',timestamp:100,alignmentVerified:true};
     const fusion=new VisionFusionEngine(new BasiraSafetyEngine(DEFAULT_VISION_CONFIG));
-    const frame=fusion.fuse({objects:[{...object('CHAIR'),boundingBox:{x:.35,y:.5,width:.3,height:.35}}],segmentation:g,relativeDepth:null,metricDepth:metric,signs:[]});
+    const frame=fusion.fuse({objects:[{...object('CHAIR'),boundingBox:{x:.35,y:.5,width:.3,height:.35}}],segmentation:g,relativeDepth:null,metricDepth:metric,signs:[]},100);
     expect(frame.detections.some(d=>d.type==='DOOR')).toBe(true);
     expect(frame.detections.find(d=>d.type==='CHAIR')?.approximateDistance?.source).toBe('LIDAR');
     expect(frame.walkableArea?.pathAhead).toBe('BLOCKED');
-    const noMetric=fusion.fuse({objects:[object('CHAIR')],segmentation:g,relativeDepth:{width:30,height:30,values,confidence:.5,source:'MONOCULAR_ESTIMATE',timestamp:100},metricDepth:null,signs:[]});
+    const noMetric=fusion.fuse({objects:[object('CHAIR')],segmentation:g,relativeDepth:{width:30,height:30,values,confidence:.5,source:'MONOCULAR_ESTIMATE',timestamp:100},metricDepth:null,signs:[]},100);
     expect(noMetric.detections.find(d=>d.type==='CHAIR')?.approximateDistance).toBeNull();
   });
   it('does not fuse an old depth frame into a new ground boundary',()=>{
@@ -64,7 +64,7 @@ describe('local semantic vision and fusion',()=>{
     const values=new Float32Array(30*30).fill(.2);
     for(let y=0;y<20;y++)for(let x=0;x<30;x++)values[y*30+x]=.9;
     const oldDepth:RelativeDepthMap={width:30,height:30,values,confidence:.5,source:'MONOCULAR_ESTIMATE',timestamp:99};
-    const result=new VisionFusionEngine(new BasiraSafetyEngine(DEFAULT_VISION_CONFIG)).fuse({objects:[],segmentation:g,relativeDepth:oldDepth,metricDepth:null,signs:[]});
+    const result=new VisionFusionEngine(new BasiraSafetyEngine(DEFAULT_VISION_CONFIG)).fuse({objects:[],segmentation:g,relativeDepth:oldDepth,metricDepth:null,signs:[]},100);
     expect(result.detections.some(d=>d.type==='DROP_OFF_UNCERTAIN')).toBe(false);
   });
   it('does not let an informational sign interrupt a recent high-risk alert',()=>{

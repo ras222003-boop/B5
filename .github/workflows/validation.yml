@@ -34,6 +34,7 @@ jobs:
       - run: node scripts/metric-depth/verify-artifact.mjs
       - run: pnpm check
       - run: pnpm test
+      - run: pnpm test:perception-metrics
       - run: node --test scripts/auto-meter-report.test.mjs
       - run: pnpm build
       - name: Validate fresh MySQL migrations

@@ -7,21 +7,29 @@ import { isNavigationText, normalizePlaceText, signTypeForText, VisualPlaceRecog
 import { SceneUnderstandingService, VisionAnnouncementService, type VisionCopy } from './scene';
 import { VisionFusionEngine } from './fusion';
 import { hazardRank } from '@/lib/guidance/safety';
-import { sampleFrameLight, type FrameLightStatus } from './frameQuality';
+import { assessFrameLight,sampleFrameLight, type FrameLightStatus } from './frameQuality';
 import { SAFE_DEFAULT_FLAGS, type SafetyFlags } from '@shared/safetyFlags';
 import { metricDiagnostic, type MetricDiagnostic } from './metricEngine';
 import { checkAtomicFrame, checkAtomicRgbFrame, rotateNativeDepthClockwise } from './nativeFramePair';
 import { measureAutoMeterObjects, measureEstimatedObjects, type AutoMeterSnapshot } from './autoMeter';
 import {meterErrorCode,type MeterDiagnostic} from './meterDiagnostics';
 import {ObjectSpeechTracker} from './objectSpeech';
+import {ObjectTracker} from './objectTracking';
+import {VisualApproachEstimator} from './visualApproach';
+import {SparseOpticalFlow} from './opticalFlow';
+import {GroundHazardEngine,grayscalePixels,type GroundHazardSnapshot} from './groundHazards';
+import {freshTimestamp,observationFor,PerceptionTelemetry,type PerceptionSnapshot} from './perception';
 
 interface Callbacks {
+  perception?:(snapshot:PerceptionSnapshot|null)=>void;
+  analysisState?:(state:'WAITING'|'LIVE'|'STALE'|'PAUSED'|'SLOW')=>void;
   scene:(description:SceneDescription)=>void;
   detectionFrame?:(frame:LiveDetectionFrame)=>void;
   alert:(text:string,risk:SceneDescription['riskLevel'])=>void;
   objectSpeech?:(text:string)=>boolean;
+  approachSpeech?:(text:string)=>boolean;
   candidate:(candidate:PlaceCandidate)=>void;
-  recognized:(place:RecognizedPlace)=>void;
+  recognized:(place:RecognizedPlace,capturedAt:number)=>void;
   OCRFailure:()=>void;
   segmentationFailure:()=>void;
   depthFailure:()=>void;
@@ -59,6 +67,7 @@ export interface VisionPipelineOptions {
   nativeCanvas?:HTMLCanvasElement;
   autoMeterEnabled?:boolean;
   objectSpeechEnabled?:boolean;
+  experimentalApproachEnabled?:boolean;
   approachPhrase?:(name:string,direction:string)=>string;
   estimatedMetricModel?:(signal?:AbortSignal)=>Promise<EstimatedMetricDepthProvider>;
   segmentation?:SceneSegmentationProvider;relativeDepth?:RelativeDepthProvider;metricDepth?:MetricDepthProvider;
@@ -82,9 +91,24 @@ export function walkableAreaForLight(light: FrameLightStatus, area: WalkableArea
 
 /** Camera -> detector -> scene/safety; sparse OCR runs separately so it cannot block safety frames. */
 export class VisionPipeline {
+  private readonly tracker=new ObjectTracker();
+  private readonly flow=new SparseOpticalFlow();
+  private readonly approach=new VisualApproachEstimator();
+  private readonly ground=new GroundHazardEngine();
+  private readonly semanticGroundEngine=new GroundHazardEngine();
+  private semanticGround:GroundHazardSnapshot|null=null;
+  private readonly telemetry=new PerceptionTelemetry();
+  private perception:PerceptionSnapshot|null=null;
+  private approachEnabled=false;
+  private lastVideoTime=-1;
+  private lastCapturedAt=0;
+  private lastCaptureWallTime=0;
+  private analysisState='WAITING';
+  private slowFrames=0;
   private running=false;
   private timer:number|null=null;
   private generation=0;
+  private observationGeneration=0;
   private ocrBusy=false;
   private ocrEnabled=true;
   private findingDestination=false;
@@ -92,6 +116,7 @@ export class VisionPipeline {
   private lowBattery=false;
   private batteryCleanup:(()=>void)|null=null;
   private recognizedPlace:RecognizedPlace|null=null;
+  private recognizedPlaceCapturedAt=Number.NEGATIVE_INFINITY;
   private signDetections:VisionDetection[]=[];
   private latest:SceneDescription|null=null;
   private seenCandidates=new Set<string>();
@@ -129,6 +154,7 @@ export class VisionPipeline {
   private inferenceMs=0;
   private detections=0;
   constructor(private readonly options:VisionPipelineOptions) {
+    this.approachEnabled=options.experimentalApproachEnabled===true;
     this.autoMeterEnabled=options.autoMeterEnabled===true;
     this.objectSpeechEnabled=options.objectSpeechEnabled!==false;
     this.objectSpeech=new ObjectSpeechTracker(options.copy,4500,options.approachPhrase);
@@ -139,6 +165,29 @@ export class VisionPipeline {
   }
   get snapshot(){return this.latest;}
   get active(){return this.running;}
+  setExperimentalApproachEnabled(enabled:boolean){this.approachEnabled=enabled;this.approach.reset();this.flow.reset();}
+  private reportAnalysis(state:'WAITING'|'LIVE'|'STALE'|'PAUSED'|'SLOW'){
+    if(state!==this.analysisState){this.analysisState=state;this.options.callbacks.analysisState?.(state);}
+  }
+  private invalidate(state:'WAITING'|'STALE'|'PAUSED'){
+    this.observationGeneration++;
+    this.latestObjects=[];this.latest=null;this.perception=null;
+    this.segmentation=null;this.relativeDepth=null;this.metricDepth=null;this.signDetections=[];
+    this.recognizedPlace=null;this.recognizedPlaceCapturedAt=Number.NEGATIVE_INFINITY;this.depthCache.clear();
+    this.tracker.reset();this.flow.reset();this.approach.reset();this.ground.reset();this.semanticGroundEngine.reset();this.semanticGround=null;this.objectSpeech.reset();
+    this.options.callbacks.perception?.(null);this.reportAnalysis(state);
+  }
+  private cameraUnavailable(){
+    // Native RGB arrives through the bridge, not the (usually paused) video element.
+    if(this.options.nativeFrames)return false;
+    const video=this.options.video;
+    const track=(video.srcObject as MediaStream|null)?.getVideoTracks?.()[0];
+    return Boolean(video.paused||video.ended||track?.readyState==='ended');
+  }
+  private acceptsObservation(generation:number,observationGeneration:number,capturedAt:number){
+    return this.running&&generation===this.generation&&observationGeneration===this.observationGeneration&&
+      !this.cameraUnavailable()&&freshTimestamp(capturedAt,performance.now());
+  }
   setFindingDestination(active:boolean){this.findingDestination=active;}
   setAlertDistanceMeters(value:number){this.safety.setAlertDistanceMeters(value);}
   setObjectSpeechEnabled(enabled:boolean){this.objectSpeechEnabled=enabled;this.objectSpeech.reset();}
@@ -317,6 +366,7 @@ export class VisionPipeline {
         const sample=await this.options.nativeFrames.nextFrame();
         if(!this.running||generation!==this.generation)return;
         if(checkAtomicRgbFrame(sample)||!sample||sample.frameId===this.lastNativeFrameId){
+          if(performance.now()-this.lastCapturedAt>1250)this.invalidate('STALE');
           this.options.callbacks.metricStatus?.({status:this.autoMeterEnabled?'WAITING':'UNAVAILABLE',source:null});
           this.schedule(500);return;
         }
@@ -340,7 +390,17 @@ export class VisionPipeline {
           nativeMap=rotateNativeDepthClockwise(sample,detectorTimestamp);
         }
         this.options.callbacks.metricStatus?.(nativeMap?{status:'LIVE',source:nativeMap.source}:{status:this.autoMeterEnabled?'WAITING':'UNAVAILABLE',source:null});
-      }else if(this.options.video.readyState<HTMLMediaElement.HAVE_CURRENT_DATA){this.schedule(250);return;}
+      }else {
+        const video=this.options.video;
+        if(this.cameraUnavailable()){
+          this.invalidate('PAUSED');this.schedule(250);return;
+        }
+        if(video.readyState<HTMLMediaElement.HAVE_CURRENT_DATA||video.currentTime===this.lastVideoTime){
+          if(started-this.lastCapturedAt>1250)this.invalidate('STALE');
+          this.schedule(100);return;
+        }
+        this.lastVideoTime=video.currentTime;
+      }
       if(!this.options.nativeFrames&&started-this.lastLightCheck>=3000){
         this.lastLightCheck=started;
         const previous=this.cameraLight;
@@ -379,9 +439,28 @@ export class VisionPipeline {
       }
       if(!this.options.nativeFrames&&detectionFrame instanceof HTMLVideoElement)
         detectionFrame=smallDetectionFrame(detectionFrame,this.options.config);
-      const detections=await this.options.vision.detect(detectionFrame,detectorTimestamp);
+      // Copy motion/ground pixels from the detector input BEFORE asynchronous inference.
+      const grayCanvas=document.createElement('canvas');grayCanvas.width=96;grayCanvas.height=72;
+      const grayContext=grayCanvas.getContext('2d',{willReadFrequently:true});
+      let gray:Uint8Array|undefined;
+      if(grayContext){
+        grayContext.drawImage(detectionFrame,0,0,96,72);
+        const rgba=grayContext.getImageData(0,0,96,72).data;gray=grayscalePixels(rgba);
+        const light=assessFrameLight(rgba);
+        if(light!==this.cameraLight){this.cameraLight=light;this.options.callbacks.quality?.(light);}
+      }
+      grayCanvas.width=grayCanvas.height=0;
+      const rawDetections=await this.options.vision.detect(detectionFrame,detectorTimestamp);
       if(!this.running||generation!==this.generation)return;
+      if(this.cameraUnavailable()){
+        if(metricFrame)metricFrame.width=metricFrame.height=0;
+        this.invalidate('PAUSED');this.schedule(250);return;
+      }
       const frameId=this.options.nativeFrames?nativeFrameId:`web-${detectorTimestamp}`;
+      const tracked=this.tracker.update(rawDetections,{frameId,capturedAt:detectorTimestamp,now:performance.now()});
+      if(tracked.rejectedFrame){if(metricFrame)metricFrame.width=metricFrame.height=0;this.invalidate('STALE');this.schedule(100);return;}
+      const detections=tracked.detections;
+      this.lastCapturedAt=detectorTimestamp;this.lastCaptureWallTime=frameCapturedAt;
       const width=detectionFrame instanceof HTMLVideoElement?detectionFrame.videoWidth:detectionFrame.width;
       const height=detectionFrame instanceof HTMLVideoElement?detectionFrame.videoHeight:detectionFrame.height;
       this.options.callbacks.detectionFrame?.({frameId,capturedAt:frameCapturedAt,width,height,detections});
@@ -409,8 +488,32 @@ export class VisionPipeline {
       }
       const enriched=await Promise.all(detections.map(async detection=>({ ...detection,approximateDistance:await this.readDepth(detection,started) })));
       if(!this.running||generation!==this.generation)return;
+      if(this.cameraUnavailable()){
+        this.invalidate('PAUSED');this.schedule(250);return;
+      }
+      const completedAt=performance.now();
+      if(!freshTimestamp(detectorTimestamp,completedAt)){this.invalidate('STALE');this.schedule(100);return;}
       this.latestObjects=enriched;
-      this.publish(started,true);
+      const motionUsable=this.approachEnabled&&this.cameraLight==='NOT_LOW_LIGHT';
+      if(!motionUsable){this.flow.reset();this.approach.reset();}
+      const motion=motionUsable&&gray?this.flow.update({frameId,capturedAt:detectorTimestamp,width:96,height:72,pixels:gray},detections):[];
+      const settings=(this.options.video.srcObject as MediaStream|null)?.getVideoTracks?.()[0]?.getSettings?.() as (MediaTrackSettings&{zoom?:number})|undefined;
+      const approach=motionUsable?this.approach.update(enriched,{frameId,capturedAt:detectorTimestamp,now:performance.now(),motion,zoom:settings?.zoom}):[];
+      const ground=this.ground.observe({frameId,capturedAt:detectorTimestamp,width:96,height:72,gray,
+        detections:enriched,lowLight:this.cameraLight==='LOW_LIGHT',segmentation:this.segmentation},completedAt);
+      if(this.semanticGround?.status==='CURRENT'&&freshTimestamp(this.semanticGround.capturedAt,completedAt)&&Math.abs(this.semanticGround.capturedAt-detectorTimestamp)<=250)
+        ground.observations.push(...this.semanticGround.observations);
+      const finishedAt=performance.now();
+      if(!freshTimestamp(detectorTimestamp,finishedAt)){this.invalidate('STALE');this.schedule(100);return;}
+      const timings=this.telemetry.record(detectorTimestamp,finishedAt);
+      this.slowFrames=timings.inferenceMs>600?Math.min(10,this.slowFrames+1):Math.max(0,this.slowFrames-1);
+      this.perception={frameId,capturedAt:detectorTimestamp,completedAt:finishedAt,observations:enriched.map(d=>{
+        const observation=observationFor(d);return this.cameraLight==='LOW_LIGHT'?{...observation,validity:'UNCERTAIN' as const,uncertainty:[...observation.uncertainty,'LOW_LIGHT']}:observation;
+      }),ground,approach,performance:timings,
+        tracking:timings.processedFrames<3?'WARMING_UP':timings.effectiveFps<1.5||this.cameraLight==='LOW_LIGHT'?'LIMITED':'TRACKING'};
+      this.options.callbacks.perception?.(this.perception);
+      this.reportAnalysis(this.perception.tracking==='LIMITED'?'SLOW':'LIVE');
+      this.publish(finishedAt,true);
       this.frames++;
       this.inferenceMs+=performance.now()-started;
       this.detections+=detections.length;
@@ -421,7 +524,8 @@ export class VisionPipeline {
       if(this.options.segmentation&&this.geometryEnabled&&!this.geometryBusy&&started-this.lastGeometry>=(this.options.segmentationIntervalMs??3000)){
         this.lastGeometry=started;void this.processGeometry(generation,started);
       }
-      this.schedule(Math.max(0,1000/(this.options.config.frameAnalysisRate/(this.lowBattery?2:1))-(performance.now()-started)));
+      const targetRate=this.approachEnabled?Math.max(4,this.options.config.frameAnalysisRate):this.options.config.frameAnalysisRate;
+      this.schedule(Math.max(0,1000/(targetRate/(this.lowBattery||this.slowFrames>=3?2:1))-(performance.now()-started)));
     } catch(error) {
       if(!this.running||generation!==this.generation)return;
       console.error('Basira vision provider failed',{name:error instanceof Error?error.name:'unknown'});
@@ -430,11 +534,13 @@ export class VisionPipeline {
     }
   }
   private publish(now:number,fromDetection=false){
-    const signs=this.signDetections.filter(sign=>now-sign.timestamp<12_000);
-    const segmentation=this.segmentation&&now-this.segmentation.timestamp<10_000?this.segmentation:null;
+    if(this.cameraUnavailable()||(!fromDetection&&!freshTimestamp(this.lastCapturedAt,now)))return;
+    const objects=this.latestObjects.filter(object=>freshTimestamp(object.timestamp,now));
+    const signs=this.signDetections.filter(sign=>freshTimestamp(sign.timestamp,now));
+    const segmentation=this.segmentation&&freshTimestamp(this.segmentation.timestamp,now)?this.segmentation:null;
     const relativeDepth=this.relativeDepth&&now-this.relativeDepth.timestamp<2_000?this.relativeDepth:null;
     const metricDepth=!this.options.nativeFrames&&this.metricDepth&&this.metricDepth.alignmentVerified===true&&Math.abs(now-this.metricDepth.timestamp)<=500?this.metricDepth:null;
-    const frame=this.fusion.fuse({objects:this.latestObjects,segmentation,relativeDepth,metricDepth,signs});
+    const frame=this.fusion.fuse({objects,segmentation,relativeDepth,metricDepth,signs},now);
     const flags=this.options.safetyFlags??SAFE_DEFAULT_FLAGS;
     const allowed=frame.events.filter(event=>
       (flags.dropOffDetection||!event.type.startsWith('DROP_OFF'))&&
@@ -443,7 +549,8 @@ export class VisionPipeline {
     const events=this.options.mode==='NAVIGATION'
       ? [...allowed].sort((a,b)=>hazardRank(b)-hazardRank(a)).filter(event=>hazardRank(event)>=3)
       : allowed;
-    this.latest=this.scene.summarize(events,this.recognizedPlace,Date.now(),walkableAreaForLight(this.cameraLight,frame.walkableArea),frame.surfaceAnalysis);
+    const recognized=freshTimestamp(this.recognizedPlaceCapturedAt,now)?this.recognizedPlace:null;
+    this.latest=this.scene.summarize(events,recognized,this.lastCaptureWallTime||Date.now()-(now-(objects[0]?.timestamp??now)),walkableAreaForLight(this.cameraLight,frame.walkableArea),frame.surfaceAnalysis);
     this.latest.cameraLight=this.cameraLight;
     this.options.callbacks.scene(this.latest);
     // Safety announcements keep priority. Ordinary object speech uses detector
@@ -452,25 +559,37 @@ export class VisionPipeline {
       .filter(event=>event.riskLevel==='HIGH'||event.riskLevel==='CRITICAL');
     const alert=this.options.announcement.announce(safetyOnlyEvents,Date.now());
     if(alert)this.options.callbacks.alert(alert.text,alert.event.riskLevel);
-    if(fromDetection&&this.objectSpeechEnabled&&!alert&&this.options.callbacks.objectSpeech)
-      this.objectSpeech.observe(this.latestObjects,Date.now(),this.options.callbacks.objectSpeech);
+    if(fromDetection&&this.cameraLight!=='LOW_LIGHT'&&(this.objectSpeechEnabled||this.approachEnabled)&&!alert&&this.options.callbacks.objectSpeech)
+      this.objectSpeech.observe(objects,now,this.options.callbacks.objectSpeech,this.approachEnabled?this.perception?.approach:undefined,this.objectSpeechEnabled,this.options.callbacks.approachSpeech);
   }
   private async processGeometry(generation:number,timestamp:number){
     this.geometryBusy=true;
+    const observationGeneration=this.observationGeneration;
     try{
+      timestamp=performance.now();
       const frame=await this.captureCurrentFrame();
-      if(!frame||!this.running||generation!==this.generation)return;
+      if(!frame||!this.acceptsObservation(generation,observationGeneration,timestamp))return;
       const grid=await this.options.segmentation!.segment(frame.blob,timestamp);
-      if(!this.running||generation!==this.generation)return;
+      if(!this.acceptsObservation(generation,observationGeneration,timestamp)||grid.timestamp!==timestamp)return;
       this.segmentation=grid;
+      this.semanticGround=this.semanticGroundEngine.observe({frameId:`seg-${timestamp}`,capturedAt:timestamp,width:grid.width,height:grid.height,segmentation:grid,lowLight:this.cameraLight==='LOW_LIGHT'},performance.now());
+      // Late semantics keep their source time; never refresh the detector capture time.
+      if(this.perception&&freshTimestamp(this.perception.capturedAt,performance.now())&&this.semanticGround.status==='CURRENT'&&Math.abs(this.perception.capturedAt-timestamp)<=250){
+        this.perception={...this.perception,ground:{...this.perception.ground,observations:[...this.perception.ground.observations.filter(item=>item.kind!=='VISIBLE_STAIRS'),...this.semanticGround.observations]}};
+        this.options.callbacks.perception?.(this.perception);
+      }
       if(this.options.relativeDepth&&this.relativeDepthEnabled&&timestamp-this.lastDepth>=(this.options.depthIntervalMs??8000)){
         this.lastDepth=timestamp;
-        try{this.relativeDepth=await this.options.relativeDepth.estimate(frame.blob,timestamp);}
-        catch{this.relativeDepthEnabled=false;this.relativeDepth=null;this.options.callbacks.depthFailure();}
+        try{
+          const depth=await this.options.relativeDepth.estimate(frame.blob,timestamp);
+          if(!this.acceptsObservation(generation,observationGeneration,timestamp))return;
+          this.relativeDepth=depth;
+        }
+        catch{if(this.acceptsObservation(generation,observationGeneration,timestamp)){this.relativeDepthEnabled=false;this.relativeDepth=null;this.options.callbacks.depthFailure();}}
       }
-      if(this.running&&generation===this.generation)this.publish(performance.now());
+      if(this.acceptsObservation(generation,observationGeneration,timestamp))this.publish(performance.now());
     }catch{
-      if(this.running&&generation===this.generation){this.geometryEnabled=false;this.segmentation=null;this.relativeDepth=null;this.options.callbacks.segmentationFailure();}
+      if(this.acceptsObservation(generation,observationGeneration,timestamp)){this.geometryEnabled=false;this.segmentation=null;this.relativeDepth=null;this.options.callbacks.segmentationFailure();}
     }finally{this.geometryBusy=false;}
   }
   private async readDepth(detection:VisionDetection,now:number):Promise<DepthReading|null>{
@@ -496,17 +615,19 @@ export class VisionPipeline {
   }
   private async processOCR(generation:number,timestamp:number){
     this.ocrBusy=true;
+    const observationGeneration=this.observationGeneration;
     try {
+      timestamp=performance.now();
       const frame=await this.captureCurrentFrame();
-      if(!frame||!this.running||generation!==this.generation)return;
+      if(!frame||!this.acceptsObservation(generation,observationGeneration,timestamp))return;
       const readings=await this.options.ocr.recognize(frame,timestamp);
-      if(!this.running||generation!==this.generation)return;
-      for(const reading of readings.filter(item=>isNavigationText(item.text)).slice(0,3)) {
+      if(!this.acceptsObservation(generation,observationGeneration,timestamp))return;
+      for(const reading of readings.filter(item=>item.timestamp===timestamp&&isNavigationText(item.text)).slice(0,3)) {
         this.addSign(reading);
         const result=await this.place.recognize(reading);
-        if(!this.running||generation!==this.generation)return;
+        if(!this.acceptsObservation(generation,observationGeneration,timestamp))return;
         const door=this.closestDoor(reading);
-        if(result.place){this.recognizedPlace={...result.place,doorDirection:door?.horizontalDirection};this.options.callbacks.recognized(this.recognizedPlace);}
+        if(result.place){this.recognizedPlaceCapturedAt=timestamp;this.recognizedPlace={...result.place,doorDirection:door?.horizontalDirection};this.options.callbacks.recognized(this.recognizedPlace,timestamp);}
         if(result.candidate){
           if(door)result.candidate.doorDirection=door.horizontalDirection;
           const key=normalizePlaceText(result.candidate.detectedText);
@@ -514,13 +635,13 @@ export class VisionPipeline {
         }
       }
     } catch {
-      if(this.running&&generation===this.generation){this.ocrEnabled=false;this.options.callbacks.OCRFailure();}
+      if(this.acceptsObservation(generation,observationGeneration,timestamp)){this.ocrEnabled=false;this.options.callbacks.OCRFailure();}
     } finally {this.ocrBusy=false;}
   }
   private closestDoor(reading:OCRDetection):VisionDetection|null {
     if(!reading.boundingBox)return null;
     const cx=reading.boundingBox.x+reading.boundingBox.width/2;
-    const doors=this.latest?.objects.filter(item=>item.type==='DOOR'&&Math.abs(item.boundingBox.x+item.boundingBox.width/2-cx)<.18&&
+    const doors=this.latest?.objects.filter(item=>item.type==='DOOR'&&freshTimestamp(item.timestamp,performance.now())&&Math.abs(item.timestamp-reading.timestamp)<=250&&Math.abs(item.boundingBox.x+item.boundingBox.width/2-cx)<.18&&
       reading.boundingBox!.y<item.boundingBox.y+item.boundingBox.height*.5)??[];
     return doors.sort((a,b)=>Math.abs(a.boundingBox.x+a.boundingBox.width/2-cx)-Math.abs(b.boundingBox.x+b.boundingBox.width/2-cx))[0]??null;
   }
@@ -559,6 +680,7 @@ export class VisionPipeline {
     this.batteryCleanup?.();this.batteryCleanup=null;
     this.options.announcement.reset();
     this.objectSpeech.reset();
+    this.invalidate('WAITING');this.lastVideoTime=-1;
     if(this.options.nativeFrames){
       await this.options.nativeFrames.setMeterEnabled(false).catch(()=>{});
       await this.options.nativeFrames.stop().catch(()=>{});
