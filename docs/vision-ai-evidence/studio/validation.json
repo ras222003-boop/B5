@@ -1,0 +1,80 @@
+{
+  "at": "2026-10-14T21:47:02.817Z",
+  "clientDate": "2026-10-15",
+  "clientTimezone": "Asia/Riyadh",
+  "base": "947d7da31d8477c2b6b148d7091c3763542bf89c",
+  "branch": "codex/basira-training-studio",
+  "nodeTests": {
+    "studio": 19,
+    "existingToolkit": 43,
+    "total": 62,
+    "passed": 62,
+    "failed": 0
+  },
+  "browser": {
+    "passed": true,
+    "checks": [
+      "12 synthetic images decode and display bounding boxes",
+      "Arabic search and class/source filters",
+      "UI saves versioned boxes; contributor cannot approve",
+      "existing importBundle adds new synthetic batch automatically without HTML regeneration",
+      "synthetic reference video decodes through authenticated ranged endpoint",
+      "experiment area has no training trigger",
+      "390px RTL viewport has no horizontal overflow",
+      "axe accessibility scan passes on library"
+    ],
+    "autoUpdate": {
+      "before": 12,
+      "after": 13,
+      "observedMs": 1696,
+      "timeoutMs": 10000,
+      "importStatus": "IMPORTED_PENDING_PRIVACY_AND_INDEPENDENT_LABEL_REVIEW",
+      "recreatedHtml": false
+    },
+    "externalRequests": 0,
+    "pageErrors": 0,
+    "axeViolations": 0,
+    "syntheticOnly": true
+  },
+  "typecheck": {
+    "passed": true
+  },
+  "applicationBuild": {
+    "passed": true,
+    "existingLargeChunkWarning": true
+  },
+  "cliSetup": {
+    "interactiveWindowsTerminalTested": true,
+    "passwordInputHidden": true,
+    "scryptVerified": true,
+    "plaintextPersisted": false,
+    "fixtureOnly": true
+  },
+  "localStorageConnection": {
+    "indexedRealImages": 38,
+    "approved": 0,
+    "incomplete": 38,
+    "issues": 0,
+    "originalBatchFilesSHA256Verified": 211,
+    "originalFilesChanged": false,
+    "humanApprovalsCreated": false
+  },
+  "ci": {
+    "studioUnitTestsAdded": true,
+    "browserExecutedInCI": false,
+    "status": "pending remote run"
+  },
+  "trainingPerformed": false,
+  "productionChanged": false,
+  "publicationAudit": {
+    "passed": true,
+    "scope": "code documentation and four SHA-bound synthetic UI screenshots only",
+    "actualDatasetFilesIncluded": false
+  },
+  "limitations": [
+    "Human accounts are an administrator-managed trust boundary, not civil identity verification.",
+    "Metadata removal does not perform visual redaction.",
+    "Large-dataset performance and advanced video/polygon editing remain unmeasured or deferred.",
+    "Test fixtures use fictional rights; no real rights or privacy approval was created."
+  ]
+}

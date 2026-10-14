@@ -1,0 +1,298 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Basira AI Training Studio</title>
+    <link rel="stylesheet" href="/styles.css" />
+    <script type="module" src="/app.mjs"></script>
+  </head>
+  <body>
+    <aside class="sidebar">
+      <div class="brand">
+        <span class="brand-mark">ب</span>
+        <div><strong>بصيرة AI</strong><small>TRAINING STUDIO</small></div>
+      </div>
+      <p class="sidebar-label">مساحة العمل</p>
+      <nav>
+        <button class="nav active" data-tab="gallery">▦ مكتبة البيانات</button
+        ><button class="nav" data-tab="experiments">◷ تجارب التدريب</button>
+      </nav>
+      <div class="local-note">
+        <span class="dot"></span> مساحة محلية خاصة
+        <p>الصور تبقى على هذا الجهاز.<br />الاتصال عبر 127.0.0.1 فقط.</p>
+      </div>
+    </aside>
+    <main>
+      <header>
+        <div>
+          <p class="eyebrow">BASIRA VISION AI</p>
+          <h1>استوديو بيانات التدريب</h1>
+          <p class="sub">
+            راجع الأدلة، صحح الوسوم، وجهّز بيانات يمكن الوثوق بها.
+          </p>
+        </div>
+        <div class="account">
+          <span id="identity">لم تسجّل الدخول</span
+          ><button id="logout" class="quiet" hidden>خروج</button
+          ><span class="local-pill">● محلي فقط</span>
+        </div>
+      </header>
+      <section id="login-panel" class="panel login">
+        <div>
+          <h2>الدخول إلى مساحة الفريق</h2>
+          <p>استخدم حسابك المحلي. كل تعديل وقرار يحمل هويتك ووقته وسببه.</p>
+        </div>
+        <form id="login">
+          <label
+            >معرّف الحساب<input
+              name="id"
+              autocomplete="username"
+              required /></label
+          ><label
+            >كلمة المرور<input
+              name="password"
+              type="password"
+              autocomplete="current-password"
+              required /></label
+          ><button class="primary">دخول</button>
+        </form>
+        <p class="muted">
+          أنشئ الحسابات من أداة --add-user. خصص حسابًا واحدًا لكل شخص.
+        </p>
+      </section>
+      <div id="workspace" hidden>
+        <section class="stats" aria-label="مؤشرات البيانات">
+          <article>
+            <span>إجمالي الصور</span><strong id="total">0</strong
+            ><small>صور مفهرسة في الدفعات</small>
+          </article>
+          <article>
+            <span>مكتملة المراجعة</span><strong id="approved">0</strong
+            ><small>حقوق وخصوصية ووسوم</small>
+          </article>
+          <article>
+            <span>مرفوضة</span><strong id="rejected">0</strong
+            ><small>قرار بشري مسجل</small>
+          </article>
+          <article>
+            <span>ناقصة</span><strong id="incomplete">0</strong
+            ><small>تحتاج وسمًا أو تسوية</small>
+          </article>
+        </section>
+        <section id="gallery-panel">
+          <div class="section-heading">
+            <div>
+              <h2>مكتبة البيانات</h2>
+              <p id="catalog-note">تُحدّث الدفعات تلقائيًا</p>
+            </div>
+            <span class="sync"
+              ><span class="dot"></span
+              ><span id="sync">بانتظار الفهرسة</span></span
+            >
+          </div>
+          <div class="filters panel">
+            <label class="search"
+              >بحث<input
+                id="search"
+                type="search"
+                placeholder="معرّف الصورة أو الدفعة أو الفئة…" /></label
+            ><label
+              >الفئة<select id="class-filter">
+                <option value="">كل الفئات</option>
+              </select></label
+            ><label
+              >المصدر<select id="source-filter">
+                <option value="">كل المصادر</option>
+                <option value="licensed_dataset">مجموعة مرخصة</option>
+                <option value="basira_team">فريق بصيرة</option>
+              </select></label
+            ><label
+              >حالة المراجعة<select id="status-filter">
+                <option value="">كل الحالات</option>
+                <option value="approved">مكتملة المراجعة</option>
+                <option value="pending">بانتظار المراجعة</option>
+                <option value="incomplete">ناقصة</option>
+                <option value="rejected">مرفوضة</option>
+              </select></label
+            >
+          </div>
+          <div class="class-strip" id="class-counts"></div>
+          <div class="snapshot panel">
+            <div>
+              <strong>تجهيز لقطة للمسار القائم</strong>
+              <p class="muted">
+                بعد اكتمال المراجعات المستقلة لكل عينات الدفعة، تحفظ نسخة جديدة
+                تحتاج تحققًا وتقسيمًا مجمدًا.
+              </p>
+            </div>
+            <label>الدفعة<select id="batch-export"></select></label
+            ><button id="export-reviewed" class="quiet" disabled>
+              تجهيز لقطة مراجعة
+            </button>
+            <p id="export-result" class="muted"></p>
+          </div>
+          <p id="issues" class="warning" hidden></p>
+          <div id="grid" class="grid"></div>
+          <div id="empty" class="empty" hidden>
+            لا توجد عينات مطابقة. أضف دفعة بأدوات الاستيراد القائمة أو عدّل
+            التصفية.
+          </div>
+          <section class="panel video-section">
+            <h2>الفيديوهات المرجعية</h2>
+            <p class="muted">
+              تظهر الملفات المسجلة في الحزمة أو المرتبطة بإطاراتها. جميع إطارات
+              الفيديو تبقى ضمن مجموعة واحدة.
+            </p>
+            <div id="videos" class="grid"></div>
+          </section>
+        </section>
+        <section id="experiments-panel" hidden>
+          <div class="section-heading">
+            <div>
+              <h2>تجارب التدريب والنتائج</h2>
+              <p>سجلات المسار القائم، للقراءة والمراجعة.</p>
+            </div>
+            <span class="badge pending">بدء التدريب معطّل</span>
+          </div>
+          <div class="panel">
+            <h3>الاعتماد أولًا</h3>
+            <p>
+              ابدأ التجارب لاحقًا من أدوات ml/vision بعد اعتماد البيانات
+              والأوزان والخطة وتجميد الاختبار. لا توفر هذه اللوحة زرًا يتجاوز
+              تلك البوابات.
+            </p>
+          </div>
+          <div id="experiment-list"></div>
+        </section>
+      </div>
+      <div id="message" role="status" aria-live="polite"></div>
+    </main>
+    <dialog id="editor">
+      <div class="editor-heading">
+        <div>
+          <p class="eyebrow">مراجعة العينة</p>
+          <h2 id="editor-title"></h2>
+          <span id="revision" class="muted"></span>
+        </div>
+        <button id="close-editor" aria-label="إغلاق المراجعة" class="quiet">
+          ✕
+        </button>
+      </div>
+      <div class="editor-layout">
+        <div>
+          <div id="stage" class="stage">
+            <img id="editor-image" alt="الصورة الجاري مراجعتها" /><svg
+              id="overlay"
+              viewBox="0 0 1000 1000"
+              preserveAspectRatio="none"
+              aria-label="مربعات الأجسام القابلة للتعديل"
+            ></svg>
+          </div>
+          <p class="muted">
+            اسحب فوق الصورة لإضافة مربع. عدّل موضعه وحجمه من حقول x وy والعرض
+            والارتفاع (بين 0 و1).
+          </p>
+          <div id="spatial" class="panel"></div>
+          <label class="file-label"
+            >إرفاق نسخة منقحة من الصورة<input
+              id="derivative"
+              type="file"
+              accept="image/png,image/jpeg,image/webp"
+          /></label>
+          <p class="muted">
+            تبقى الصورة الأصلية كما هي. تُحفظ النسخة منفصلة وتُزال بياناتها
+            الوصفية، وتعود المراجعات إلى الانتظار. الطمس المرئي يتطلب تجهيزًا
+            بشريًا.
+          </p>
+        </div>
+        <div class="editor-controls">
+          <h3>الأجسام والتصنيفات</h3>
+          <div id="objects"></div>
+          <div class="conditions">
+            <label
+              >الإضاءة<select id="condition-lighting">
+                <option value="unreviewed">غير مراجع</option>
+                <option value="daylight">نهار</option>
+                <option value="indoor">داخلية</option>
+                <option value="low_light">إضاءة منخفضة</option>
+                <option value="mixed">مختلطة</option>
+              </select></label
+            ><label
+              >المكان<select id="condition-scene">
+                <option value="unreviewed">غير مراجع</option>
+                <option value="indoor">داخل</option>
+                <option value="outdoor">خارج</option>
+              </select></label
+            ><label
+              >حركة الالتقاط<select id="condition-motion">
+                <option value="unreviewed">غير مراجع</option>
+                <option value="static">ثابت</option>
+                <option value="moving">متحرك</option>
+              </select></label
+            >
+          </div>
+          <label
+            >سبب التعديل أو القرار<textarea
+              id="reason"
+              rows="2"
+              placeholder="ما الذي صححته أو راجعته؟"
+              required
+            ></textarea></label
+          ><button id="save-labels" class="primary">حفظ إصدار الوسوم</button>
+          <section class="review-panel">
+            <h3>مراجعة مستقلة</h3>
+            <div id="review-status"></div>
+            <label
+              >نوع المراجعة<select id="review-kind">
+                <option value="rights">الحقوق والمصدر</option>
+                <option value="privacy">الخصوصية</option>
+                <option value="labels">الوسوم</option>
+              </select></label
+            >
+            <div id="privacy-fields">
+              <label
+                >الوجوه<select id="faces">
+                  <option value="unreviewed">غير مراجعة</option>
+                  <option value="absent">غير موجودة</option>
+                  <option value="redacted">مطموسة</option>
+                </select></label
+              ><label
+                >اللوحات<select id="plates">
+                  <option value="unreviewed">غير مراجعة</option>
+                  <option value="absent">غير موجودة</option>
+                  <option value="redacted">مطموسة</option>
+                </select></label
+              ><label
+                >النص الشخصي<select id="personalText">
+                  <option value="unreviewed">غير مراجع</option>
+                  <option value="absent">غير موجود</option>
+                  <option value="redacted">مطموس</option>
+                </select></label
+              >
+            </div>
+            <label class="check"
+              ><input id="confirm-review" type="checkbox" /> راجعت الأدلة
+              والخصوصية أو جميع الوسوم بحسب نوع القرار</label
+            >
+            <div class="button-row">
+              <button id="approve" class="primary">اعتماد المراجعة</button
+              ><button id="reject" class="danger">رفض</button>
+            </div>
+            <p class="muted">
+              المراجع مستقل عن محرر العينة. القرار لا يبدأ تدريبًا.
+            </p>
+          </section>
+        </div>
+      </div>
+      <details>
+        <summary>المصدر والأدلة والقياسات المسجلة</summary>
+        <pre id="evidence"></pre>
+      </details>
+      <details>
+        <summary>سجل الإصدارات والقرارات</summary>
+        <div id="history"></div>
+      </details>
+    </dialog>
+  </body>
+</html>

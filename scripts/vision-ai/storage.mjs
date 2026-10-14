@@ -125,7 +125,7 @@ export async function transferPlan(rootPath, provider, bucket) {
     for (const entry of await readdir(folder, { withFileTypes: true })) {
       check(!entry.isSymbolicLink(), 'symlinks forbidden in transfer inventory');
       const key = `${prefix}${entry.name}`, path = join(folder, entry.name);
-      check(!/(^|\/)(\.env(?:\..*)?|.*\.(?:pem|key))$/i.test(key), 'credentials cannot be included in transfer inventory');
+      check(!/(^|\/)(\.env(?:\..*)?|.*\.(?:pem|key))$/i.test(key) && key !== '.studio/identities.json', 'credentials cannot be included in transfer inventory');
       if (entry.isDirectory()) await walk(path, `${key}/`);
       else if (entry.isFile()) files.push({ key, bytes: (await stat(path)).size, sha256: await fileHash(path) });
     }
