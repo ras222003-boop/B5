@@ -23,6 +23,7 @@ import {
 } from "../common.mjs";
 import { validateSource, validateDataset } from "../data.mjs";
 import { validateSpatial, unknownSpatial } from "../spatial.mjs";
+import { rightsBlocked, releaseGroups } from "./assistant.mjs";
 
 export class StudioWorkspace {
   constructor(root) {
@@ -424,6 +425,21 @@ export class StudioWorkspace {
         await this.checkReferences(child, prefix);
     }
   }
+  async contributors(item) {
+    const original = item.data.samples.find(s => s.id === item.sample.id);
+    const people = new Set(
+      [
+        original?.annotation?.annotator,
+        original?.generation?.uploadedBy,
+        item.sample.annotation?.annotator,
+      ].filter(Boolean)
+    );
+    for (const path of await this.revisions(item.key)) {
+      const r = await this.json(path);
+      if (r.action !== "review") people.add(r.actor);
+    }
+    return people;
+  }
   async change(key, payload, actor) {
     check(!this.busy, "Another edit is active; retry");
     this.busy = true;
@@ -457,6 +473,8 @@ export class StudioWorkspace {
       const can = role =>
         check(actor.roles.includes(role), "Role not authorized");
       const reset = () => {
+        const rejectedRights = rightsBlocked(item);
+        const rightsDecision = item.decisions?.rights;
         item.sample.annotation = {
           ...item.sample.annotation,
           status: "pending",
@@ -475,12 +493,19 @@ export class StudioWorkspace {
           trainingAllowed: false,
           rightsReview: {
             ...s.rightsReview,
-            status: "pending",
+            status: rejectedRights ? "rejected" : "pending",
             reviewer: "",
             at: "",
           },
         }));
-        item.decisions = {};
+        item.decisions = rejectedRights
+          ? {
+              rights: rightsDecision ?? {
+                status: "rejected",
+                reason: "Rights rejection preserved",
+              },
+            }
+          : {};
       };
       const at = new Date().toISOString();
       if (payload.action === "labels") {
@@ -560,6 +585,10 @@ export class StudioWorkspace {
       } else if (payload.action === "derivative") {
         can("annotator");
         check(
+          !rightsBlocked(item),
+          "Rights rejected: derivatives cannot bypass rights"
+        );
+        check(
           typeof payload.image === "string" &&
             payload.image.length < 24_000_000,
           "Image upload limit exceeded"
@@ -604,11 +633,15 @@ export class StudioWorkspace {
         can(payload.kind);
         const contributor = item.sample.annotation?.annotator;
         check(
-          contributor && contributor !== actor.id,
+          contributor && !(await this.contributors(item)).has(actor.id),
           "Independent reviewer must differ from contributor"
         );
         if (payload.status === "approved") {
           if (payload.kind === "rights") {
+            check(
+              !rightsBlocked(item),
+              "Rights rejected: use a new independent licensed source, not modified rejected pixels"
+            );
             check(item.sources.length > 0, "Rights sources missing");
             await this.sourceEvidence(item);
             for (const s of item.sources) {
@@ -729,6 +762,31 @@ export class StudioWorkspace {
         activePath: item.activePath ?? null,
         activeSha256: item.activeSha256 ?? null,
         decisions: item.decisions ?? {},
+        assistantAudit: payload.assistantAudit
+          ? {
+              method:
+                payload.assistantAudit.method === "solid-mask"
+                  ? "solid-mask"
+                  : "operator-assertion",
+              regions: Array.isArray(payload.assistantAudit.regions)
+                ? payload.assistantAudit.regions.filter(validBox).slice(0, 100)
+                : [],
+              inputSha256: /^[a-f0-9]{64}$/.test(
+                payload.assistantAudit.inputSha256 ?? ""
+              )
+                ? payload.assistantAudit.inputSha256
+                : null,
+              reportIds: Array.isArray(payload.assistantAudit.reportIds)
+                ? payload.assistantAudit.reportIds
+                    .filter(
+                      id => typeof id === "string" && /^[a-f0-9-]{36}$/.test(id)
+                    )
+                    .slice(0, 10)
+                : [],
+              attestation:
+                "Operator-supplied rationale; not an approval or verified model inference",
+            }
+          : null,
       };
       const path = `.studio/items/${key}/${String(version).padStart(6, "0")}.json`;
       await writeFile(
@@ -787,6 +845,7 @@ export class StudioWorkspace {
       );
       const sources = [],
         samples = [];
+      const similarityGroups = await releaseGroups(this, selected);
       const frozen = selected.some(
         i => i.sample.split !== null && i.sample.split !== undefined
       );
@@ -821,6 +880,8 @@ export class StudioWorkspace {
       };
       for (const item of selected) {
         const s = await convert(item, item.sample);
+        if (similarityGroups.has(item.key))
+          s.leakageGroup = similarityGroups.get(item.key);
         s.path = item.activePath ?? globalPath(item, s.path);
         s.sha256 = item.activeSha256 ?? s.sha256;
         s.split = frozen ? item.sample.split : null;

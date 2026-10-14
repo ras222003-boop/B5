@@ -242,7 +242,7 @@ p {
 }
 .filters {
   display: grid;
-  grid-template-columns: 2fr 1fr 1fr 1fr;
+  grid-template-columns: 2fr 1fr 1fr 1fr 1fr;
   gap: 14px;
   padding: 16px;
   margin-bottom: 16px;
@@ -459,6 +459,9 @@ dialog::backdrop {
   width: 100%;
   height: 100%;
   cursor: crosshair;
+}
+#redaction-overlay {
+  pointer-events: none;
 }
 .editor-controls {
   min-width: 0;
@@ -702,4 +705,65 @@ summary {
 }
 .snapshot label {
   min-width: 200px;
+}
+
+.assistant-tools {
+  margin-top: 20px;
+}
+.assistant-issue {
+  background: #fff;
+  border: 1px solid #dae4da;
+  border-right: 3px solid #ba9646;
+  padding: 14px;
+  border-radius: 9px;
+  margin: 10px 0;
+  font-size: 13px;
+}
+.assistant-issue p {
+  margin: 6px 0;
+}
+.comparison {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin: 15px 0;
+}
+.comparison img {
+  width: 100%;
+  height: auto;
+  max-height: 300px;
+  object-fit: contain;
+}
+.comparison figure {
+  margin: 0;
+}
+#assistant-panel > div.button-row {
+  flex-wrap: wrap;
+}
+#packet-preview {
+  max-height: 480px;
+  overflow: auto;
+  direction: ltr;
+  text-align: left;
+}
+#synthetic-form {
+  display: grid;
+  gap: 14px;
+  max-width: 750px;
+  margin-top: 20px;
+}
+#assistant-result {
+  max-height: 500px;
+  overflow: auto;
+}
+#issue-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 10px;
+}
+.filters label {
+  min-width: 0;
+}
+.snapshot label {
+  max-width: 100%;
 }

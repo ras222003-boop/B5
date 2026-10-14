@@ -20,10 +20,24 @@ const untracked = git(["ls-files", "--others", "--exclude-standard", "-z"]);
 const findings = [],
   files = [...new Set([...changed, ...untracked])];
 let studioEvidence;
+let assistantEvidence;
 try {
   studioEvidence = JSON.parse(
     await readFile(
       resolve(repo, "docs/vision-ai-evidence/studio/browser-validation.json"),
+      "utf8"
+    )
+  );
+} catch (e) {
+  if (e.code !== "ENOENT") throw e;
+}
+try {
+  assistantEvidence = JSON.parse(
+    await readFile(
+      resolve(
+        repo,
+        "docs/vision-ai-evidence/studio-assistant/browser-validation.json"
+      ),
       "utf8"
     )
   );
@@ -39,19 +53,25 @@ const patterns = {
     /[?&](?:X-Amz-Signature|X-Goog-Signature|sig)=[A-Za-z0-9%+/]{20,}/,
 };
 for (const file of files) {
-  // Only the four user-requested, synthetic-only UI screenshots may leave Git.
+  // Only the six exact synthetic-only UI screenshot paths below may leave Git.
   // All other dataset/media binaries remain prohibited. The report binds exact bytes.
   if (
     /^docs\/vision-ai-evidence\/studio\/(?:desktop|editor|experiments|mobile)-synthetic\.png$/.test(
       file
+    ) ||
+    /^docs\/vision-ai-evidence\/studio-assistant\/(?:assistant|comparison)-synthetic\.png$/.test(
+      file
     )
   ) {
-    const evidence = studioEvidence?.screenshots?.find(s => s.path === file);
+    const report = file.includes("/studio-assistant/")
+      ? assistantEvidence
+      : studioEvidence;
+    const evidence = report?.screenshots?.find(s => s.path === file);
     const raw = await readFile(resolve(repo, file));
     if (
-      studioEvidence?.contentKind !== "synthetic-ui-only" ||
-      studioEvidence?.trainingPerformed !== false ||
-      studioEvidence?.externalRequests?.length !== 0 ||
+      report?.contentKind !== "synthetic-ui-only" ||
+      report?.trainingPerformed !== false ||
+      report?.externalRequests?.length !== 0 ||
       evidence?.contentKind !== "synthetic-ui-only" ||
       evidence.sha256 !== (await fileHash(resolve(repo, file))) ||
       raw.length > 2_000_000 ||

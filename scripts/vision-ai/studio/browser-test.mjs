@@ -18,7 +18,10 @@ import { importBundle } from "../storage.mjs";
 
 const temp = await mkdtemp(resolve(tmpdir(), "basira-studio-browser-")),
   root = resolve(temp, "data");
-const evidence = resolve(repo, "docs/vision-ai-evidence/studio");
+const evidence = resolve(
+  repo,
+  process.env.BASIRA_STUDIO_EVIDENCE_DIR ?? "docs/vision-ai-evidence/studio"
+);
 await mkdir(evidence, { recursive: true });
 const data = await fixture(root);
 const studio = await createStudio(root);
@@ -73,7 +76,12 @@ try {
   await page.locator(".card").first().click();
   await page.locator('[data-coord="0,0"]').fill("0.2");
   await page.locator("#reason").fill("تصحيح تجريبي لموضع مربع الجسم");
+  const saveResponsePromise = page.waitForResponse(
+    r => r.url().includes("/api/items/") && r.request().method() === "POST"
+  );
   await page.locator("#save-labels").click();
+  const saveResponse = await saveResponsePromise;
+  assert.equal(saveResponse.status(), 200, await saveResponse.text());
   await page.waitForFunction(() =>
     document.getElementById("revision").textContent.includes("الإصدار 1")
   );

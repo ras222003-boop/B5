@@ -1,3 +1,4 @@
+import { assistantUI } from "./assistant-ui.mjs";
 const $ = id => document.getElementById(id),
   esc = v =>
     String(v ?? "").replace(
@@ -97,6 +98,8 @@ function boxesSvg(item) {
 function render() {
   if (!catalog) return;
   const s = catalog.summary;
+  $("content-counts").textContent =
+    `بيانات حقيقية: ${catalog.items.filter(i => i.contentKind === "real").length} · اصطناعية: ${catalog.items.filter(i => i.contentKind === "synthetic").length} (مستبعدة من التقييم الحقيقي والمعايرة)`;
   for (const [id, v] of Object.entries({
     total: s.images,
     approved: s.approved,
@@ -135,6 +138,8 @@ function render() {
     status = $("status-filter").value;
   const list = catalog.items.filter(
     i =>
+      (!$("content-filter").value ||
+        i.contentKind === $("content-filter").value) &&
       (!cls || i.sample.annotation?.objects?.some(o => o.classId === +cls)) &&
       (!source ||
         (source.startsWith("batch:")
@@ -272,6 +277,7 @@ function drawBoxes() {
 async function openEditor(key) {
   selected = structuredClone(catalog.items.find(i => i.key === key));
   objects = structuredClone(selected.sample.annotation?.objects ?? []);
+  assistant.reset();
   $("editor-title").textContent = selected.sample.id;
   $("revision").textContent =
     `الإصدار ${selected.version} · ${states[selected.status]}`;
@@ -441,6 +447,10 @@ $("overlay").onpointerup = e => {
     h = Math.abs(p[1] - drawing[1]);
   drawing = null;
   if (w < 0.005 || h < 0.005) return;
+  if (assistant.isRedactionMode()) {
+    assistant.addRegion([x, y, w, h]);
+    return;
+  }
   objects.push({
     id: crypto.randomUUID(),
     classId: classes()[0].id,
@@ -456,7 +466,13 @@ $("overlay").onpointercancel = () => {
   drawing = null;
 };
 $("close-editor").onclick = () => $("editor").close();
-for (const id of ["search", "class-filter", "source-filter", "status-filter"])
+for (const id of [
+  "search",
+  "class-filter",
+  "source-filter",
+  "status-filter",
+  "content-filter",
+])
   $(id).addEventListener(id === "search" ? "input" : "change", render);
 async function setActor(a) {
   actor = a;
@@ -498,6 +514,8 @@ document.querySelectorAll("[data-tab]").forEach(
         .forEach(el => el.classList.toggle("active", el === b));
       $("gallery-panel").hidden = b.dataset.tab !== "gallery";
       $("experiments-panel").hidden = b.dataset.tab !== "experiments";
+      $("assistant-panel").hidden = b.dataset.tab !== "assistant";
+      if (b.dataset.tab === "assistant" && actor) await assistant.open();
       if (b.dataset.tab === "experiments" && actor) {
         const r = await api("/api/experiments");
         $("experiment-list").innerHTML = r.results.length
@@ -511,6 +529,33 @@ document.querySelectorAll("[data-tab]").forEach(
       }
     })
 );
+const assistant = assistantUI({
+  api,
+  getCatalog: () => catalog,
+  getSelected: () => selected,
+  getActor: () => actor,
+  refresh,
+  openEditor,
+  notify,
+  acceptProposal: p => {
+    const o = p.objectId ? objects.find(o => o.id === p.objectId) : null;
+    if (o) {
+      o.classId = p.classId;
+      o.box = p.box;
+    } else
+      objects.push({
+        id: crypto.randomUUID(),
+        classId: p.classId,
+        box: p.box,
+        trackId:
+          selected.sample.media?.kind === "video_frame" ? "new-track" : null,
+        occluded: false,
+        truncated: false,
+        groundContact: "unknown",
+      });
+    renderObjects();
+  },
+});
 try {
   const bootstrap = await api("/api/bootstrap");
   csrf = bootstrap.csrf;

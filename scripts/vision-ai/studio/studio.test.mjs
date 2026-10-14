@@ -459,6 +459,46 @@ test("login failures are throttled and private APIs require authentication", asy
   assert.match((await last.json()).error, /locked/);
 });
 
+test("an in-flight catalog cannot overwrite a newly saved version with stale cache", async t => {
+  const { root, item } = await setup(t, 1),
+    studio = await createStudio(root);
+  t.after(() => studio.close());
+  const { get, post } = await session(studio);
+  const original = studio.workspace.catalog.bind(studio.workspace);
+  let release, started;
+  const gate = new Promise(ok => {
+      release = ok;
+    }),
+    ready = new Promise(ok => {
+      started = ok;
+    });
+  let first = true;
+  studio.workspace.catalog = async () => {
+    const c = await original();
+    if (first) {
+      first = false;
+      started();
+      await gate;
+    }
+    return c;
+  };
+  const stale = get("/api/catalog");
+  await ready;
+  try {
+    const r = await post("/api/items/" + item.key, {
+      version: 0,
+      action: "labels",
+      reason: "synthetic concurrent save",
+      objects: item.sample.annotation.objects,
+    });
+    assert.equal(r.status, 200, await r.text());
+  } finally {
+    release();
+  }
+  assert.equal((await (await stale).json()).items[0].version, 1);
+  assert.equal((await (await get("/api/catalog")).json()).items[0].version, 1);
+});
+
 test("frozen train/test assignments survive reviewed snapshot export", async t => {
   const { root, w, item } = await setup(t, 3);
   const path = resolve(root, "incoming/demo/dataset.review.pending.json");
