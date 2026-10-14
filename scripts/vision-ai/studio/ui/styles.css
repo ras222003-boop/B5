@@ -463,6 +463,13 @@ dialog::backdrop {
 #redaction-overlay {
   pointer-events: none;
 }
+#review-task-overlay {
+  pointer-events: none;
+}
+#review-tasks {
+  max-height: 500px;
+  overflow: auto;
+}
 .editor-controls {
   min-width: 0;
 }

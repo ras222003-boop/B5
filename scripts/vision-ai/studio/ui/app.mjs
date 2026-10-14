@@ -20,6 +20,7 @@ let csrf,
   fingerprint = "",
   drawing = null,
   polling = false;
+let reviewQueue = { items: [], stale: 0 };
 const states = {
   approved: "مكتملة المراجعة",
   pending: "بانتظار المراجعة",
@@ -140,7 +141,9 @@ function render() {
     i =>
       (!$("content-filter").value ||
         i.contentKind === $("content-filter").value) &&
-      (!cls || i.sample.annotation?.objects?.some(o => o.classId === +cls)) &&
+      (!cls ||
+        i.sample.annotation?.objects?.some(o => o.classId === +cls) ||
+        i.sample.candidateClassId === +cls) &&
       (!source ||
         (source.startsWith("batch:")
           ? i.batchKey === source.slice(6)
@@ -150,6 +153,14 @@ function render() {
         .toLowerCase()
         .includes(query)
   );
+  list.sort(
+    (a, b) =>
+      (reviewQueue.items.find(i => i.key === a.key)?.priority ?? 99) -
+      (reviewQueue.items.find(i => i.key === b.key)?.priority ?? 99)
+  );
+  $("review-plan-note").textContent = reviewQueue.items.length
+    ? `قائمة مراجعة مرتبة: ${reviewQueue.items.length} عينات · ${reviewQueue.stale} قوائم قديمة محجوبة. الاقتراحات ليست وسومًا أو اعتمادات.`
+    : "لا توجد قائمة مراجعة محلية بعد.";
   $("grid").innerHTML = list
     .map(
       i =>
@@ -186,7 +197,8 @@ async function refresh() {
   polling = true;
   try {
     const c = await api("/api/catalog");
-    const f = JSON.stringify(c);
+    reviewQueue = await api("/api/review-plan");
+    const f = JSON.stringify({ catalog: c, reviewQueue });
     catalog = c;
     if (f !== fingerprint) {
       fingerprint = f;
@@ -278,6 +290,29 @@ async function openEditor(key) {
   selected = structuredClone(catalog.items.find(i => i.key === key));
   objects = structuredClone(selected.sample.annotation?.objects ?? []);
   assistant.reset();
+  $("review-task-overlay").replaceChildren();
+  const plan = reviewQueue.items.find(
+    i => i.key === key && i.version === selected.version
+  );
+  $("review-tasks").innerHTML = plan
+    ? `<p>أولوية ${plan.priority} · راجع الأصل والنسخة. لا اعتماد آلي.</p>` +
+      plan.tasks
+        .map(
+          (t, n) =>
+            `<article class="assistant-issue"><strong>${esc(t.label)}</strong>${t.classId ? `<p>${esc(className(t.classId))}</p>` : ""}${t.box ? `<button class="quiet" data-focus-task="${n}">عرض المنطقة المرشحة</button>` : ""}${t.score !== null ? `<small>درجة نموذج غير معايرة: ${Math.round(t.score * 100)}%</small>` : ""}</article>`
+        )
+        .join("")
+    : "لا مهام محلية لهذا الإصدار.";
+  $("review-tasks")
+    .querySelectorAll("[data-focus-task]")
+    .forEach(
+      b =>
+        (b.onclick = () => {
+          const [x, y, w, h] = plan.tasks[+b.dataset.focusTask].box;
+          $("review-task-overlay").innerHTML =
+            `<rect x="${x * 1000}" y="${y * 1000}" width="${w * 1000}" height="${h * 1000}" fill="none" stroke="#bd3d47" stroke-width="4" stroke-dasharray="10 6"/>`;
+        })
+    );
   $("editor-title").textContent = selected.sample.id;
   $("revision").textContent =
     `الإصدار ${selected.version} · ${states[selected.status]}`;

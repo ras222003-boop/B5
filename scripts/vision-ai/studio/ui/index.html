@@ -125,6 +125,11 @@
             >
           </div>
           <p id="content-counts" class="muted"></p>
+          <p id="review-plan-note" class="panel"></p>
+          <p class="muted">
+            مرشح فئة الجمع يدخل في التصفية فقط؛ لا يعد وسمًا معتمدًا، ولا يدخل
+            في أعداد الصناديق.
+          </p>
           <div class="class-strip" id="class-counts"></div>
           <div class="snapshot panel">
             <div>
@@ -189,7 +194,11 @@
             <button id="download-packet" class="quiet">
               تنزيل التقرير النصي
             </button>
-            <pre id="packet-preview" tabindex="0" aria-label="حزمة المراجعة النصية القابلة للتمرير"></pre>
+            <pre
+              id="packet-preview"
+              tabindex="0"
+              aria-label="حزمة المراجعة النصية القابلة للتمرير"
+            ></pre>
           </section>
           <details class="panel">
             <summary>استيراد صورة اصطناعية مستقلة</summary>
@@ -297,12 +306,30 @@
               preserveAspectRatio="none"
               aria-hidden="true"
             ></svg>
+            <svg
+              id="review-task-overlay"
+              viewBox="0 0 1000 1000"
+              preserveAspectRatio="none"
+              aria-hidden="true"
+            ></svg>
           </div>
           <p class="muted">
             اسحب فوق الصورة لإضافة مربع. عدّل موضعه وحجمه من حقول x وy والعرض
             والارتفاع (بين 0 و1).
           </p>
           <div id="spatial" class="panel"></div>
+          <section class="panel">
+            <h3>مهام المراجعة لهذا الإصدار</h3>
+            <p>
+              وسوم المصدر والأجسام غير المطابقة والاقتراحات تحتاج قرارًا بشريًا.
+              عرض المنطقة لا يعدل الوسم.
+            </p>
+            <div
+              id="review-tasks"
+              tabindex="0"
+              aria-label="قائمة مهام المراجعة"
+            ></div>
+          </section>
           <section class="panel assistant-tools">
             <h3>المساعد المحلي</h3>
             <div class="button-row">

@@ -8,6 +8,7 @@ import { StudioWorkspace } from "./workspace.mjs";
 import { requireValue as check, fileHash } from "../common.mjs";
 import * as assistant from "./assistant.mjs";
 import { modelRuntime, assetMime } from "./model-runtime.mjs";
+import { reviewPlan } from "./review-plan.mjs";
 
 const ui = resolve(dirname(fileURLToPath(import.meta.url)), "ui");
 const secret = () => randomBytes(32).toString("hex");
@@ -189,6 +190,10 @@ export async function createStudio(root, { port = 0 } = {}) {
         return;
       }
       check(session.actor, "Local account login required");
+      if (pathname === "/api/review-plan" && req.method === "GET") {
+        json(200, await reviewPlan(workspace));
+        return;
+      }
       if (req.method === "GET" && pathname === "/local-models.mjs") {
         res.setHeader("Content-Type", "text/javascript");
         res.end(runtime.script);
