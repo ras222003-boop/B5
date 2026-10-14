@@ -1,0 +1,34 @@
+import { execFileSync } from 'node:child_process';
+import { readFile, stat } from 'node:fs/promises';
+import { extname, resolve } from 'node:path';
+import { repo, writeJson } from './common.mjs';
+
+const [base = 'f4ca091', output] = process.argv.slice(2);
+const git = args => execFileSync('git', args, { cwd: repo, encoding: 'utf8' }).split('\0').filter(Boolean);
+const changed = git(['diff', '--name-only', '-z', base, '--diff-filter=ACMRT', '--']);
+const untracked = git(['ls-files', '--others', '--exclude-standard', '-z']);
+const findings = [], files = [...new Set([...changed, ...untracked])];
+const patterns = {
+  private_key: /-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----/,
+  github_token: /(?:gh[pousr]_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{50,})/,
+  api_key: /sk-(?:proj-)?[A-Za-z0-9_-]{32,}/,
+  aws_key: /(?<![A-Za-z0-9+/])AKIA[0-9A-Z]{16}(?![A-Za-z0-9+/])/,
+  signed_url: /[?&](?:X-Amz-Signature|X-Goog-Signature|sig)=[A-Za-z0-9%+/]{20,}/
+};
+for (const file of files) {
+  if (/(^|\/)(?:\.env(?!\.example)|Basira-Vision-Datasets|\.vision-ai)(?:\/|$)/.test(file) ||
+      /\.(?:png|jpe?g|webp|mp4|mov|webm|mkv|pt|pth|onnx|tflite|zip|pem|key)$/i.test(file)) findings.push({ file, kind: 'private-data-or-binary-path' });
+  const absolute = resolve(repo, file);
+  if ((await stat(absolute)).size > 5_000_000) { findings.push({ file, kind: 'large-file-requires-review' }); continue; }
+  const text = await readFile(absolute, 'utf8');
+  for (const [kind, pattern] of Object.entries(patterns)) if (pattern.test(text)) findings.push({ file, kind });
+  if (extname(file) === '.json') {
+    const value = JSON.parse(text);
+    if (value.sources && value.samples || value.status === 'approved' && value.binding)
+      findings.push({ file, kind: 'dataset-or-training-approval-must-stay-private' });
+  }
+}
+const report = { scope: 'outgoing-files-pattern-and-media-audit', base, filesChecked: files.length, findings,
+  passed: findings.length === 0, limitation: 'Pattern checks cannot prove absence of all secrets or personal information; human review remains necessary.' };
+if (output) await writeJson(output, report);
+console.log(JSON.stringify(report, null, 2)); process.exitCode = report.passed ? 0 : 1;

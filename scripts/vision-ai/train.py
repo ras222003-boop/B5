@@ -7,16 +7,23 @@ import argparse
 import hashlib
 import json
 import math
+import os
 import platform
 import random
 import subprocess
+import time
+from datetime import datetime, timezone
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[2]
 
 
 def digest(path):
-    return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+    value = hashlib.sha256()
+    with Path(path).open('rb') as stream:
+        for chunk in iter(lambda: stream.read(1024 * 1024), b''):
+            value.update(chunk)
+    return value.hexdigest()
 
 
 def read(path):
@@ -35,7 +42,40 @@ def inside(root, relative):
     return path
 
 
-def preflight(args):
+def approval_binding(args, lock):
+    return {"datasetSha256": lock["datasetSha256"], "exportLockSha256": digest(Path(args.export) / "dataset.lock.json"),
+            "configSha256": digest(args.config), "pretrainedDescriptorSha256": digest(args.pretrained),
+            "taxonomySha256": digest(REPO / "ml/vision/taxonomy.v1.json"),
+            "proximityPolicySha256": digest(REPO / "ml/vision/proximity-policy.v1.json")}
+
+
+def validate_approval(approval, expected):
+    if (approval.get("schemaVersion") != 1 or approval.get("status") != "approved" or
+            approval.get("scope") != "offline_object_and_ground_hazard_detection" or
+            not approval.get("reviewer") or not approval.get("dataReviewer") or
+            approval["reviewer"] == approval["dataReviewer"] or approval.get("containsUserData") is not False or
+            approval.get("contentKind") != "real" or approval.get("testSetSealed") is not True or
+            approval.get("productionActivation") is not False or approval.get("binding") != expected):
+        raise ValueError("explicit independent dataset/training approval bound to these exact inputs required")
+    at = datetime.fromisoformat(approval.get("at", "").replace("Z", "+00:00"))
+    if at.tzinfo is None or at > datetime.now(timezone.utc):
+        raise ValueError("approval requires a non-future timezone-aware timestamp")
+
+
+def gpu_environment(torch, torchvision):
+    available = torch.cuda.is_available()
+    pinned = torch.__version__.split('+')[0] == '2.7.1' and torchvision.__version__.split('+')[0] == '0.22.1'
+    result = {"torch": torch.__version__, "torchvision": torchvision.__version__, "cudaRuntime": torch.version.cuda,
+              "cudaAvailable": available, "pinnedVersions": pinned, "ready": available and pinned,
+              "trainingPerformed": False, "python": platform.python_version()}
+    if available:
+        props = torch.cuda.get_device_properties(0)
+        result.update({"gpu": props.name, "totalMemoryBytes": props.total_memory,
+                       "computeCapability": list(torch.cuda.get_device_capability(0))})
+    return result
+
+
+def preflight(args, require_approval=True):
     root, exports = Path(args.data_root).resolve(), Path(args.export).resolve()
     lock = read(exports / "dataset.lock.json")
     for name in ("train.json", "validation.json", "test.json"):
@@ -74,6 +114,10 @@ def preflight(args):
     categories = train["categories"]
     if categories != val["categories"]:
         raise ValueError("category mismatch")
+    if require_approval:
+        if not getattr(args, 'approval', None):
+            raise ValueError("--approval is required; no real training without dataset release approval")
+        validate_approval(read(args.approval), approval_binding(args, lock))
     return root, lock, config, checkpoint, checkpoint_path, train, val
 
 
@@ -95,17 +139,30 @@ def train(args):
     if args.preflight_only:
         print(json.dumps({"status": "PREFLIGHT_ONLY", "trainingPerformed": False, "datasetSha256": lock["datasetSha256"]}))
         return
+    # Must be configured before CUDA context creation. Unsupported deterministic kernels fail closed.
+    os.environ['CUBLAS_WORKSPACE_CONFIG'] = ':4096:8'
     import numpy as np
     import torch
     import torchvision
     from PIL import Image
     if torch.__version__.split("+")[0] != "2.7.1" or torchvision.__version__.split("+")[0] != "0.22.1":
         raise ValueError("use pinned requirements-training.txt environment")
+    environment = gpu_environment(torch, torchvision)
+    if args.device == 'cuda' and not environment['ready']:
+        raise ValueError("requested GPU unavailable or incompatible; refusing silent CPU fallback")
     output = Path(args.output).resolve()
     output.mkdir(parents=True, exist_ok=False)
+    write(output / 'run-start.json', {"status": "RUNNING", "startedAt": datetime.now(timezone.utc).isoformat(),
+          "environment": environment, "binding": approval_binding(args, lock), "approvalSha256": digest(args.approval)})
+    args.started_output = output
     random.seed(cfg["seed"])
     np.random.seed(cfg["seed"])
     torch.manual_seed(cfg["seed"])
+    if args.device == 'cuda':
+        torch.cuda.manual_seed_all(cfg['seed'])
+        torch.cuda.reset_peak_memory_stats()
+    torch.backends.cudnn.benchmark = False
+    torch.backends.cudnn.deterministic = True
     torch.use_deterministic_algorithms(True)
     torch.set_num_threads(args.threads)
     categories = training["categories"]
@@ -138,6 +195,7 @@ def train(args):
                                        generator=torch.Generator().manual_seed(cfg["seed"]))
     val_data, history = Dataset(validation), []
     for epoch in range(cfg["epochs"]):
+        epoch_started = time.perf_counter()
         model.train()
         for parameter in model.backbone.parameters():
             parameter.requires_grad_(epoch >= cfg["freezeBackboneEpochs"])
@@ -170,7 +228,12 @@ def train(args):
                                             float(box[2] - box[0]) / width, float(box[3] - box[1]) / height]}
                                    for box, label, score in zip(pred["boxes"].cpu(), pred["labels"].cpu(), pred["scores"].cpu())]})
         write(output / f"validation-epoch-{epoch + 1}.json", {"scope": "validation-predictions-not-browser-benchmark", "samples": samples})
-        history.append({"epoch": epoch + 1, "meanTrainingLoss": sum(losses) / len(losses), "validationFrames": len(samples)})
+        torch.save(model.state_dict(), output / f'checkpoint-epoch-{epoch + 1}.pt')
+        history.append({"epoch": epoch + 1, "meanTrainingLoss": sum(losses) / len(losses), "validationFrames": len(samples),
+                        "elapsedSeconds": time.perf_counter() - epoch_started,
+                        "peakCudaMemoryBytes": torch.cuda.max_memory_allocated() if args.device == 'cuda' else None,
+                        "checkpointSha256": digest(output / f'checkpoint-epoch-{epoch + 1}.pt')})
+        write(output / f'epoch-{epoch + 1}.json', history[-1])
         print(json.dumps(history[-1]), flush=True)
     # Fixed epoch count; no test-set feedback or automatic deployment.
     torch.save(model.cpu().state_dict(), output / "weights.pt")
@@ -180,6 +243,7 @@ def train(args):
           "trainingScriptSha256": digest(Path(__file__)), "configSha256": digest(args.config),
           "requirementsSha256": digest(REPO / "ml/vision/requirements-training.txt"),
           "pretrainedSha256": provenance["sha256"], "weightsSha256": digest(output / "weights.pt"),
+          "approvalSha256": digest(args.approval), "environment": environment,
           "categories": categories, "history": history, "device": args.device, "python": platform.python_version(),
           "torch": torch.__version__, "torchvision": torchvision.__version__, "testUsedForOptimization": False,
           "browserCompatible": None, "productionEligible": False})
@@ -249,6 +313,13 @@ def main():
     training.add_argument("--device", choices=("cpu", "cuda"), default="cpu")
     training.add_argument("--threads", type=int, default=2)
     training.add_argument("--preflight-only", action="store_true")
+    training.add_argument("--approval", required=True)
+    approval = sub.add_parser('approval-template')
+    for key in ('manifest', 'data-root', 'export', 'pretrained', 'output'):
+        approval.add_argument('--' + key, required=True)
+    approval.add_argument('--config', default=str(REPO / 'ml/vision/experiment.json'))
+    gpu = sub.add_parser('gpu-check')
+    gpu.add_argument('--output', required=True)
     exporting = sub.add_parser("export")
     exporting.add_argument("--run", required=True)
     exporting.add_argument("--output", required=True)
@@ -256,7 +327,27 @@ def main():
     if args.command == "train":
         if args.threads < 1:
             parser.error("threads must be positive")
-        train(args)
+        try:
+            train(args)
+        except BaseException as error:
+            if getattr(args, 'started_output', None):
+                write(args.started_output / 'run-failure.json', {"status": "FAILED", "errorType": type(error).__name__,
+                      "completedAt": datetime.now(timezone.utc).isoformat(), "productionEligible": False})
+            raise
+    elif args.command == 'approval-template':
+        _, lock, *_ = preflight(args, require_approval=False)
+        write(args.output, {"schemaVersion": 1, "status": "pending", "scope": "offline_object_and_ground_hazard_detection",
+              "reviewer": "", "dataReviewer": "", "at": "", "contentKind": "real", "containsUserData": False,
+              "testSetSealed": False, "productionActivation": False, "binding": approval_binding(args, lock)})
+        print('PENDING_HUMAN_DATASET_AND_TRAINING_REVIEW; trainingPerformed=false')
+    elif args.command == 'gpu-check':
+        import torch
+        import torchvision
+        report = gpu_environment(torch, torchvision)
+        write(args.output, report)
+        print(json.dumps(report))
+        if not report['ready']:
+            raise SystemExit(2)
     else:
         export_onnx(args)
 

@@ -1,5 +1,7 @@
 # Basira Vision AI — مختبر المرحلة الأولى
 
+**تحديث المرحلة الثانية:** اتبع [دليل البيانات والتدريب](PHASE2.md) للتخزين خارج Git ووسوم القرب والحركة وموافقة التدريب الإلزامية. تعليمات المرحلة الأولى أدناه مرجع للأدوات الأساسية.
+
 هذا المسار مستقل عن تطبيق بصيرة. لا يضيف جمع صور مستخدمين أو رفعها أو التعلم منها، ولا يبدّل محركات الإنتاج. البيانات المقبولة: تصوير فريق بصيرة المصرح به أو مجموعة بيانات ذات حقوق تدريب موثقة. لا يكفي أن تكون الصورة متاحة على الإنترنت.
 
 **لا توجد مجموعة تدريب حقيقية مرفقة ولا نموذج مخصص مدرّب.** ملفات الاختبار الاصطناعية تثبت سلوك الأدوات فقط. تقرير التنفيذ: [المرحلة الأولى](../../docs/vision-ai-phase1-report.md).
@@ -159,8 +161,8 @@ node scripts/vision-ai/cli.mjs export .vision-ai/team-dataset/dataset.v1.json .v
 القيم أعلاه قالب غير قابل للقبول حتى تستكمل المراجعة. بعد توفر البيانات والأوزان المعتمدة:
 
 ```powershell
-python scripts/vision-ai/train.py train --manifest .vision-ai/team-dataset/dataset.v1.json --data-root .vision-ai/team-dataset --export .vision-ai/export-v1 --pretrained .vision-ai/pretrained/pretrained.json --output .vision-ai/run-001 --preflight-only
-python scripts/vision-ai/train.py train --manifest .vision-ai/team-dataset/dataset.v1.json --data-root .vision-ai/team-dataset --export .vision-ai/export-v1 --pretrained .vision-ai/pretrained/pretrained.json --output .vision-ai/run-001
+python scripts/vision-ai/train.py train --manifest .vision-ai/team-dataset/dataset.v1.json --data-root .vision-ai/team-dataset --export .vision-ai/export-v1 --pretrained .vision-ai/pretrained/pretrained.json --approval .vision-ai/approval.approved.json --output .vision-ai/run-001 --preflight-only
+python scripts/vision-ai/train.py train --manifest .vision-ai/team-dataset/dataset.v1.json --data-root .vision-ai/team-dataset --export .vision-ai/export-v1 --pretrained .vision-ai/pretrained/pretrained.json --approval .vision-ai/approval.approved.json --output .vision-ai/run-001
 python scripts/vision-ai/train.py export --run .vision-ai/run-001 --output .vision-ai/onnx-001
 ```
 

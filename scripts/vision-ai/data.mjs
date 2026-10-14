@@ -2,6 +2,7 @@ import { mkdir } from 'node:fs/promises';
 import { resolve, dirname } from 'node:path';
 import { readJson, writeJson, requireValue as check, nonempty, sha, finite, fileHash, jsonHash,
   checkedFile, localPath, validBox, taxonomyPath, hash } from './common.mjs';
+import { proximityPolicy, validateSpatial, validateMotion } from './spatial.mjs';
 
 export const splits = ['train', 'validation', 'test'];
 const review = item => item?.status === 'approved' && nonempty(item.reviewer) &&
@@ -22,6 +23,10 @@ export async function validateDataset(data, root, { verifyFiles = true, requireS
   check(data?.schemaVersion === 1 && nonempty(data.id) && nonempty(data.annotationRevision), 'dataset identity/revision required');
   check(data.taxonomyVersion === taxonomy.version, 'taxonomy version mismatch');
   check(data.contentKind === 'real' || allowSynthetic && data.contentKind === 'synthetic', 'real approved data required; synthetic fixtures cannot train');
+  const spatialEnabled = data.spatialPolicyVersion !== undefined;
+  if (spatialEnabled) check(data.spatialPolicyVersion === proximityPolicy.version, 'spatial policy version mismatch');
+  else check(data.motionSegments === undefined && data.samples?.every(s => s.annotation?.objects?.every(o => o.spatial === undefined)),
+    'spatial labels require explicit spatialPolicyVersion');
   check(Array.isArray(data.sources) && data.sources.length > 0, 'approved sources required');
   const sources = new Set();
   for (const source of data.sources) {
@@ -52,6 +57,10 @@ export async function validateDataset(data, root, { verifyFiles = true, requireS
       const v = s.media.video;
       check(nonempty(v?.id) && sha(v.sha256) && finite(s.media.timestampMs) && s.media.timestampMs >= 0, `${s.id}: video identity/time required`);
       localPath(root, v.path);
+      if (spatialEnabled) check(review(v.privacy) && v.privacy.metadataStripped === true &&
+        ['absent', 'redacted'].includes(v.privacy.faces) && ['absent', 'redacted'].includes(v.privacy.plates) &&
+        ['absent', 'redacted'].includes(v.privacy.personalText) && ['absent', 'redacted'].includes(v.privacy.voices),
+        'phase-two original video privacy/audio review required');
       const prior = videos.get(v.id);
       if (prior) check(prior.sha256 === v.sha256 && prior.path === v.path, 'inconsistent video id');
       else { if (verifyFiles) await checkedFile(root, v.path, v.sha256); videos.set(v.id, v); }
@@ -83,6 +92,7 @@ export async function validateDataset(data, root, { verifyFiles = true, requireS
         if (tracks.has(key)) check(tracks.get(key) === o.classId, `${s.id}: track class changed`);
         tracks.set(key, o.classId);
       } else check(o.trackId === null, 'still images must have null trackId');
+      if (spatialEnabled) await validateSpatial(o.spatial, s, root, verifyFiles);
       const key = classes.get(o.classId).key;
       classCounts[key] ??= { train: 0, validation: 0, test: 0, unsplit: 0 };
       classCounts[key][s.split ?? 'unsplit']++;
@@ -102,6 +112,7 @@ export async function validateDataset(data, root, { verifyFiles = true, requireS
       check(!meta.exif && !meta.xmp && !meta.iptc && !meta.comments?.length && (meta.pages ?? 1) === 1, `${s.id}: strip metadata; single-frame media required`);
     }
   }
+  if (spatialEnabled) await validateMotion(data, root, verifyFiles);
   if (requireSplit) {
     check(splits.every(k => counts[k] > 0), 'train/validation/test must all be nonempty');
     check(data.splitPolicy?.algorithm === 'sha256-group-order-v1' && Number.isSafeInteger(data.splitPolicy.seed), 'frozen split provenance required');
@@ -146,7 +157,8 @@ export async function exportCoco(data, root, output) {
     images: selected.map((s, i) => ({ id: i + 1, sample_id: s.id, file_name: s.path, width: s.width, height: s.height, sha256: s.sha256 })),
     annotations: selected.flatMap((s, i) => s.annotation.objects.map(o => ({ id: ++annotationId, image_id: i + 1, category_id: o.classId,
       bbox: [o.box[0] * s.width, o.box[1] * s.height, o.box[2] * s.width, o.box[3] * s.height],
-      area: o.box[2] * s.width * o.box[3] * s.height, iscrowd: 0, track_id: o.trackId }))) };
+      area: o.box[2] * s.width * o.box[3] * s.height, iscrowd: 0, track_id: o.trackId,
+      ...(o.spatial ? { basira_spatial: o.spatial } : {}) }))) };
     await writeJson(resolve(output, `${split}.json`), value); files[`${split}.json`] = await fileHash(resolve(output, `${split}.json`));
   }
   await writeJson(resolve(output, 'dataset.lock.json'), { schemaVersion: 1, ...report, files, dataset: data });
@@ -186,7 +198,7 @@ export function importCoco(data, coco, taxonomy) {
       check(Array.isArray(a.bbox) && a.bbox.length === 4, 'missing COCO box');
       const box = a.bbox.map((v, j) => v / (j % 2 ? s.height : s.width)); check(validBox(box), 'invalid COCO box');
       return { id: String(a.id), classId: categories.get(a.category_id), box, trackId: a.track_id == null ? null : String(a.track_id),
-        occluded: false, truncated: false, groundContact: 'unknown' };
+        occluded: false, truncated: false, groundContact: 'unknown', ...(a.basira_spatial ? { spatial: a.basira_spatial } : {}) };
     });
     return { ...s, annotation: { ...s.annotation, status: 'pending', reviewer: '', exhaustive: false, objects } };
   }) };

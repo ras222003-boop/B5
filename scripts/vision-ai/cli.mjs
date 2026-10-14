@@ -7,8 +7,20 @@ import { validateDataset, assignSplits, exportCoco, prepareDraft, importCoco } f
 import { evaluateRun, compareReports, phoneGate } from './evaluation.mjs';
 import { registerRelease, verifyRelease, selectRelease } from './registry.mjs';
 import { extractFrames } from './extract-frames.mjs';
+import { initStorage, importBundle, transferPlan, bundleDraft } from './storage.mjs';
+import { spatialDraft, rankAlerts } from './spatial.mjs';
+import { evaluateProximity } from './proximity-evaluation.mjs';
+import { dataNeeds } from './data-needs.mjs';
 
-const help = `Basira Vision AI — offline phase-1 tools (no upload or production activation)
+const help = `Basira Vision AI — offline preparation tools (no upload or production activation)
+  storage-init <new-directory-outside-git>
+  import-bundle <bundle.json> <incoming-root> <storage-root>
+  bundle-draft <bundle-inventory.json> <incoming-root> <new-bundle.json>
+  transfer-plan <storage-root> <gcs|r2> <private-bucket-name> <new-plan.json>
+  spatial-draft <manifest.json> <new-manifest.json>
+  proximity-evaluate <manifest.json> <proximity-run.json> <new-report.json>
+  priority <observations.json> <now-ms> <new-report.json>
+  data-needs <new-report.json> [validated-manifest.json]
   init <new-data-directory>
   draft <inventory.json> <data-root> <new-manifest.json>
   extract-frames <approved-video-record.json> <data-root> <new-relative-frame-directory> <new-inventory.json>
@@ -34,6 +46,18 @@ try {
   let result;
   switch (command) {
     case undefined: case 'help': console.log(help); break;
+    case 'storage-init': required(1); result = await initStorage(args[0]); break;
+    case 'import-bundle': required(3); result = await importBundle(await readJson(args[0]), resolve(args[1]), resolve(args[2])); break;
+    case 'bundle-draft': required(3); await writeJson(args[2], await bundleDraft(await readJson(args[0]), resolve(args[1]))); result = { status: 'BUNDLE_DRAFT_RIGHTS_REVIEW_REQUIRED' }; break;
+    case 'transfer-plan': required(4); result = await transferPlan(args[0], args[1], args[2]); await writeJson(args[3], result); result = { status: result.status, files: result.files.length, totalBytes: result.totalBytes }; break;
+    case 'spatial-draft': required(2); sameRoot(args[0], args[1]); await writeJson(args[1], spatialDraft(await readJson(args[0]))); result = { status: 'SPATIAL_DRAFT_REQUIRES_REVIEW' }; break;
+    case 'proximity-evaluate': { required(3); const { data, root } = await load(args[0]); result = await evaluateProximity(data, root, await readJson(args[1])); await writeJson(args[2], result); break; }
+    case 'priority': required(3); result = rankAlerts(await readJson(args[0]), await readJson(taxonomyPath), Number(args[1])); await writeJson(args[2], result); break;
+    case 'data-needs': {
+      required(1, 2); let data = null;
+      if (args[1]) { const loaded = await load(args[1]); data = loaded.data; await validateDataset(data, loaded.root); }
+      result = await dataNeeds(data); await writeJson(args[0], result); result = { status: result.status, classes: result.classes.length }; break;
+    }
     case 'init': {
       required(1); const root = resolve(args[0]); await mkdir(root);
       for (const folder of ['media', 'videos', 'rights']) await mkdir(resolve(root, folder));

@@ -13,6 +13,31 @@ spec.loader.exec_module(training)
 
 
 class TrainingPreparationTests(unittest.TestCase):
+    def test_training_approval_fails_closed_and_is_bound_to_inputs(self):
+        binding = {'datasetSha256': 'test-hash'}
+        approval = {'schemaVersion': 1, 'status': 'approved', 'scope': 'offline_object_and_ground_hazard_detection',
+                    'reviewer': 'training-reviewer', 'dataReviewer': 'data-reviewer', 'at': '2020-01-01T00:00:00Z',
+                    'contentKind': 'real', 'containsUserData': False, 'testSetSealed': True,
+                    'productionActivation': False, 'binding': binding}
+        training.validate_approval(approval, binding)
+        for change in ({'status': 'pending'}, {'binding': {}}, {'containsUserData': True}, {'testSetSealed': False},
+                       {'contentKind': 'synthetic'}, {'reviewer': 'data-reviewer'}, {'productionActivation': True},
+                       {'at': '2999-01-01T00:00:00Z'}, {'at': '2020-01-01'}):
+            with self.assertRaises(ValueError):
+                training.validate_approval({**approval, **change}, binding)
+
+    def test_gpu_readiness_does_not_silently_accept_cpu_or_wrong_versions(self):
+        torch = SimpleNamespace(__version__='2.7.1+cpu', version=SimpleNamespace(cuda=None),
+                                cuda=SimpleNamespace(is_available=lambda: False))
+        report = training.gpu_environment(torch, SimpleNamespace(__version__='0.22.1'))
+        self.assertFalse(report['ready'])
+        self.assertFalse(report['trainingPerformed'])
+        torch.cuda = SimpleNamespace(is_available=lambda: True,
+            get_device_properties=lambda _: SimpleNamespace(name='TEST GPU', total_memory=123),
+            get_device_capability=lambda _: (8, 0))
+        self.assertTrue(training.gpu_environment(torch, SimpleNamespace(__version__='0.22.1'))['ready'])
+        self.assertFalse(training.gpu_environment(torch, SimpleNamespace(__version__='0.20.1'))['ready'])
+
     def test_relative_paths_cannot_escape_data_root(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory).resolve()
