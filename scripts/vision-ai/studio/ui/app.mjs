@@ -21,6 +21,10 @@ let csrf,
   drawing = null,
   polling = false;
 let reviewQueue = { items: [], stale: 0 };
+let visibleKeys = [],
+  sequence = [],
+  eligibility = { allowedKinds: [] },
+  editorRequest = 0;
 const states = {
   approved: "مكتملة المراجعة",
   pending: "بانتظار المراجعة",
@@ -158,6 +162,8 @@ function render() {
       (reviewQueue.items.find(i => i.key === a.key)?.priority ?? 99) -
       (reviewQueue.items.find(i => i.key === b.key)?.priority ?? 99)
   );
+  visibleKeys = list.map(i => i.key);
+  $("start-final-review").disabled = !visibleKeys.length;
   $("review-plan-note").textContent = reviewQueue.items.length
     ? `قائمة مراجعة مرتبة: ${reviewQueue.items.length} عينات · ${reviewQueue.stale} قوائم قديمة محجوبة. الاقتراحات ليست وسومًا أو اعتمادات.`
     : "لا توجد قائمة مراجعة محلية بعد.";
@@ -189,7 +195,7 @@ function render() {
     : '<p class="muted">لا توجد فيديوهات مفهرسة حاليًا.</p>';
   $("grid")
     .querySelectorAll("[data-item]")
-    .forEach(b => (b.onclick = () => openEditor(b.dataset.item)));
+    .forEach(b => (b.onclick = () => startReview(b.dataset.item)));
   renderExport();
 }
 async function refresh() {
@@ -287,7 +293,16 @@ function drawBoxes() {
     .join("");
 }
 async function openEditor(key) {
+  const request = ++editorRequest;
+  if (!sequence.includes(key)) sequence = [key];
   selected = structuredClone(catalog.items.find(i => i.key === key));
+  eligibility = { allowedKinds: [] };
+  updateReviewButtons();
+  const position = sequence.indexOf(key);
+  $("review-position").textContent =
+    `صورة ${position + 1} من ${sequence.length} · ${selected.contentKind === "synthetic" ? "اصطناعية — مستبعدة من التقييم الحقيقي" : "حقيقية"}`;
+  $("review-previous").disabled = position <= 0;
+  $("review-next").disabled = position < 0 || position >= sequence.length - 1;
   objects = structuredClone(selected.sample.annotation?.objects ?? []);
   assistant.reset();
   $("review-task-overlay").replaceChildren();
@@ -319,6 +334,8 @@ async function openEditor(key) {
   $("editor-image").src = `/media/image/${key}?v=${selected.version}`;
   $("reason").value = "";
   $("confirm-review").checked = false;
+  for (const name of ["faces", "plates", "personalText"])
+    $(name).value = "unreviewed";
   $("evidence").textContent = JSON.stringify(
     {
       sources: selected.sources,
@@ -332,8 +349,10 @@ async function openEditor(key) {
   );
   try {
     const proof = await api("/api/evidence/" + key);
+    if (request !== editorRequest) return;
     $("evidence").textContent += "\n\n" + JSON.stringify(proof, null, 2);
   } catch (e) {
+    if (request !== editorRequest) return;
     $("evidence").textContent += "\n\n" + e.message;
   }
   $("review-status").innerHTML = ["rights", "privacy", "labels"]
@@ -365,11 +384,20 @@ async function openEditor(key) {
     $("condition-" + name).value =
       selected.sample.conditions?.[name] ?? "unreviewed";
   renderObjects();
+  try {
+    const e = await api("/api/review-eligibility/" + key);
+    if (request !== editorRequest) return;
+    if (selected.key === key && e.version === selected.version) eligibility = e;
+  } catch (e) {
+    if (request !== editorRequest) return;
+    notify(e.message);
+  }
   updateReviewButtons();
   $("save-labels").disabled = !actor.roles.includes("annotator");
   $("derivative").disabled = !actor.roles.includes("annotator");
-  $("editor").showModal();
+  if (!$("editor").open) $("editor").showModal();
   const h = await api("/api/history/" + key);
+  if (request !== editorRequest) return;
   $("history").innerHTML = h.revisions.length
     ? h.revisions
         .map(
@@ -379,12 +407,39 @@ async function openEditor(key) {
         .join("")
     : '<p class="muted">لم تُسجل تعديلات بعد.</p>';
 }
+function startReview(key = visibleKeys[0]) {
+  sequence = [...visibleKeys];
+  return openEditor(key);
+}
+$("start-final-review").onclick = () => startReview();
+async function moveReview(offset) {
+  const key = sequence[sequence.indexOf(selected?.key) + offset];
+  if (!key) return;
+  await refresh();
+  if (!catalog.items.some(i => i.key === key)) {
+    notify("العينة لم تعد متاحة. أعد بدء المراجعة من المكتبة.");
+    return;
+  }
+  $("editor").close();
+  await openEditor(key);
+}
+$("review-previous").onclick = () => moveReview(-1);
+$("review-next").onclick = () => moveReview(1);
 function updateReviewButtons() {
-  const forbidden =
-    !actor?.roles.includes($("review-kind").value) ||
-    actor?.id === selected?.sample.annotation?.annotator;
+  const kind = $("review-kind").value;
+  const forbidden = !eligibility.allowedKinds.includes(kind);
   $("approve").disabled = forbidden;
   $("reject").disabled = forbidden;
+  $("privacy-fields").hidden = kind !== "privacy";
+  $("review-eligibility").textContent = forbidden
+    ? "القرار محجوب: يلزم دور المراجعة واستقلال الحساب عن جميع المساهمين في إعداد العينة، وسلامة إصدارها."
+    : "حسابك مؤهل للمراجعة المستقلة لهذا الإصدار. القبول يتطلب الفحص الفعلي والأدلة والسبب.";
+  const conditions = selected?.sample.conditions;
+  $("review-blockers").textContent =
+    kind === "labels" &&
+    (!conditions || Object.values(conditions).includes("unreviewed"))
+      ? "الوسوم غير جاهزة للقبول: يجب أن يستكمل مُعِدّ مستقل ظروف المشهد قبل مراجعتك. إذا عدلتها بنفسك فلن تستطيع اعتماد عملك."
+      : "غياب اقتراح آلي لا يثبت سلامة الخصوصية أو اكتمال الوسوم. القبول يخص نوع المراجعة المحدد فقط.";
 }
 $("review-kind").onchange = updateReviewButtons;
 async function change(payload) {
@@ -441,12 +496,17 @@ $("approve").onclick = () => {
     personalText: $("personalText").value,
   });
 };
-$("reject").onclick = () =>
-  change({
+$("reject").onclick = () => {
+  if (!$("confirm-review").checked) {
+    notify("أكد إتمام المراجعة البشرية أولًا.");
+    return;
+  }
+  return change({
     action: "review",
     kind: $("review-kind").value,
     status: "rejected",
   });
+};
 $("derivative").onchange = async () => {
   const file = $("derivative").files[0];
   if (!file) return;

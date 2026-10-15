@@ -588,13 +588,40 @@ export class StudioWorkspace {
           !rightsBlocked(item),
           "Rights rejected: derivatives cannot bypass rights"
         );
-        check(
-          typeof payload.image === "string" &&
-            payload.image.length < 24_000_000,
-          "Image upload limit exceeded"
-        );
-        const bytes = Buffer.from(payload.image, "base64");
         const { default: sharp } = await import("sharp");
+        let bytes;
+        if (payload.normalizeOrientation === true) {
+          // Only unlabelled stills: transformed annotations/calibration require
+          // an explicit new intake, never a silent box-coordinate conversion.
+          check(
+            !item.sample.annotation.objects.length &&
+              !(item.sample.annotation.surfaces ?? []).length &&
+              item.sample.media?.kind === "image" &&
+              !item.motionSegments.length,
+            "Orientation normalization requires an unlabelled still image"
+          );
+          const original = await this.mediaPath(item, true);
+          check(
+            (await fileHash(original)) === item.sample.sha256,
+            "Original media SHA-256 mismatch; cannot normalize changed input"
+          );
+          const metadata = await sharp(original).metadata();
+          check(
+            metadata.orientation >= 2 && metadata.orientation <= 8,
+            "Original has no EXIF orientation to normalize"
+          );
+          bytes = await sharp(original).autoOrient().png().toBuffer();
+          const normalized = await sharp(bytes).metadata();
+          item.sample.width = normalized.width;
+          item.sample.height = normalized.height;
+        } else {
+          check(
+            typeof payload.image === "string" &&
+              payload.image.length < 24_000_000,
+            "Image upload limit exceeded"
+          );
+          bytes = Buffer.from(payload.image, "base64");
+        }
         const m = await sharp(bytes, {
           limitInputPixels: 100_000_000,
         }).metadata();

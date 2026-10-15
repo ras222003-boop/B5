@@ -126,6 +126,14 @@
           </div>
           <p id="content-counts" class="muted"></p>
           <p id="review-plan-note" class="panel"></p>
+          <button id="start-final-review" class="primary">
+            بدء المراجعة النهائية صورة تلو الأخرى
+          </button>
+          <p class="muted">
+            تستخدم المراجعة التصفية وترتيب الأولوية الحاليين. لكل صورة قرارات
+            منفصلة للحقوق والخصوصية والوسوم، مع سبب وهوية ووقت. الانتقال لا يحفظ
+            قرارًا.
+          </p>
           <p class="muted">
             مرشح فئة الجمع يدخل في التصفية فقط؛ لا يعد وسمًا معتمدًا، ولا يدخل
             في أعداد الصناديق.
@@ -291,6 +299,13 @@
           ✕
         </button>
       </div>
+      <nav class="review-navigation panel" aria-label="التنقل في مراجعة الصور">
+        <button id="review-previous" class="quiet">
+          الصورة السابقة دون حفظ
+        </button>
+        <span id="review-position" role="status"></span>
+        <button id="review-next" class="quiet">الصورة التالية دون حفظ</button>
+      </nav>
       <div class="editor-layout">
         <div>
           <div id="stage" class="stage">
@@ -420,6 +435,8 @@
           <section class="review-panel">
             <h3>مراجعة مستقلة</h3>
             <div id="review-status"></div>
+            <p id="review-eligibility" class="muted"></p>
+            <p id="review-blockers" class="muted"></p>
             <label
               >نوع المراجعة<select id="review-kind">
                 <option value="rights">الحقوق والمصدر</option>
@@ -453,7 +470,8 @@
               والخصوصية أو جميع الوسوم بحسب نوع القرار</label
             >
             <div class="button-row">
-              <button id="approve" class="primary">اعتماد المراجعة</button
+              <button id="approve" class="primary">
+                قبول نوع المراجعة المحدد</button
               ><button id="reject" class="danger">رفض</button>
             </div>
             <p class="muted">

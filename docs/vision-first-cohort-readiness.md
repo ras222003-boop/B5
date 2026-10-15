@@ -1,0 +1,53 @@
+# Final review and first experiment readiness
+
+This extends the existing Studio on Draft PR #41. It does not train, change the operational EfficientDet engine, approve data, or publish media.
+
+## Owner review
+
+Start Studio using [the existing Windows instructions](../ml/vision/STUDIO.md). The owner may use one real local account with `rights,privacy,labels` roles for work prepared by others. Do not create aliases to bypass independence. An owner who edits a sample becomes a contributor and needs a different human reviewer for that sample.
+
+Filter the library, then choose **بدء المراجعة النهائية صورة تلو الأخرى**. The sequence captures the current filter and priority order. Previous/next explicitly discard unsaved form entries and record no decision. New imports appear in the gallery; restart the sequence to include them. Saving a decision stays on the same image so the other review gates can be considered. There is no combined approval or automatic advance.
+
+For each image, inspect the original and active derivative, source evidence, all source objects (including unmatched objects), proposed boxes, and privacy context. Choose rights, privacy, or labels; enter a reason, confirm actual review, then accept or reject that gate. Privacy selectors and confirmation reset between images. Absence of a detector/OCR proposal does not prove privacy clearance. Server checks roles, every contributor in the revision history, current version, hashes, evidence, and the existing per-gate requirements. UI eligibility is advisory; the write endpoint enforces the rules again.
+
+Incomplete scene conditions and non-exhaustive annotation remain blockers. A preparer must finish these before independent label approval. A still photo cannot establish camera motion; do not guess `static` merely to pass a validator. The current schema cannot express unknown motion in a released sample, so uncertain capture conditions require source evidence or separate exclusion from the first release. Do not relax this gate during owner review.
+
+EXIF orientation normalization uses the existing derivative action with an explicit `normalizeOrientation` option, reading the original locally and keeping it unchanged. It is restricted to stills without object/surface labels or motion records. Labelled or calibrated geometry must go through a new intake and reviewed transformation. Metadata stripping is not visible privacy redaction or approval.
+
+## Independent comparison protocol — draft requiring approval
+
+1. Define a first **four-class smoke experiment** (person, chair, table, car). Do not claim training all 35 classes or improving navigation from a small cohort. Ground hazards need their own sufficient real annotation and evaluation coverage. Synthetic data stays separate and is currently rejected by the existing real-data release/export gate.
+2. Complete source rights (photos, annotations and pretrained weights separately), privacy, exhaustive boxes, class definitions, coordinate conventions, capture conditions and contributor independence. Review RDD D00/D10/D20 as cracks and D40 as potholes; RDD is not a staircase source. Three Commons stair candidates are a separate source and need independent box correction. Preserve source XML and per-file attribution evidence.
+3. Build groups from original ID, photographer, location, capture session, video, near-duplicate and derivative families. Unknown related sessions stay together conservatively; filename gaps do not prove independence. Two related synthetic candidate pairs are not evidence of real cross-split leakage. Their whole simulation session remains outside real evaluation and distance calibration.
+4. **No test is frozen yet.** The existing pilot has already been inspected by assistants. Use it for preparation/smoke/validation; obtain new real scenes from independent sessions for a credible unseen final test. A human custodian chooses eligible grouped splits before any training and seals a manifest with hashes for original/active media, annotations, rights, group IDs, taxonomy and approvals using existing split/lock tools. Keep sealed test media/labels out of the training workspace, assistant analysis and experiment-selection prompts. An export hash is not an access-control boundary; lock verification may read hashes, but test inference/labels must not drive training or tuning.
+5. Pre-register seed, checkpoint/config hashes, four-class mapping, score/NMS/max detection settings, primary metrics and deployment acceptance criteria before the custodian evaluates. The existing `train.py` uses train/validation exports; never copy test samples into those exports. Tune only train/validation. Record all attempts and selected checkpoint by validation results. Small coverage with no positive examples yields `not evaluable`, never a claimed zero-error result.
+6. On the same sealed real test and paired physical-phone scenarios, compare the unchanged EfficientDet Lite0 baseline and the exported candidate with existing benchmark/evaluation tools. Baseline artifact SHA-256: `0720bf247bd76e6594ea28fa9c6f7c5242be774818997dbbeffc4da460c723bb`. Report per-class precision/recall and AP at IoU .5:.95, false positives on hard negatives, size/occlusion/lighting slices, sample counts and uncertainty by independent session. Use identical input policy and fixed pre-registered output thresholds; disclose unsupported baseline classes.
+7. Measure browser/phone FPS, p50/p95 latency, memory, thermal and energy behavior with device/browser versions, warmup and duration recorded. Detection accuracy does not establish metric distance, user travel direction, tracking quality or collision prediction. No proximity claim without independent measured/calibrated evidence.
+8. Let the custodian run the final test after model/config freeze. If test results inform changes, retire it as a development set and obtain a new unseen final test. Keep signed/manual decision records, model and report SHA-256, existing registry rollback, explicit deployment approval. Neither a GPU smoke run nor better pilot scores authorizes replacing the current engine.
+
+## Compute planning (checked 2026-10-15; no resources requested)
+
+Candidate: existing SSDLite320 MobileNetV3 Large transfer-learning pipeline, isolated Python 3.11, pinned torch 2.7.1/torchvision 0.22.1 CUDA build, approved local checkpoint and SHA. Current environment is CPU-only and does not satisfy those pins. Start with batch 4, 320 input, 5 epochs after approval. Allow 16–24 GB VRAM, 32 GB RAM and 100 GB private SSD for setup/headroom; this is a planning allocation, not measured minimum consumption.
+
+Budget a **2–4 billed-hour window** for environment setup, preflight, a tiny smoke run and export verification; no training-time measurement exists. Public on-demand quotes below are USD, before tax, storage/transfer/idle fees and regional availability. Recheck the actual private instance quote and CUDA compatibility before owner payment approval.
+
+| Option                                  | Published compute rate | 2–4 hour compute allowance | Notes                                                               |
+| --------------------------------------- | ---------------------- | -------------------------- | ------------------------------------------------------------------- |
+| Existing local NVIDIA GPU, if available | No rental              | Electricity only, unpriced | No suitable local GPU has been confirmed                            |
+| Runpod RTX A5000 24 GB                  | $0.27/hour             | $0.54–$1.08                | Listed host RAM is 25 GB; verify/choose enough RAM and privacy tier |
+| Runpod L4 24 GB / 50 GB host RAM        | $0.59/hour             | $1.18–$2.36                | Planning option with RAM headroom                                   |
+| Lambda A10 24 GB                        | $1.29/hour             | $2.58–$5.16                | Check inventory/region and terms                                    |
+
+Primary quotes: [Runpod pricing](https://www.runpod.io/pricing), [Lambda pricing](https://lambda.ai/pricing). Runpod standard network storage below 1 TB is listed at $0.07/GB/month: retaining 100 GB for a month adds approximately $7. Persistent storage may be billed after compute stops. No account, paid instance, cloud upload or external image analysis has been initiated.
+
+## Real hazard acquisition routes
+
+Continue bounded per-file Commons discovery for stairs, curb steps, bollards/barriers and actual videos. Preserve imageinfo, original page, creator attribution, license text and retrieval hashes; stop on HTTP 429/403 rather than bypass restrictions. Declared CC BY allows commercial reuse subject to its conditions, but does not settle privacy, attribution completeness or every intended use: final approval remains independent. [Commons reuse guidance](https://commons.wikimedia.org/wiki/Commons:Reusing_content_outside_Wikimedia), [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).
+
+RDD2022 is useful for cracks/potholes only ([publisher repository](https://github.com/sekilab/RoadDamageDetector), [dataset](https://figshare.com/articles/dataset/_/21431547)). Expand only after verifying class/coordinate mappings, per-file source records and conservative country/session grouping. Bonn stairs has real RGB/depth examples but no explicit usable data license has been confirmed; do not ingest it yet. Dataset cards or search titles alone do not establish per-asset rights. Noncommercial or unresolved sources stay outside the training release.
+
+For a next acquisition batch request real ascent/descent stairs, curb drops and ramps, potholes, poles/barriers and flat-pavement/shadow hard negatives across distinct sessions, indoor/outdoor, day/night, occlusion and wet/low-light conditions. Real videos should retain timestamps, original codec/source rights and privacy review for **all frames and audio**, with camera/object motion distinguished. Apparent size, simulation and detector confidence never establish measured meters.
+
+## Validation and unresolved work
+
+Automated tests use synthetic fixtures only; they do not certify real labels or rights. A private, hash-bound preparation report records actual cohort counts and source checks outside Git. Owner acceptance decisions, all uncertain annotation/privacy cases, real hazard/video coverage, a genuinely independent sealed test, approved pretrained checkpoint, compatible GPU environment and explicit permission to train remain required. See the private progress report for current counts; repository documents contain no private media, OCR text or reviewer identities.
