@@ -1,5 +1,5 @@
 {
-  "at": "2026-10-14T21:44:23.616Z",
+  "at": "2026-10-15T02:53:52.822Z",
   "contentKind": "synthetic-ui-only",
   "checks": [
     "12 synthetic images decode and display bounding boxes",
@@ -14,7 +14,7 @@
   "autoUpdate": {
     "before": 12,
     "after": 13,
-    "observedMs": 1696,
+    "observedMs": 490,
     "timeoutMs": 10000,
     "importStatus": "IMPORTED_PENDING_PRIVACY_AND_INDEPENDENT_LABEL_REVIEW",
     "recreatedHtml": false
@@ -25,22 +25,22 @@
   "screenshots": [
     {
       "path": "docs/vision-ai-evidence/studio/desktop-synthetic.png",
-      "sha256": "968b0c86fc281ab23057ddabb35b7dc8223a1ca9a906310887ff2b1cdf0fc10c",
+      "sha256": "bf76a7cd31bf0ff6631ecd99bc199c3ace2bf5d1fa64d0dd8beea135f6002c0f",
       "contentKind": "synthetic-ui-only"
     },
     {
       "path": "docs/vision-ai-evidence/studio/editor-synthetic.png",
-      "sha256": "1bc64d86a54a773a7ca802acfc0b5cfac74def34d2ac98a88e84b4a6aa6c6403",
+      "sha256": "9fb9422e8139166e0496ca8c6d60743850929cfb8c20b51e3cbbabeeaf4b79c0",
       "contentKind": "synthetic-ui-only"
     },
     {
       "path": "docs/vision-ai-evidence/studio/experiments-synthetic.png",
-      "sha256": "d02614db97f6cf3adab3bd06adb8436d3e84747aa2f1aeb5ce23fe263c6e40e0",
+      "sha256": "62ae33072fb6e7cc6bfe14cb8522240e7f40492363e92971d9fdc503587510c2",
       "contentKind": "synthetic-ui-only"
     },
     {
       "path": "docs/vision-ai-evidence/studio/mobile-synthetic.png",
-      "sha256": "e79f88b3c44106e02855396d3c5104bb91dfa837a4ccc5f50cbbda39c071c2f8",
+      "sha256": "fdedaf7015870df427f56f456210318c4aa84c5e7437bd8f42c006bab563de37",
       "contentKind": "synthetic-ui-only"
     }
   ],

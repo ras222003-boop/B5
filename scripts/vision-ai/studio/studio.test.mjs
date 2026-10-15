@@ -383,6 +383,112 @@ async function session(studio) {
   csrf = actor.csrf;
   return { get, post, cookie };
 }
+test("eligibility uses contribution history, even after a different editor saves", async t => {
+  const { root, w, item } = await setup(t, 1);
+  await w.change(item.key, edit(item), editor);
+  const next = await w.item(item.key);
+  await w.change(item.key, edit(next), {
+    id: "second-editor",
+    roles: ["annotator"],
+  });
+  const identitiesPath = resolve(root, ".studio/identities.json");
+  const identities = JSON.parse(await readFile(identitiesPath));
+  identities.users
+    .find(u => u.id === "editor")
+    .roles.push("rights", "privacy", "labels");
+  await writeFile(identitiesPath, JSON.stringify(identities));
+  const studio = await createStudio(root);
+  t.after(() => studio.close());
+  const client = await session(studio);
+  const response = await client.get("/api/review-eligibility/" + item.key);
+  const result = await response.json();
+  assert.equal(response.status, 200);
+  assert.equal(result.independent, false);
+  assert.deepEqual(result.allowedKinds, []);
+  assert.equal(result.version, 2);
+  const denied = await client.post("/api/items/" + item.key, {
+    version: 2,
+    action: "review",
+    kind: "labels",
+    status: "rejected",
+    reason: "synthetic self review must fail",
+  });
+  assert.equal(denied.status, 400);
+  assert.equal((await w.item(item.key)).version, 2);
+});
+
+test("EXIF normalization preserves original bytes and blocks labelled geometry", async t => {
+  const { root, w, item } = await setup(t, 1);
+  await assert.rejects(
+    w.change(
+      item.key,
+      {
+        action: "derivative",
+        normalizeOrientation: true,
+        version: 0,
+        reason: "synthetic orientation check",
+      },
+      editor
+    ),
+    /unlabelled still/
+  );
+  const path = resolve(root, "incoming/demo/images/demo-001.png");
+  await sharp({
+    create: { width: 80, height: 40, channels: 3, background: "red" },
+  })
+    .withMetadata({ orientation: 6 })
+    .png()
+    .toFile(path);
+  const manifestPath = resolve(
+    root,
+    "incoming/demo/dataset.review.pending.json"
+  );
+  const manifest = JSON.parse(await readFile(manifestPath));
+  Object.assign(manifest.samples[0], {
+    sha256: await fileHash(path),
+    width: 80,
+    height: 40,
+  });
+  manifest.samples[0].annotation.objects = [];
+  manifest.samples[0].annotation.surfaces = [];
+  await writeFile(manifestPath, JSON.stringify(manifest));
+  const originalSha = await fileHash(path);
+  await w.change(
+    item.key,
+    {
+      action: "derivative",
+      normalizeOrientation: true,
+      version: 0,
+      reason: "synthetic EXIF normalization, no approval",
+    },
+    editor
+  );
+  const normalized = await w.item(item.key);
+  const m = await sharp(await w.mediaPath(normalized)).metadata();
+  assert.equal(m.width, 40);
+  assert.equal(m.height, 80);
+  assert.equal(m.exif, undefined);
+  assert.equal(await fileHash(path), originalSha);
+  assert.equal(normalized.sample.privacy.status, "pending");
+  assert.equal(normalized.sources[0].rightsReview.status, "pending");
+  await writeFile(
+    path,
+    Buffer.concat([await readFile(path), Buffer.from("changed original")])
+  );
+  await assert.rejects(
+    w.change(
+      item.key,
+      {
+        action: "derivative",
+        normalizeOrientation: true,
+        version: 1,
+        reason: "synthetic changed-original guard",
+      },
+      editor
+    ),
+    /Original media SHA-256/
+  );
+});
 test("HTTP only binds IPv4 loopback and rejects DNS rebinding, cross-origin and missing CSRF", async t => {
   const { root } = await setup(t);
   const studio = await createStudio(root);

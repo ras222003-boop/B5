@@ -280,6 +280,25 @@ export async function createStudio(root, { port = 0 } = {}) {
         json(200, { ...c, items: c.items.map(({ data, ...item }) => item) });
         return;
       }
+      const eligibilityRoute =
+        /^\/api\/review-eligibility\/([a-f0-9]{32})$/.exec(pathname);
+      if (eligibilityRoute && req.method === "GET") {
+        const item = await workspace.item(eligibilityRoute[1]);
+        const independent =
+          !!item.sample.annotation?.annotator &&
+          !(await workspace.contributors(item)).has(session.actor.id);
+        json(200, {
+          version: item.version,
+          independent,
+          allowedKinds:
+            independent && !item.conflict
+              ? session.actor.roles.filter(r =>
+                  ["rights", "privacy", "labels"].includes(r)
+                )
+              : [],
+        });
+        return;
+      }
       if (pathname === "/api/experiments" && req.method === "GET") {
         json(200, await workspace.experiments());
         return;

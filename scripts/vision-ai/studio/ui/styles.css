@@ -774,3 +774,10 @@ summary {
 .snapshot label {
   max-width: 100%;
 }
+.review-navigation {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}

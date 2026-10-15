@@ -72,12 +72,37 @@ try {
     await page.locator(".card").first().getAttribute("data-item"),
     items[1].key
   );
-  await page.locator(".card").first().click();
+  await page.locator("#start-final-review").click();
+  await page.waitForFunction(() =>
+    document.getElementById("review-position").textContent.includes("1 من 2")
+  );
+  assert.ok(await page.locator("#review-previous").isDisabled());
   await page.locator("[data-focus-task]").click();
   assert.equal(await page.locator("#review-task-overlay rect").count(), 1);
   assert.equal((await studio.workspace.item(items[1].key)).version, 0);
   assert.equal((await studio.workspace.catalog()).summary.approved, 0);
   assert.ok(await page.locator("#save-labels").isDisabled());
+  await page.locator("#review-kind").selectOption("privacy");
+  await page.locator("#faces").selectOption("absent");
+  await page.locator("#confirm-review").check();
+  await page
+    .locator("#reason")
+    .fill("synthetic unsaved decision must not leak to next image");
+  await page.locator("#review-next").click();
+  await page.waitForFunction(() =>
+    document.getElementById("review-position").textContent.includes("2 من 2")
+  );
+  assert.equal(await page.locator("#reason").inputValue(), "");
+  assert.equal(await page.locator("#faces").inputValue(), "unreviewed");
+  assert.equal(await page.locator("#confirm-review").isChecked(), false);
+  assert.ok(await page.locator("#review-next").isDisabled());
+  assert.ok(
+    (await studio.workspace.catalog()).items.every(i => i.version === 0)
+  );
+  await page.locator("#review-previous").click();
+  await page.waitForFunction(() =>
+    document.getElementById("review-position").textContent.includes("1 من 2")
+  );
   await page.locator("#close-editor").click();
   await page.locator("#class-filter").selectOption("23");
   assert.equal(await page.locator(".card").count(), 1);
@@ -97,6 +122,8 @@ try {
       sourceUnmatchedVisible: true,
       readonlyOverlay: true,
       versionUnchanged: true,
+      sequentialReview: true,
+      unsavedDecisionReset: true,
       approved: 0,
       externalRequests: 0,
       pageErrors: 0,
