@@ -15,6 +15,7 @@ import * as prereview from "./prereview.mjs";
 import * as assistant from "./assistant.mjs";
 import { finalCohort, exposures } from "../test-cohort.mjs";
 import { assignSplits, exportCoco, validateDataset } from "../data.mjs";
+import { reviewPlan } from "./review-plan.mjs";
 
 const base = ".studio/batch-review";
 const stamp = i =>
@@ -166,6 +167,14 @@ export class BatchReview {
         ),
       });
     }
+    const priorities = new Map(
+      (await reviewPlan(this.w)).items.map(i => [i.key, i.priority])
+    );
+    items.sort(
+      (a, b) =>
+        (priorities.get(a.key) ?? 999) - (priorities.get(b.key) ?? 999) ||
+        a.id.localeCompare(b.id)
+    );
     return {
       items,
       pairs: scan.pairs.filter(p => p.requiresReview || p.crossSplit),

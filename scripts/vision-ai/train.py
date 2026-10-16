@@ -10,6 +10,7 @@ import math
 import os
 import platform
 import random
+import importlib
 import subprocess
 import time
 from datetime import datetime, timezone
@@ -73,6 +74,21 @@ def gpu_environment(torch, torchvision):
         result.update({"gpu": props.name, "totalMemoryBytes": props.total_memory,
                        "computeCapability": list(torch.cuda.get_device_capability(0))})
     return result
+
+
+def inspect_gpu(import_module=importlib.import_module):
+    """Report an unusable environment without installing packages or starting training."""
+    try:
+        torch = import_module('torch')
+        torchvision = import_module('torchvision')
+        return gpu_environment(torch, torchvision)
+    except (ImportError, OSError, RuntimeError) as error:
+        # No arbitrary exception text/paths in shareable environment reports.
+        return {"ready": False, "cudaAvailable": False, "pinnedVersions": False,
+                "trainingPerformed": False, "python": platform.python_version(),
+                "status": "DEPENDENCIES_UNAVAILABLE_OR_INCOMPATIBLE",
+                "errorType": type(error).__name__,
+                "missingModule": getattr(error, 'name', None)}
 
 
 def preflight(args, require_approval=True):
@@ -341,9 +357,7 @@ def main():
               "testSetSealed": False, "productionActivation": False, "binding": approval_binding(args, lock)})
         print('PENDING_HUMAN_DATASET_AND_TRAINING_REVIEW; trainingPerformed=false')
     elif args.command == 'gpu-check':
-        import torch
-        import torchvision
-        report = gpu_environment(torch, torchvision)
+        report = inspect_gpu()
         write(args.output, report)
         print(json.dumps(report))
         if not report['ready']:

@@ -13,6 +13,18 @@ spec.loader.exec_module(training)
 
 
 class TrainingPreparationTests(unittest.TestCase):
+    def test_gpu_check_reports_missing_or_incompatible_dependencies_without_training(self):
+        for error in (ModuleNotFoundError("missing", name='torch'),
+                      OSError("private path must not be included"), RuntimeError("operator mismatch")):
+            def unavailable(_):
+                raise error
+            report = training.inspect_gpu(unavailable)
+            self.assertFalse(report['ready'])
+            self.assertFalse(report['trainingPerformed'])
+            self.assertNotIn('private path', json.dumps(report))
+        self.assertEqual(training.inspect_gpu(lambda _: (_ for _ in ()).throw(
+            ModuleNotFoundError("missing", name='torch')))['missingModule'], 'torch')
+
     def test_training_approval_fails_closed_and_is_bound_to_inputs(self):
         binding = {'datasetSha256': 'test-hash'}
         approval = {'schemaVersion': 1, 'status': 'approved', 'scope': 'offline_object_and_ground_hazard_detection',

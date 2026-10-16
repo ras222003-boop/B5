@@ -62,6 +62,27 @@ const commit = (
   operationId = randomUUID(),
   session = "test-session"
 ) => b.commit({ stage, receipts, operationId }, actor, session);
+test("batch board reuses the current advisory review plan without granting approval", async t => {
+  const { w, b, items } = await setup(t, 2);
+  await writeFile(
+    await w.safe(".studio/human-review-plan.json", true),
+    JSON.stringify({
+      schemaVersion: 1,
+      items: items.map((i, n) => ({
+        key: i.key,
+        version: i.version,
+        imageSha256: i.sample.sha256,
+        priority: 2 - n,
+        tasks: [],
+      })),
+    }),
+    { flag: "wx" }
+  );
+  const board = await b.board(editor);
+  assert.equal(board.items[0].key, items[1].key);
+  assert.ok(board.items.every(i => i.status !== "approved"));
+  assert.ok((await w.catalog()).items.every(i => i.version === 0));
+});
 test("concurrent duplicate operation IDs never create duplicate revisions or partial journals", async t => {
   const { w, b, items } = await setup(t, 1),
     receipt = await inspected(b, items[0].key, "prepare", editor),
