@@ -24,6 +24,7 @@ import {
 } from "../common.mjs";
 import { validateSource, validateDataset } from "../data.mjs";
 import { validateSpatial, unknownSpatial } from "../spatial.mjs";
+import { validateStairsDirection } from "../stairs-task.mjs";
 import { rightsBlocked, releaseGroups } from "./assistant.mjs";
 
 export class StudioWorkspace {
@@ -547,6 +548,7 @@ export class StudioWorkspace {
             boxes = new Set(),
             tracks = new Set();
           for (const o of payload.objects) {
+            validateStairsDirection(o);
             check(
               typeof o.id === "string" && o.id.length > 0 && !ids.has(o.id),
               "Unique object ID required"

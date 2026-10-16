@@ -1,5 +1,7 @@
 # First real Basira training: execute the existing pipeline
 
+**Priority update:** the first pilot is now stairs only. Follow [STAIRS-FIRST-PILOT.md](STAIRS-FIRST-PILOT.md) and `experiment.stairs.json`. The chair/table selection below is historical and must not be used as the active first-training plan or a stairs final test.
+
 This change finishes technical preparation rather than adding a new review interface or trainer. It reuses the Studio review plan, batch approvals, local detector/OCR/privacy tooling, grouped split, locked COCO export, `train.py`, ONNX exporter and isolated browser comparison.
 
 The existing batch board now honors the current, version/SHA-bound advisory review plan. Old plan entries are ignored after an image changes. Sorting never grants approval. The existing local prereview runner accepts an explicit key selection so only stale, unapproved development reports need refreshing:

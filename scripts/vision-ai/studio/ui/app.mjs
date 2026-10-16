@@ -332,7 +332,7 @@ function renderObjects() {
           )
           .join(
             ""
-          )}</select><button class="danger remove" data-remove="${index}" aria-label="حذف الجسم ${index + 1}">×</button></div><div class="coords">${["x", "y", "w", "h"].map((name, j) => `<label>${name}<input data-coord="${index},${j}" type="number" min="0" max="1" step="0.001" value="${o.box[j]}"></label>`).join("")}</div></div>`
+          )}</select><button class="danger remove" data-remove="${index}" aria-label="حذف الجسم ${index + 1}">×</button></div><div class="coords">${["x", "y", "w", "h"].map((name, j) => `<label>${name}<input data-coord="${index},${j}" type="number" min="0" max="1" step="0.001" value="${o.box[j]}"></label>`).join("")}</div>${o.classId === 23 ? `<label>اتجاه الدرج بالنسبة للكاميرا<select data-stairs="${index}" aria-label="اتجاه الدرج ${index + 1}">${[['', 'لم يُراجع بعد'], ['stairs_up', 'صاعد'], ['stairs_down', 'هابط'], ['stairs_present_uncertain_direction', 'درج موجود — الاتجاه غير مؤكد']].map(([v,t]) => `<option value="${v}" ${o.stairsDirection?.label === v ? 'selected' : ''}>${t}</option>`).join('')}</select></label><label>دليل الاتجاه أو سبب عدم اليقين<input data-stairs-evidence="${index}" aria-label="دليل اتجاه الدرج ${index + 1}" maxlength="1000" value="${esc(o.stairsDirection?.evidence ?? '')}"></label><small>وسم تجريبي يحتاج مراجعة مستقلة. لا أمتار ولا ضمان سلامة. راجع كل رحلة درج على حدة.</small>` : ''}</div>`
     )
     .join("");
   $("objects")
@@ -341,9 +341,23 @@ function renderObjects() {
       el =>
         (el.onchange = () => {
           objects[+el.dataset.class].classId = +el.value;
-          drawBoxes();
+          if (+el.value !== 23) delete objects[+el.dataset.class].stairsDirection;
+          renderObjects();
         })
     );
+  $("objects").querySelectorAll("[data-stairs]").forEach(el => {
+    el.onchange = () => {
+      const o = objects[+el.dataset.stairs];
+      if (el.value) o.stairsDirection = {label: el.value, evidence: $("objects").querySelector(`[data-stairs-evidence="${el.dataset.stairs}"]`).value};
+      else delete o.stairsDirection;
+    };
+  });
+  $("objects").querySelectorAll("[data-stairs-evidence]").forEach(el => {
+    el.oninput = () => {
+      const o = objects[+el.dataset.stairsEvidence];
+      if (o.stairsDirection) o.stairsDirection.evidence = el.value;
+    };
+  });
   $("objects")
     .querySelectorAll("[data-remove]")
     .forEach(
@@ -374,7 +388,7 @@ function drawBoxes() {
   $("overlay").innerHTML = objects
     .map(
       (o, i) =>
-        `<rect x="${o.box[0] * 1000}" y="${o.box[1] * 1000}" width="${o.box[2] * 1000}" height="${o.box[3] * 1000}" fill="none" stroke="#f8dc59" stroke-width="3" vector-effect="non-scaling-stroke"/><text x="${o.box[0] * 1000 + 7}" y="${o.box[1] * 1000 + 30}" fill="#17332e" stroke="#fff" stroke-width="1" font-size="28">${i + 1}</text>`
+        `<rect x="${o.box[0] * 1000}" y="${o.box[1] * 1000}" width="${o.box[2] * 1000}" height="${o.box[3] * 1000}" fill="none" stroke="#f8dc59" stroke-width="3" vector-effect="non-scaling-stroke"/><text x="${o.box[0] * 1000 + 7}" y="${o.box[1] * 1000 + 30}" fill="#17332e" stroke="#fff" stroke-width="1" font-size="28">${i + 1}${o.classId === 23 ? ` · ${o.box[0]+o.box[2]/2 < 1/3 ? 'يسار' : o.box[0]+o.box[2]/2 < 2/3 ? 'وسط' : 'يمين'}${o.box[0] < 2/3 && o.box[0]+o.box[2] > 1/3 ? ' · يتقاطع مع وسط الصورة' : ''}` : ''}</text>`
     )
     .join("");
 }

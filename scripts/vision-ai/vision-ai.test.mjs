@@ -357,6 +357,24 @@ test('missing frames, modified data and changed comparison device rejected', asy
   const report = await evaluateRun(output, root, run), other = structuredClone(report); other.run.device = 'different';
   assert.throws(() => compareReports(report, other), /device/);
 });
+
+test('stairs evaluation uses three reviewed directions, presence and image position without mixing global classes', async t => {
+  const {root,data}=await fixture(t),output=frozen(data);
+  output.contentKind='synthetic';
+  for(const s of output.samples)for(const o of s.annotation.objects){o.classId=23;o.stairsDirection={label:'stairs_up',evidence:'synthetic fixture: visible fictional ascent'};}
+  const run=predictions(output);
+  run.task='basira-stairs-v1';run.taskPolicySha256=await fileHash(resolve(repo,'ml/vision/stairs-task.v1.json'));
+  for(const s of run.samples)for(const p of s.predictions)p.classId=2301;
+  const report=await evaluateRun(output,root,run,{allowSynthetic:true});
+  assert.equal(report.detection.microRecall,1);assert.equal(report.stairs.position.horizontalCorrect,report.stairs.position.matchedBoxes);
+  assert.equal(report.stairs.position.metricDistance,null);assert.equal(report.scope,'synthetic-arithmetic-only');
+  const incompatible=structuredClone(report);incompatible.task=null;
+  assert.throws(()=>compareReports(report,incompatible),/task mismatch/);
+  await assert.rejects(evaluateRun(output,root,{...run,taskPolicySha256:hash('changed')},{allowSynthetic:true}),/policy hash/);
+  for(const s of output.samples)for(const o of s.annotation.objects)delete o.stairsDirection;
+  const stale={...run,datasetSha256:jsonHash(output)};
+  await assert.rejects(evaluateRun(output,root,stale,{allowSynthetic:true}),/Generic stairs/);
+});
 test('false positives on negative frames and unsupported model classes are counted', async t => {
   const { root, data } = await fixture(t), output = frozen(data), run = predictions(output);
   run.samples.find(s => !s.predictions.length).predictions.push({ classId: -1, score: .9, box: [.1, .1, .2, .2] });
