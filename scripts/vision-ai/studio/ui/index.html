@@ -15,6 +15,7 @@
       </div>
       <p class="sidebar-label">مساحة العمل</p>
       <nav>
+        <button class="nav" data-tab="batch">✓ مراجعة الدفعات</button>
         <button class="nav" data-tab="assistant">✦ المساعد المحلي</button>
         <button class="nav active" data-tab="gallery">▦ مكتبة البيانات</button
         ><button class="nav" data-tab="experiments">◷ تجارب التدريب</button>
@@ -177,6 +178,40 @@
             <span class="badge pending">السحابة معطلة</span>
           </div>
           <p id="assistant-capabilities" class="panel"></p>
+          <section class="panel" id="prereview-panel">
+            <h3>المراجعة الذكية المسبقة</h3>
+            <p>
+              قائمة موحدة لتجهيز دفعة صغيرة. الاقتراحات آلية؛ التصحيح يؤكده
+              المُعدّ، ثم يراجعه شخص مستقل. لا اعتماد جماعي.
+            </p>
+            <div class="button-row">
+              <label
+                >القائمة<select id="prereview-kind">
+                  <option value="real">صور حقيقية</option>
+                  <option value="synthetic">اصطناعية منفصلة</option>
+                </select></label
+              >
+              <button id="prereview-refresh" class="quiet">
+                تحديث القائمة
+              </button>
+              <button id="prereview-run" class="primary">
+                تجهيز القائمة محليًا
+              </button>
+              <button id="prereview-export" class="quiet">
+                تصدير المحدد المعتمد للمسار القائم
+              </button>
+              <button id="prereview-packet" class="quiet">
+                تنزيل تقرير التجهيز التجميعي
+              </button>
+            </div>
+            <p id="prereview-progress" role="status"></p>
+            <p>
+              الكشف وOCR محليان. تظهر مقترحات الوجوه واللوحات عند تهيئة الأداة.
+              قد تفوتها بيانات حساسة؛ لا أمتار أو قرارات خصوصية آلية.
+            </p>
+            <div id="prereview-board"></div>
+            <div id="prereview-related"></div>
+          </section>
           <div class="button-row">
             <button id="batch-models" class="quiet">
               اقتراحات الكشف للمكتبة</button
@@ -267,6 +302,81 @@
             </form>
           </details>
         </section>
+        <section id="batch-panel" hidden>
+          <div class="panel">
+            <h2>مراجعة الدفعة — افحص كل صورة، ثم نفّذ بإجراء واحد</h2>
+            <p>
+              التجهيز الآلي ليس اعتمادًا. افتح كل صورة وافحص الأصل والنسخة
+              المقترحة والوسوم وأدلة المصدر. تُستبعد الحالات غير المحسومة، ويظل
+              الاختبار النهائي من جلسات حقيقية جديدة.
+            </p>
+            <div class="filters">
+              <label
+                >المرحلة<select id="batch-stage">
+                  <option value="prepare">عامر — تجهيز</option>
+                  <option value="approve">رائد — مراجعة مستقلة</option>
+                </select></label
+              >
+              <label
+                >نوع البيانات<select id="batch-kind">
+                  <option value="real">حقيقية</option>
+                  <option value="synthetic">اصطناعية منفصلة</option>
+                </select></label
+              >
+              <label
+                >الحالة<select id="batch-category">
+                  <option value="">جميع الحالات</option>
+                  <option value="ready">جاهزة للمراجعة</option>
+                  <option value="needs_information">تحتاج معلومات</option>
+                  <option value="high_risk">عالية الخطورة</option>
+                </select></label
+              >
+              <label
+                >بحث في الدفعة أو الصورة<input id="batch-search" type="search"
+              /></label>
+              <button id="batch-refresh" class="quiet">تحديث</button>
+            </div>
+            <p id="batch-counts" role="status"></p>
+            <button id="batch-commit" class="primary" disabled>
+              تأكيد تجهيز الدفعة
+            </button>
+            <p id="batch-result" role="status" aria-live="polite"></p>
+          </div>
+          <div id="batch-board" class="batch-grid"></div>
+          <section class="panel">
+            <h3>استثناءات الدفعة</h3>
+            <div id="batch-exceptions"></div>
+          </section>
+          <details class="panel" id="batch-training-panel">
+            <summary>تجهيز التدريب بعد الاعتماد — دون تشغيل GPU</summary>
+            <p>
+              اختر عينات حقيقية معتمدة فقط. لتسجيل الاختبار النهائي، يلزم
+              استيراد جلسات تصوير جديدة لم تُستخدم في التشخيص أو التحسين، مع
+              دليل مستقل للجلسة. التسجيل يحميها من التعديل والتحليل التطويري.
+              الصور الحالية ليست اختبارًا مستقلًا.
+            </p>
+            <div id="batch-training-selection"></div>
+            <label
+              >مسار دليل جلسات الاختبار داخل مجلد البيانات<input
+                id="batch-test-evidence"
+                placeholder="reference/session-evidence.json"
+            /></label>
+            <label>SHA-256 للدليل<input id="batch-test-sha" /></label>
+            <label>سبب تسجيل الاختبار<input id="batch-test-reason" /></label>
+            <label class="check"
+              ><input id="batch-test-inspected" type="checkbox" />راجعت استقلال
+              الجلسات ودليل التقاطها، ولم تستخدم العينات أو جلساتها لضبط النموذج
+              أو إعداداته.</label
+            >
+            <button id="batch-register-test" class="quiet">
+              تسجيل الاختيار اختبارًا مستقلًا محميًا
+            </button>
+            <button id="batch-prepare-training" class="quiet">
+              تجهيز ملفات الاختيار المعتمد بالمسار القائم
+            </button>
+            <p id="batch-training-result" role="status"></p>
+          </details>
+        </section>
         <section id="experiments-panel" hidden>
           <div class="section-heading">
             <div>
@@ -299,195 +409,300 @@
           ✕
         </button>
       </div>
-      <nav class="review-navigation panel" aria-label="التنقل في مراجعة الصور">
-        <button id="review-previous" class="quiet">
-          الصورة السابقة دون حفظ
+      <p
+        id="editor-save-status"
+        role="alert"
+        aria-live="polite"
+        tabindex="-1"
+      ></p>
+      <section id="save-conflict" class="panel" hidden>
+        <p>
+          مسودتك محفوظة في هذه الجلسة. لا تُستبدل التغييرات المتعارضة تلقائيًا.
+        </p>
+        <pre id="save-conflict-details"></pre>
+        <label class="check"
+          ><input id="confirm-rebase" type="checkbox" />راجعت الفروق وأريد
+          الإبقاء على تعديلاتي في الحقول المتعارضة</label
+        >
+        <button id="rebase-draft" class="quiet">
+          تجهيز مسودتي فوق الإصدار الحالي دون حفظ تلقائي
         </button>
-        <span id="review-position" role="status"></span>
-        <button id="review-next" class="quiet">الصورة التالية دون حفظ</button>
-      </nav>
-      <div class="editor-layout">
-        <div>
-          <div id="stage" class="stage">
-            <img id="editor-image" alt="الصورة الجاري مراجعتها" /><svg
-              id="overlay"
-              viewBox="0 0 1000 1000"
-              preserveAspectRatio="none"
-              aria-label="مربعات الأجسام القابلة للتعديل"
-            ></svg
-            ><svg
-              id="redaction-overlay"
-              viewBox="0 0 1000 1000"
-              preserveAspectRatio="none"
-              aria-hidden="true"
-            ></svg>
-            <svg
-              id="review-task-overlay"
-              viewBox="0 0 1000 1000"
-              preserveAspectRatio="none"
-              aria-hidden="true"
-            ></svg>
-          </div>
-          <p class="muted">
-            اسحب فوق الصورة لإضافة مربع. عدّل موضعه وحجمه من حقول x وy والعرض
-            والارتفاع (بين 0 و1).
-          </p>
-          <div id="spatial" class="panel"></div>
-          <section class="panel">
-            <h3>مهام المراجعة لهذا الإصدار</h3>
-            <p>
-              وسوم المصدر والأجسام غير المطابقة والاقتراحات تحتاج قرارًا بشريًا.
-              عرض المنطقة لا يعدل الوسم.
+        <button id="reload-saved" class="quiet">
+          عرض الإصدار المحفوظ بدل مسودتي
+        </button>
+      </section>
+      <fieldset id="editor-fields">
+        <nav
+          class="review-navigation panel"
+          aria-label="التنقل في مراجعة الصور"
+        >
+          <button id="review-previous" class="quiet">
+            الصورة السابقة دون حفظ
+          </button>
+          <span id="review-position" role="status"></span>
+          <button id="review-next" class="quiet">الصورة التالية دون حفظ</button>
+        </nav>
+        <div class="editor-layout">
+          <div>
+            <div id="stage" class="stage">
+              <img id="editor-image" alt="الصورة الجاري مراجعتها" /><svg
+                id="overlay"
+                viewBox="0 0 1000 1000"
+                preserveAspectRatio="none"
+                aria-label="مربعات الأجسام القابلة للتعديل"
+              ></svg
+              ><svg
+                id="redaction-overlay"
+                viewBox="0 0 1000 1000"
+                preserveAspectRatio="none"
+                aria-hidden="true"
+              ></svg>
+              <svg
+                id="review-task-overlay"
+                viewBox="0 0 1000 1000"
+                preserveAspectRatio="none"
+                aria-hidden="true"
+              ></svg>
+            </div>
+            <p class="muted">
+              اسحب فوق الصورة لإضافة مربع. عدّل موضعه وحجمه من حقول x وy والعرض
+              والارتفاع (بين 0 و1).
             </p>
-            <div
-              id="review-tasks"
-              tabindex="0"
-              aria-label="قائمة مهام المراجعة"
-            ></div>
-          </section>
-          <section class="panel assistant-tools">
-            <h3>المساعد المحلي</h3>
-            <div class="button-row">
-              <button id="analyze-quality" class="quiet">
-                تحليل الجودة والوسوم</button
-              ><button id="analyze-models" class="primary">
-                اقتراح كشف وOCR محلي
-              </button>
-            </div>
-            <label class="check"
-              ><input id="use-ocr" type="checkbox" checked />استخدام OCR المحلي
-              للنصوص (قد يستغرق وقتًا)</label
-            >
-            <div id="assistant-result"></div>
-            <label class="check"
-              ><input id="redaction-mode" type="checkbox" />السحب فوق الصورة
-              يحدد منطقة تنقيح بدل إضافة جسم</label
-            >
-            <div id="redaction-regions"></div>
-            <label class="check"
-              ><input id="confirm-redaction" type="checkbox" />راجعت المناطق
-              وأطلب تغطيتها في نسخة مستقلة، دون اعتماد الخصوصية</label
-            >
-            <div class="button-row">
-              <button id="apply-redaction" class="quiet">
-                تجهيز نسخة منقحة</button
-              ><button id="compare-versions" class="quiet">
-                مقارنة الأصل بالنسخة
-              </button>
-            </div>
-            <div id="comparison" class="comparison" hidden>
-              <figure>
-                <img id="compare-before" alt="الأصل دون تعديل" />
-                <figcaption>الأصل</figcaption>
-              </figure>
-              <figure>
-                <img id="compare-after" alt="النسخة الحالية المنفصلة" />
-                <figcaption>النسخة الحالية</figcaption>
-              </figure>
-            </div>
-          </section>
-          <label class="file-label"
-            >إرفاق نسخة منقحة من الصورة<input
-              id="derivative"
-              type="file"
-              accept="image/png,image/jpeg,image/webp"
-          /></label>
-          <p class="muted">
-            تبقى الصورة الأصلية كما هي. تُحفظ النسخة منفصلة وتُزال بياناتها
-            الوصفية، وتعود المراجعات إلى الانتظار. الطمس المرئي يتطلب تجهيزًا
-            بشريًا.
-          </p>
-        </div>
-        <div class="editor-controls">
-          <h3>الأجسام والتصنيفات</h3>
-          <div id="objects"></div>
-          <div class="conditions">
-            <label
-              >الإضاءة<select id="condition-lighting">
-                <option value="unreviewed">غير مراجع</option>
-                <option value="daylight">نهار</option>
-                <option value="indoor">داخلية</option>
-                <option value="low_light">إضاءة منخفضة</option>
-                <option value="mixed">مختلطة</option>
-              </select></label
-            ><label
-              >المكان<select id="condition-scene">
-                <option value="unreviewed">غير مراجع</option>
-                <option value="indoor">داخل</option>
-                <option value="outdoor">خارج</option>
-              </select></label
-            ><label
-              >حركة الالتقاط<select id="condition-motion">
-                <option value="unreviewed">غير مراجع</option>
-                <option value="static">ثابت</option>
-                <option value="moving">متحرك</option>
-              </select></label
-            >
+            <div id="spatial" class="panel"></div>
+            <section id="prereview-detail" class="panel"></section>
+            <section class="panel">
+              <h3>مهام المراجعة لهذا الإصدار</h3>
+              <p>
+                وسوم المصدر والأجسام غير المطابقة والاقتراحات تحتاج قرارًا
+                بشريًا. عرض المنطقة لا يعدل الوسم.
+              </p>
+              <div
+                id="review-tasks"
+                tabindex="0"
+                aria-label="قائمة مهام المراجعة"
+              ></div>
+            </section>
+            <section class="panel assistant-tools">
+              <h3>المساعد المحلي</h3>
+              <div class="button-row">
+                <button id="analyze-quality" class="quiet">
+                  تحليل الجودة والوسوم</button
+                ><button id="analyze-models" class="primary">
+                  اقتراح كشف وOCR محلي
+                </button>
+              </div>
+              <label class="check"
+                ><input id="use-ocr" type="checkbox" checked />استخدام OCR
+                المحلي للنصوص (قد يستغرق وقتًا)</label
+              >
+              <div id="assistant-result"></div>
+              <label class="check"
+                ><input id="redaction-mode" type="checkbox" />السحب فوق الصورة
+                يحدد منطقة تنقيح بدل إضافة جسم</label
+              >
+              <div id="redaction-regions"></div>
+              <label class="check"
+                ><input id="confirm-redaction" type="checkbox" />راجعت المناطق
+                وأطلب تغطيتها في نسخة مستقلة، دون اعتماد الخصوصية</label
+              >
+              <div class="button-row">
+                <button id="apply-redaction" class="quiet">
+                  تجهيز نسخة منقحة</button
+                ><button id="compare-versions" class="quiet">
+                  مقارنة الأصل بالنسخة
+                </button>
+              </div>
+              <div id="comparison" class="comparison" hidden>
+                <figure>
+                  <img id="compare-before" alt="الأصل دون تعديل" />
+                  <figcaption>الأصل</figcaption>
+                </figure>
+                <figure>
+                  <img id="compare-after" alt="النسخة الحالية المنفصلة" />
+                  <figcaption>النسخة الحالية</figcaption>
+                </figure>
+              </div>
+            </section>
+            <label class="file-label"
+              >إرفاق نسخة منقحة من الصورة<input
+                id="derivative"
+                type="file"
+                accept="image/png,image/jpeg,image/webp"
+            /></label>
+            <p class="muted">
+              تبقى الصورة الأصلية كما هي. تُحفظ النسخة منفصلة وتُزال بياناتها
+              الوصفية، وتعود المراجعات إلى الانتظار. الطمس المرئي يتطلب تجهيزًا
+              بشريًا.
+            </p>
           </div>
-          <label
-            >سبب التعديل أو القرار<textarea
-              id="reason"
-              rows="2"
-              placeholder="ما الذي صححته أو راجعته؟"
-              required
-            ></textarea></label
-          ><button id="save-labels" class="primary">حفظ إصدار الوسوم</button>
-          <section class="review-panel">
-            <h3>مراجعة مستقلة</h3>
-            <div id="review-status"></div>
-            <p id="review-eligibility" class="muted"></p>
-            <p id="review-blockers" class="muted"></p>
-            <label
-              >نوع المراجعة<select id="review-kind">
-                <option value="rights">الحقوق والمصدر</option>
-                <option value="privacy">الخصوصية</option>
-                <option value="labels">الوسوم</option>
-              </select></label
-            >
-            <div id="privacy-fields">
+          <div class="editor-controls">
+            <h3>الأجسام والتصنيفات</h3>
+            <div id="objects"></div>
+            <div class="conditions">
               <label
-                >الوجوه<select id="faces">
-                  <option value="unreviewed">غير مراجعة</option>
-                  <option value="absent">غير موجودة</option>
-                  <option value="redacted">مطموسة</option>
-                </select></label
-              ><label
-                >اللوحات<select id="plates">
-                  <option value="unreviewed">غير مراجعة</option>
-                  <option value="absent">غير موجودة</option>
-                  <option value="redacted">مطموسة</option>
-                </select></label
-              ><label
-                >النص الشخصي<select id="personalText">
+                >الإضاءة<select id="condition-lighting">
                   <option value="unreviewed">غير مراجع</option>
-                  <option value="absent">غير موجود</option>
-                  <option value="redacted">مطموس</option>
+                  <option value="daylight">نهار</option>
+                  <option value="indoor">داخلية</option>
+                  <option value="low_light">إضاءة منخفضة</option>
+                  <option value="mixed">مختلطة</option>
+                </select></label
+              ><label
+                >المكان<select id="condition-scene">
+                  <option value="unreviewed">غير مراجع</option>
+                  <option value="indoor">داخل</option>
+                  <option value="outdoor">خارج</option>
+                </select></label
+              ><label
+                >حركة الالتقاط<select id="condition-motion">
+                  <option value="unreviewed">غير مراجع</option>
+                  <option value="static">ثابت</option>
+                  <option value="moving">متحرك</option>
                 </select></label
               >
             </div>
-            <label class="check"
-              ><input id="confirm-review" type="checkbox" /> راجعت الأدلة
-              والخصوصية أو جميع الوسوم بحسب نوع القرار</label
-            >
-            <div class="button-row">
-              <button id="approve" class="primary">
-                قبول نوع المراجعة المحدد</button
-              ><button id="reject" class="danger">رفض</button>
-            </div>
-            <p class="muted">
-              المراجع مستقل عن محرر العينة. القرار لا يبدأ تدريبًا.
-            </p>
-          </section>
+            <label
+              >سبب التعديل أو القرار<textarea
+                id="reason"
+                rows="2"
+                placeholder="ما الذي صححته أو راجعته؟"
+                required
+              ></textarea></label
+            ><button id="save-labels" class="primary">حفظ إصدار الوسوم</button>
+            <section class="review-panel">
+              <h3>مراجعة مستقلة</h3>
+              <div id="review-status"></div>
+              <p id="review-eligibility" class="muted"></p>
+              <p id="review-blockers" class="muted"></p>
+              <label
+                >نوع المراجعة<select id="review-kind">
+                  <option value="rights">الحقوق والمصدر</option>
+                  <option value="privacy">الخصوصية</option>
+                  <option value="labels">الوسوم</option>
+                </select></label
+              >
+              <div id="privacy-fields">
+                <label
+                  >الوجوه<select id="faces">
+                    <option value="unreviewed">غير مراجعة</option>
+                    <option value="absent">غير موجودة</option>
+                    <option value="redacted">مطموسة</option>
+                  </select></label
+                ><label
+                  >اللوحات<select id="plates">
+                    <option value="unreviewed">غير مراجعة</option>
+                    <option value="absent">غير موجودة</option>
+                    <option value="redacted">مطموسة</option>
+                  </select></label
+                ><label
+                  >النص الشخصي<select id="personalText">
+                    <option value="unreviewed">غير مراجع</option>
+                    <option value="absent">غير موجود</option>
+                    <option value="redacted">مطموس</option>
+                  </select></label
+                >
+              </div>
+              <label class="check"
+                ><input id="confirm-review" type="checkbox" /> راجعت الأدلة
+                والخصوصية أو جميع الوسوم بحسب نوع القرار</label
+              >
+              <div class="button-row">
+                <button id="approve" class="primary">
+                  قبول نوع المراجعة المحدد</button
+                ><button id="reject" class="danger">رفض</button>
+              </div>
+              <p class="muted">
+                المراجع مستقل عن محرر العينة. القرار لا يبدأ تدريبًا.
+              </p>
+            </section>
+          </div>
         </div>
+        <details>
+          <summary>المصدر والأدلة والقياسات المسجلة</summary>
+          <pre id="evidence"></pre>
+        </details>
+        <details>
+          <summary>سجل الإصدارات والقرارات</summary>
+          <div id="history"></div>
+        </details>
+      </fieldset>
+    </dialog>
+    <dialog
+      id="batch-detail"
+      class="batch-dialog"
+      aria-labelledby="batch-title"
+    >
+      <div class="batch-detail-heading">
+        <h2 id="batch-title">فحص الصورة</h2>
+        <button id="batch-close" class="quiet">إغلاق</button>
       </div>
-      <details>
-        <summary>المصدر والأدلة والقياسات المسجلة</summary>
-        <pre id="evidence"></pre>
-      </details>
-      <details>
-        <summary>سجل الإصدارات والقرارات</summary>
-        <div id="history"></div>
-      </details>
+      <p id="batch-detail-status" role="alert"></p>
+      <fieldset id="batch-fields">
+        <div class="batch-comparison">
+          <figure>
+            <figcaption>الأصل المحفوظ</figcaption>
+            <canvas id="batch-original"></canvas>
+          </figure>
+          <figure>
+            <figcaption>النسخة المقترحة والوسوم — غير معتمدة</figcaption>
+            <canvas id="batch-preview"></canvas>
+          </figure>
+        </div>
+        <p>
+          غياب اكتشاف آلي لا يثبت غياب البيانات الشخصية. احتفظ بالأجسام الأصلية
+          التي لم يطابقها النموذج ما لم يثبت خطؤها بالفحص.
+        </p>
+        <section class="panel">
+          <h3>الوسوم والاقتراحات</h3>
+          <div id="batch-labels"></div>
+          <button id="batch-keep-labels" class="quiet">
+            فحصت الاقتراحات وأبقي الوسوم الحالية لهذه الصورة</button
+          ><button id="batch-edit" class="quiet">
+            تعديل المربعات أو مناطق التنقيح في المحرر
+          </button>
+        </section>
+        <section class="panel">
+          <h3>الظروف والخصوصية</h3>
+          <div id="batch-conditions" class="filters"></div>
+          <p id="batch-condition-note"></p>
+          <div id="batch-privacy" class="filters"></div>
+        </section>
+        <section class="panel">
+          <h3>أدلة الحقوق والمصدر</h3>
+          <div id="batch-evidence"></div>
+        </section>
+        <button id="batch-quick-check" class="quiet">
+          راجعت هذه الصورة وكل أدلتها: أبقِ الوسوم الحالية ولا توجد بيانات شخصية
+        </button>
+        <label class="check"
+          ><input type="checkbox" id="batch-seen-labels" />فحصت جميع الأجسام
+          والمربعات، بما فيها الأجسام الأصلية غير المطابقة، والاقتراحات التي
+          قبلتها أو رفضتها.</label
+        >
+        <label class="check"
+          ><input type="checkbox" id="batch-seen-privacy" />فحصت الأصل والنسخة
+          المقترحة بصريًا للوجوه واللوحات والنصوص الشخصية، والتنقيح كافٍ حيث
+          يلزم.</label
+        >
+        <label class="check"
+          ><input type="checkbox" id="batch-seen-sources" />اطلعت على جميع أدلة
+          المصدر والترخيص لهذه الصورة. الشروط والخصوصية تسمحان بالخطوة التي
+          أؤكدها.</label
+        >
+        <label class="check" id="batch-commercial-wrap"
+          ><input type="checkbox" id="batch-commercial" />راجعت بصورة مستقلة
+          الإذن بالتدريب التجاري وحقوق كل مصدر، وليس بصمته فقط.</label
+        >
+        <label
+          >سبب القرار لهذه الصورة<textarea
+            id="batch-reason"
+            rows="2"
+          ></textarea>
+        </label>
+        <button id="batch-attest" class="primary">
+          فحصت هذه الصورة وأدلتها — أضفها لقائمة الدفعة
+        </button>
+      </fieldset>
     </dialog>
   </body>
 </html>

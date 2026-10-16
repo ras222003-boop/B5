@@ -347,6 +347,7 @@ export async function releaseGroups(w, selected) {
   return result;
 }
 export async function analyze(w, key, actor) {
+  await (await import('../test-cohort.mjs')).markDevelopment(w,await w.item(key));
   const i = await w.item(key),
     f = await fingerprint(w, i),
     issues = [];
@@ -502,9 +503,14 @@ export function compareLabels(objects, detections) {
       });
     }
   }
+  for (const o of objects) {
+    if (!detections.some(d => iou(o.box, d.box) >= 0.3 && o.classId === d.classId))
+      issues.push(issue("original_unmatched", "راجع الجسم الأصلي أيضًا؛ غياب كشف مطابق لا يثبت خطأ الوسم ولا يبرر حذفه.", null, { objectId: o.id, classId: o.classId, box: o.box }));
+  }
   return { issues, proposals };
 }
 export async function saveModelReport(w, p, actor, modelManifest) {
+  await (await import('../test-cohort.mjs')).markDevelopment(w,await w.item(p.key));
   const i = await w.item(p.key);
   check(
     (await fingerprint(w, i)).orientation === 1,

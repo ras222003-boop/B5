@@ -19,6 +19,7 @@ export async function validateSource(source, root, verifyFiles = true) {
 
 /** Fails closed. Human attestations are checked for completeness, never certified as truthful. */
 export async function validateDataset(data, root, { verifyFiles = true, requireSplit = true, allowSynthetic = false } = {}) {
+  await (await import('./test-cohort.mjs')).guardFinalSplits(data,root);
   const taxonomy = await readJson(taxonomyPath);
   check(data?.schemaVersion === 1 && nonempty(data.id) && nonempty(data.annotationRevision), 'dataset identity/revision required');
   check(data.taxonomyVersion === taxonomy.version, 'taxonomy version mismatch');

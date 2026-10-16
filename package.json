@@ -17,9 +17,14 @@
     "vision-ai": "node scripts/vision-ai/cli.mjs",
     "test:vision-ai": "node --test scripts/vision-ai/vision-ai.test.mjs",
     "vision-studio": "node scripts/vision-ai/studio/server.mjs",
-    "test:vision-studio": "node --test scripts/vision-ai/studio/studio.test.mjs scripts/vision-ai/studio/assistant.test.mjs scripts/vision-ai/studio/review-plan.test.mjs",
+    "test:vision-studio": "node --test scripts/vision-ai/studio/studio.test.mjs scripts/vision-ai/studio/assistant.test.mjs scripts/vision-ai/studio/review-plan.test.mjs scripts/vision-ai/studio/password-reset.test.mjs scripts/vision-ai/studio/local-http.test.mjs scripts/vision-ai/studio/prereview.test.mjs scripts/vision-ai/studio/label-draft.test.mjs scripts/vision-ai/studio/batch-review.test.mjs",
     "test:vision-assistant-browser": "node scripts/vision-ai/studio/assistant-browser-test.mjs",
-    "test:vision-studio-browser": "node scripts/vision-ai/studio/browser-test.mjs"
+    "test:vision-studio-browser": "node scripts/vision-ai/studio/browser-test.mjs",
+    "vision-prereview": "node scripts/vision-ai/studio/prereview-run.mjs",
+    "test:vision-prereview-browser": "node scripts/vision-ai/studio/prereview-browser-test.mjs",
+    "test:vision-label-save-browser": "node scripts/vision-ai/studio/label-save-browser-test.mjs",
+    "test:vision-batch": "node --test scripts/vision-ai/studio/batch-review.test.mjs",
+    "test:vision-batch-browser": "node scripts/vision-ai/studio/batch-review-browser-test.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",

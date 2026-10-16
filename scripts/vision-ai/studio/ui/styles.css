@@ -8,6 +8,104 @@
   --surface: #fff;
   font-family: Tahoma, "Segoe UI", sans-serif;
 }
+.batch-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(245px, 1fr));
+  gap: 16px;
+}
+.batch-card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  overflow: hidden;
+}
+.batch-card > img {
+  width: 100%;
+  height: 170px;
+  object-fit: contain;
+  background: #e6ebe7;
+}
+.batch-card > div {
+  padding: 14px;
+}
+.batch-card small {
+  display: block;
+  overflow-wrap: anywhere;
+}
+.batch-card.high_risk {
+  border-color: #bc584a;
+}
+.batch-card.needs_information {
+  border-color: #ba9c50;
+}
+.batch-card.ready {
+  border-color: var(--green);
+}
+.batch-dialog {
+  width: min(1180px, 96vw);
+  max-width: 96vw;
+  max-height: 94vh;
+  overflow: auto;
+}
+.batch-detail-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+#batch-fields {
+  border: 0;
+  padding: 0;
+  min-width: 0;
+}
+.batch-comparison {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 16px;
+}
+.batch-comparison figure {
+  margin: 0;
+}
+.batch-comparison canvas {
+  width: 100%;
+  height: auto;
+  border-radius: 8px;
+}
+.batch-proposal {
+  display: block;
+  padding: 10px;
+  margin-block: 8px;
+  background: var(--bg);
+}
+#batch-evidence pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-height: 320px;
+  overflow: auto;
+}
+#batch-detail-status:not(:empty),
+#batch-result:not(:empty) {
+  background: #fff0cc;
+  padding: 12px;
+  border-radius: 8px;
+  overflow-wrap: anywhere;
+}
+#editor-fields {
+  border: 0;
+  margin: 0;
+  padding: 0;
+  min-width: 0;
+}
+#editor-save-status:not(:empty) {
+  background: #fff0cc;
+  color: #493900;
+  padding: 12px;
+  border-radius: 8px;
+}
+#save-conflict pre {
+  max-height: 240px;
+  overflow: auto;
+  white-space: pre-wrap;
+}
 * {
   box-sizing: border-box;
 }
@@ -780,4 +878,15 @@ summary {
   justify-content: space-between;
   gap: 12px;
   flex-wrap: wrap;
+}
+.prereview-compare {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+}
+.prereview-compare img {
+  width: 100%;
+  height: auto;
+  max-height: 420px;
+  object-fit: contain;
 }
