@@ -7,6 +7,12 @@ test("selective existing prereview cannot rerun approved samples, wrong kind or 
     { key: "b".repeat(32), contentKind: "real", status: "approved" },
     { key: "c".repeat(32), contentKind: "synthetic", status: "pending" },
   ];
+  items.push({
+    key: "d".repeat(32),
+    contentKind: "real",
+    status: "pending",
+    sample: { intendedUse: "independent_test_candidate" },
+  });
   assert.deepEqual(
     selectItems(items).map(i => i.key),
     ["a".repeat(32)]

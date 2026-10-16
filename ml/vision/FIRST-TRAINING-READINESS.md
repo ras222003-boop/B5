@@ -20,6 +20,8 @@ Select development validation using development data only, then verify positive 
 
 Fresh test candidates must remain separate and receive no detector/OCR/scene/proximity inference for development. Source/rights checks and independent manual reference annotation are still required. Internet metadata can support provenance, but cannot certify actual session independence or privacy. Quarantined acquisitions are not an approved or registered test cohort. Stop collection when the source returns 403/429; do not circumvent access limits.
 
+Pending test samples carry `intendedUse: independent_test_candidate`. The existing exposure guard rejects development inference before final registration too, while allowing actual human annotation/redaction/review. The existing dataset validator rejects their assignment to train or validation, and the initial development ledger excludes explicitly reserved new candidates. This intent flag is not an approval or proof of independence. Preserve original upstream labels as pending reference proposals, their separate annotation license and all per-file provenance; check overlap/site/session uncertainty independently. Existing byte/perceptual duplicate hygiene can flag leakage without running detector/OCR models or tuning against test results.
+
 Use [the existing batch workflow](BATCH-REVIEW.md) to register approved new sessions, freeze the grouped dataset and export the locked COCO files. A single approved image can pass canonical unsplit validation, but cannot provide disjoint train/validation/test or adequate class coverage. Never manufacture empty exports or approvals to make the real training preflight pass.
 
 ## Environment and pretrained weights

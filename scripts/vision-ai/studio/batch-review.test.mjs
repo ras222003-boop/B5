@@ -83,6 +83,39 @@ test("batch board reuses the current advisory review plan without granting appro
   assert.ok(board.items.every(i => i.status !== "approved"));
   assert.ok((await w.catalog()).items.every(i => i.version === 0));
 });
+test("reserved test candidates allow human preparation but block development analysis and training assignment before registration", async t => {
+  const { w, b, items, root } = await setup(t, 1),
+    path = resolve(root, "incoming/demo/dataset.review.pending.json"),
+    data = JSON.parse(await readFile(path));
+  data.samples[0].intendedUse = "independent_test_candidate";
+  await writeFile(path, JSON.stringify(data));
+  const i = (await w.catalog()).items[0];
+  const { markDevelopment, guardFinalSplits } = await import(
+    "../test-cohort.mjs"
+  );
+  await assert.rejects(markDevelopment(w, i), /Reserved independent-test/);
+  for (const split of ["train", "validation"])
+    await assert.rejects(
+      guardFinalSplits({ samples: [{ ...i.sample, split }] }, root),
+      /Reserved independent-test/
+    );
+  await guardFinalSplits({ samples: [{ ...i.sample, split: "test" }] }, root);
+  const r = await commit(
+    b,
+    "prepare",
+    [await inspected(b, i.key, "prepare", editor)],
+    editor
+  );
+  assert.equal(r.results[0].saved, true);
+  assert.equal(
+    (await w.item(i.key)).sample.intendedUse,
+    "independent_test_candidate"
+  );
+  await assert.rejects(
+    assistant.analyze(w, i.key, editor),
+    /Reserved independent-test/
+  );
+});
 test("concurrent duplicate operation IDs never create duplicate revisions or partial journals", async t => {
   const { w, b, items } = await setup(t, 1),
     receipt = await inspected(b, items[0].key, "prepare", editor),

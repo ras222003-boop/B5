@@ -30,11 +30,12 @@ export function selectItems(
     i =>
       i.contentKind === kind &&
       i.status !== "approved" &&
+      i.sample?.intendedUse !== "independent_test_candidate" &&
       (keys === null || keys.includes(i.key))
   );
   check(
     keys === null || selected.length === keys.length,
-    "Unknown, approved or wrong-kind sample in selection"
+    "Unknown, approved, reserved test or wrong-kind sample in selection"
   );
   check(selected.length > 0, "No unapproved development samples selected");
   return selected;

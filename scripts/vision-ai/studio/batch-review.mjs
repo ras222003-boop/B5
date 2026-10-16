@@ -62,12 +62,16 @@ export class BatchReview {
             at: new Date().toISOString(),
             purpose:
               "Exclude existing diagnostic library from an independent final test",
-            samples: c.items.map(i => ({
-              key: i.key,
-              sha256: i.sample.sha256,
-              group: i.sample.leakageGroup,
-              videoSha256: i.sample.media?.video?.sha256 ?? null,
-            })),
+            samples: c.items
+              .filter(
+                i => i.sample.intendedUse !== "independent_test_candidate"
+              )
+              .map(i => ({
+                key: i.key,
+                sha256: i.sample.sha256,
+                group: i.sample.leakageGroup,
+                videoSha256: i.sample.media?.video?.sha256 ?? null,
+              })),
           },
           null,
           2
