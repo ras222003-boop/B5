@@ -1,9 +1,12 @@
 import { requireValue as check, finite, sha, nonempty, jsonHash, checkedFile } from './common.mjs';
 import { validateDataset } from './data.mjs';
 import { proximityPolicy, estimatedProximity } from './spatial.mjs';
+import { unknownStairsStillMotion } from './stairs-task.mjs';
 
 /** Object IDs are manually matched to truth: isolates metric error, NOT end-to-end detection accuracy. */
 export async function evaluateProximity(data, root, run) {
+  check(!data.samples.some(s => s.conditions?.motion === unknownStairsStillMotion),
+    'Unknown capture motion stairs stills cannot be used for distance evaluation or calibration');
   await validateDataset(data, root);
   check(data.spatialPolicyVersion === proximityPolicy.version && run?.datasetSha256 === jsonHash(data) && run.split === 'test',
     'proximity evaluation requires the exact locked spatial test dataset');

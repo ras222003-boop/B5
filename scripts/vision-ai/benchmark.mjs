@@ -10,6 +10,7 @@ import { vitePluginOnnxRuntimeRawAssets } from '../../server/onnxRuntimeAssetPlu
 import { readJson, writeJson, repo, taxonomyPath, fileHash, hash, checkedFile, requireValue as check } from './common.mjs';
 import { validateDataset } from './data.mjs';
 import { evaluateRun } from './evaluation.mjs';
+import { assertStairsMotionTask } from './stairs-task.mjs';
 
 const positional = process.argv.slice(2).filter(v => !['--synthetic-smoke','--stairs'].includes(v));
 const stairs = process.argv.includes('--stairs');
@@ -19,6 +20,7 @@ check(manifestPath && ['validation', 'test'].includes(split) && ['baseline', 'ba
   'Usage: node scripts/vision-ai/benchmark.mjs manifest.json validation|test baseline|baseline-worker|candidate new-run.json [candidate-export-directory] [--stairs]');
 check(variant === 'candidate' ? !!modelDirectory : !modelDirectory, 'candidate requires its exported model directory only');
 const root = dirname(resolve(manifestPath)), data = await readJson(manifestPath);
+assertStairsMotionTask(data, stairs ? 'basira-stairs-v1' : null);
 if (syntheticSmoke) check(data.contentKind === 'synthetic', '--synthetic-smoke accepts only explicitly synthetic fixtures');
 const quality = await validateDataset(data, root, { allowSynthetic: syntheticSmoke }), taxonomy = await readJson(taxonomyPath);
 const selected = data.samples.filter(s => s.split === split).sort((a, b) => a.id.localeCompare(b.id));

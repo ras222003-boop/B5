@@ -1,5 +1,6 @@
 import { readJson, repo, requireValue as check, finite, nonempty, sha, checkedFile, localPath } from './common.mjs';
 import { resolve } from 'node:path';
+import { unknownStairsStillMotion } from './stairs-task.mjs';
 
 export const proximityPolicy = await readJson(resolve(repo, 'ml/vision/proximity-policy.v1.json'));
 const unit = x => finite(x) && x >= 0 && x <= 1;
@@ -45,6 +46,8 @@ export async function validateSpatial(spatial, sample, root, verifyFiles = true)
     ['left', 'center', 'right', 'unknown'].includes(spatial.direction.sector) &&
     ['toward_camera', 'away_from_camera', 'side_on', 'unknown'].includes(spatial.direction.facing), 'invalid camera-relative direction/orientation');
   const d = spatial.distance;
+  check(sample.conditions?.motion !== unknownStairsStillMotion || d?.status === 'uncertain',
+    'Unknown capture motion stairs stills cannot supply metric distance/calibration evidence');
   check(['measured', 'uncertain'].includes(d?.status), 'distance status required');
   if (d.status === 'uncertain') {
     check(['not_measured', 'occluded', 'calibration_missing', 'out_of_range', 'unsynchronized'].includes(d.reason) &&
@@ -88,6 +91,8 @@ export async function validateMotion(data, root, verifyFiles = true) {
     const frames = data.samples.filter(s => s.media.kind === 'video_frame' && s.media.video.sha256 === m.videoSha256 &&
       s.media.timestampMs >= m.startMs && s.media.timestampMs <= m.endMs && s.annotation.objects.some(o => o.trackId === m.trackId))
       .sort((a, b) => a.media.timestampMs - b.media.timestampMs);
+    check(frames.every(s => s.conditions?.motion !== unknownStairsStillMotion),
+      'Unknown capture motion stairs stills cannot supply motion evaluation evidence');
     check(frames.length >= 2 && frames[0].media.timestampMs === m.startMs && frames.at(-1).media.timestampMs === m.endMs,
       'motion interval must have labeled track endpoints in the same video');
     if (['approaching', 'receding'].includes(m.relativeMotion)) {

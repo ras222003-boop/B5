@@ -24,7 +24,11 @@ import {
 } from "../common.mjs";
 import { validateSource, validateDataset } from "../data.mjs";
 import { validateSpatial, unknownSpatial } from "../spatial.mjs";
-import { validateStairsDirection } from "../stairs-task.mjs";
+import {
+  validateStairsDirection,
+  validCaptureMotion,
+  knownSceneConditions,
+} from "../stairs-task.mjs";
 import { rightsBlocked, releaseGroups } from "./assistant.mjs";
 
 export class StudioWorkspace {
@@ -608,10 +612,18 @@ export class StudioWorkspace {
                 ["unreviewed", "indoor", "outdoor"].includes(
                   payload.conditions.scene
                 ) &&
-                ["unreviewed", "static", "moving"].includes(
-                  payload.conditions.motion
-                ),
-              "Scene conditions required"
+                (payload.conditions.motion === "unreviewed" ||
+                  validCaptureMotion(
+                    {
+                      ...item.sample,
+                      annotation: {
+                        ...item.sample.annotation,
+                        objects: payload.objects,
+                      },
+                    },
+                    payload.conditions.motion
+                  )),
+              "Scene conditions required; unknown capture motion is only for stairs still images without metric measurements"
             );
             item.sample.conditions = payload.conditions;
           }
@@ -751,13 +763,7 @@ export class StudioWorkspace {
                 "Exhaustive independent label review required"
               );
               check(
-                ["daylight", "indoor", "low_light", "mixed"].includes(
-                  item.sample.conditions?.lighting
-                ) &&
-                  ["indoor", "outdoor"].includes(
-                    item.sample.conditions?.scene
-                  ) &&
-                  ["static", "moving"].includes(item.sample.conditions?.motion),
+                knownSceneConditions(item.sample),
                 "Scene conditions required"
               );
               item.sample.annotation = {

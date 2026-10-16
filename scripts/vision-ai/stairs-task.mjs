@@ -9,6 +9,38 @@ export const stairsLabels = [
   "stairs_down",
   "stairs_present_uncertain_direction",
 ];
+// Explicitly reviewed absence of capture evidence; never a synonym for "static".
+export const unknownStairsStillMotion = "unknown_stairs_still";
+export function validCaptureMotion(sample, motion = sample.conditions?.motion) {
+  if (["static", "moving"].includes(motion)) return true;
+  return (
+    motion === unknownStairsStillMotion &&
+    sample.media?.kind === "image" &&
+    (sample.annotation?.objects?.some(o => o.classId === 23) ||
+      sample.hardNegatives?.length > 0) &&
+    !sample.annotation?.objects?.some(
+      o => o.spatial?.distance?.status === "measured"
+    )
+  );
+}
+export function knownSceneConditions(sample, conditions = sample.conditions) {
+  return (
+    ["daylight", "indoor", "low_light", "mixed"].includes(
+      conditions?.lighting
+    ) &&
+    ["indoor", "outdoor"].includes(conditions?.scene) &&
+    validCaptureMotion(sample, conditions?.motion)
+  );
+}
+export function assertStairsMotionTask(data, task) {
+  check(
+    task === "basira-stairs-v1" ||
+      !data.samples.some(
+        s => s.conditions?.motion === unknownStairsStillMotion
+      ),
+    "Unknown capture motion is restricted to the stairs still-image detection task, not motion or distance evaluation"
+  );
+}
 export function validateStairsDirection(object) {
   if (object.stairsDirection === undefined) return; // Generic historical approval remains generic.
   const d = object.stairsDirection;

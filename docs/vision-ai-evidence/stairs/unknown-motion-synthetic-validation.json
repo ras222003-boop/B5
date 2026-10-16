@@ -1,0 +1,36 @@
+{
+  "scope": "synthetic-fixtures-only-not-training-or-accuracy-evidence",
+  "policy": "unknown_stairs_still",
+  "node": { "passed": 83, "failed": 0 },
+  "python": { "passed": 10, "failed": 0 },
+  "chromeEditor": {
+    "saveAndReopenUnknownMotion": true,
+    "independentLabelReview": true,
+    "selfReviewBlocked": true,
+    "rightsAndPrivacyRemainPending": true,
+    "originalPreserved": true,
+    "consoleErrors": 0,
+    "unexpectedNetworkErrors": 0,
+    "externalRequests": 0
+  },
+  "chromeBatch": {
+    "threeInspectedPreparationsSavedOnce": true,
+    "threeSeparateDecisionsPerSampleByIndependentReviewer": true,
+    "savedRevisionReopened": true,
+    "originalsAndFixtureCredentialsUnchanged": true,
+    "consoleErrors": 0,
+    "failedRequests": 0,
+    "externalRequests": 0
+  },
+  "guards": [
+    "unreviewed motion is not accepted as reviewed unknown",
+    "lighting and scene must still be reviewed",
+    "ordinary non-stairs samples without hard-negative evidence rejected",
+    "video frames and metric measurements rejected",
+    "non-stairs training and evaluation tasks rejected",
+    "distance evaluation and calibration rejected"
+  ],
+  "actualImageApprovalsCreated": 0,
+  "trainingPerformed": false,
+  "productionModelChanged": false
+}

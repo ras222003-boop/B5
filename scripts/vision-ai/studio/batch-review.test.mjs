@@ -62,6 +62,94 @@ const commit = (
   operationId = randomUUID(),
   session = "test-session"
 ) => b.commit({ stage, receipts, operationId }, actor, session);
+test("stairs still unknown motion requires explicit preparation and independent batch decisions", async t => {
+  const { w, b, items } = await setup(t, 1),
+    original = items[0];
+  await w.change(
+    original.key,
+    {
+      action: "labels",
+      version: original.version,
+      reason: "Fictional stairs, capture motion explicitly unknown",
+      conditions: {
+        lighting: "indoor",
+        scene: "indoor",
+        motion: "unknown_stairs_still",
+      },
+      objects: original.sample.annotation.objects.map(o => ({
+        ...o,
+        classId: 23,
+        stairsDirection: {
+          label: "stairs_up",
+          evidence: "Fictional visible ascending flight",
+        },
+      })),
+    },
+    editor
+  );
+  let item = await w.item(original.key);
+  assert.equal(item.sample.conditions.motion, "unknown_stairs_still");
+  assert.notEqual(item.status, "approved");
+  const p = await commit(
+    b,
+    "prepare",
+    [await inspected(b, item.key, "prepare", editor)],
+    editor
+  );
+  assert.equal(p.results[0].saved, true);
+  item = await w.item(item.key);
+  assert.equal(item.sample.conditions.motion, "unknown_stairs_still");
+  assert.notEqual(item.status, "approved");
+  await assert.rejects(
+    b.inspect(item.key, "approve", editor, "test-session"),
+    /Independent/
+  );
+  const r = await commit(
+    b,
+    "approve",
+    [await inspected(b, item.key, "approve", reviewer)],
+    reviewer
+  );
+  assert.equal(r.results[0].saved, true);
+  item = await w.item(item.key);
+  assert.equal(item.status, "approved");
+  assert.equal(item.sample.annotation.reviewer, reviewer.id);
+  for (const k of ["rights", "privacy", "labels"])
+    assert.equal(item.decisions[k].status, "approved");
+});
+test("unknown motion cannot prepare an ordinary sample or silently create a revision", async t => {
+  const { w, b, items } = await setup(t, 1),
+    i = items[0];
+  await assert.rejects(
+    w.change(
+      i.key,
+      {
+        action: "labels",
+        version: i.version,
+        reason: "Fictional ordinary object cannot use stairs exception",
+        objects: i.sample.annotation.objects,
+        conditions: {
+          lighting: "indoor",
+          scene: "indoor",
+          motion: "unknown_stairs_still",
+        },
+      },
+      editor
+    ),
+    /only for stairs/
+  );
+  await assert.rejects(
+    inspected(b, i.key, "prepare", editor, "test-session", {
+      conditions: {
+        lighting: "indoor",
+        scene: "indoor",
+        motion: "unknown_stairs_still",
+      },
+    }),
+    /Scene conditions/
+  );
+  assert.equal((await w.item(i.key)).version, 0);
+});
 test("batch board reuses the current advisory review plan without granting approval", async t => {
   const { w, b, items } = await setup(t, 2);
   await writeFile(

@@ -5,8 +5,87 @@ import {
   validateStairsDirection,
   imagePosition,
   stairsMetrics,
+  unknownStairsStillMotion,
+  validCaptureMotion,
+  knownSceneConditions,
+  assertStairsMotionTask,
 } from "./stairs-task.mjs";
 import { readJson } from "./common.mjs";
+import { validateSpatial, unknownSpatial } from "./spatial.mjs";
+import { evaluateProximity } from "./proximity-evaluation.mjs";
+
+test("unknown capture motion is scoped to still stairs/negatives and cannot assert measurements or generic tasks", async () => {
+  const sample = {
+    media: { kind: "image" },
+    conditions: {
+      lighting: "indoor",
+      scene: "indoor",
+      motion: unknownStairsStillMotion,
+    },
+    hardNegatives: [],
+    annotation: { objects: [{ classId: 23, spatial: unknownSpatial() }] },
+  };
+  assert.equal(knownSceneConditions(sample), true);
+  assert.equal(
+    knownSceneConditions(sample, {
+      ...sample.conditions,
+      motion: "unreviewed",
+    }),
+    false
+  );
+  assert.equal(
+    knownSceneConditions(sample, {
+      ...sample.conditions,
+      lighting: "unreviewed",
+    }),
+    false
+  );
+  assert.equal(
+    validCaptureMotion({ ...sample, media: { kind: "video_frame" } }),
+    false
+  );
+  assert.equal(
+    validCaptureMotion({
+      ...sample,
+      annotation: { objects: [{ classId: 2 }] },
+    }),
+    false
+  );
+  assert.equal(
+    validCaptureMotion({
+      ...sample,
+      annotation: { objects: [] },
+      hardNegatives: ["shadow"],
+    }),
+    true
+  );
+  const measured = {
+    ...sample,
+    annotation: {
+      objects: [{ classId: 23, spatial: { distance: { status: "measured" } } }],
+    },
+  };
+  assert.equal(validCaptureMotion(measured), false);
+  assertStairsMotionTask({ samples: [sample] }, "basira-stairs-v1");
+  assert.throws(
+    () => assertStairsMotionTask({ samples: [sample] }, null),
+    /restricted/
+  );
+  await validateSpatial(unknownSpatial(), sample, ".", false);
+  await assert.rejects(
+    validateSpatial(
+      { ...unknownSpatial(), distance: { status: "measured" } },
+      sample,
+      ".",
+      false
+    ),
+    /cannot supply metric/
+  );
+  await assert.rejects(
+    evaluateProximity({ samples: [sample] }, ".", {}),
+    /cannot be used for distance/
+  );
+});
 
 test("generic approval does not infer a direction or change historical class 23", () => {
   const o = { id: "original", classId: 23, box: [0.1, 0.1, 0.8, 0.8] };
