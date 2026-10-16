@@ -95,6 +95,12 @@ def inspect_gpu(import_module=importlib.import_module):
                 "missingModule": getattr(error, 'name', None)}
 
 
+def validate_capture_motion_task(data, config):
+    if (config.get('task') != 'basira-stairs-v1' and
+            any(s.get('conditions', {}).get('motion') == 'unknown_stairs_still' for s in data['samples'])):
+        raise ValueError('unknown capture motion is restricted to stairs still-image detection, not motion or distance evaluation')
+
+
 def preflight(args, require_approval=True):
     root, exports = Path(args.data_root).resolve(), Path(args.export).resolve()
     lock = read(exports / "dataset.lock.json")
@@ -109,6 +115,8 @@ def preflight(args, require_approval=True):
     if validation["taxonomySha256"] != digest(REPO / "ml/vision/taxonomy.v1.json"):
         raise ValueError("taxonomy mismatch")
     config = read(args.config)
+    data = read(args.manifest)
+    validate_capture_motion_task(data, config)
     if (config["architecture"] != "ssdlite320_mobilenet_v3_large" or config["inputSize"] != 320 or
             config["automaticDownload"] is not False or config["userDataAllowed"] is not False or
             config["autoLearning"] is not False or config["productionActivation"] is not False):

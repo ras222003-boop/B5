@@ -41,6 +41,7 @@ const choices = {
     unreviewed: "غير مؤكدة — تحتاج أدلة التقاط",
     static: "التقاط ثابت",
     moving: "كاميرا متحركة",
+    unknown_stairs_still: "غير معروفة — صور الدرج الثابتة فقط؛ لا للحركة أو المسافة",
   },
 };
 export function batchReviewUI({

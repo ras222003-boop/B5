@@ -16,6 +16,7 @@ import * as assistant from "./assistant.mjs";
 import { finalCohort, exposures } from "../test-cohort.mjs";
 import { assignSplits, exportCoco, validateDataset } from "../data.mjs";
 import { reviewPlan } from "./review-plan.mjs";
+import { knownSceneConditions } from "../stairs-task.mjs";
 
 const base = ".studio/batch-review";
 const stamp = i =>
@@ -27,10 +28,6 @@ const stamp = i =>
       i.activeSha256 ?? i.sample.sha256,
     ])
   );
-const knownConditions = c =>
-  ["daylight", "indoor", "low_light", "mixed"].includes(c?.lighting) &&
-  ["indoor", "outdoor"].includes(c?.scene) &&
-  ["static", "moving"].includes(c?.motion);
 const privacyChoice = p =>
   ["faces", "plates", "personalText"].every(k =>
     ["absent", "redacted"].includes(p?.[k])
@@ -129,7 +126,7 @@ export class BatchReview {
       const exceptions = [...p.problems];
       if (cohort?.samples.some(s => s.key === i.key))
         exceptions.push("protected_final_test");
-      if (!knownConditions(i.sample.conditions))
+      if (!knownSceneConditions(i.sample))
         exceptions.push("scene_evidence");
       if (related.length) exceptions.push("similarity_unresolved");
       if (!prepared) exceptions.push("preparer_inspection");
@@ -356,7 +353,7 @@ export class BatchReview {
     const conditions =
       r.stage === "prepare" ? p.conditions : i.sample.conditions;
     check(
-      knownConditions(conditions),
+      knownSceneConditions(i.sample, conditions),
       "Scene conditions need evidence; keep this image in exceptions if uncertain"
     );
     let proposalIds = [],

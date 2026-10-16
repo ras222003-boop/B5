@@ -13,6 +13,14 @@ spec.loader.exec_module(training)
 
 
 class TrainingPreparationTests(unittest.TestCase):
+    def test_unknown_capture_motion_cannot_enter_other_training_tasks(self):
+        data={'samples':[{'conditions':{'motion':'unknown_stairs_still'}}]}
+        training.validate_capture_motion_task(data,{'task':'basira-stairs-v1'})
+        for config in ({},{'task':'other'}):
+            with self.assertRaisesRegex(ValueError,'restricted to stairs'):
+                training.validate_capture_motion_task(data,config)
+        training.validate_capture_motion_task({'samples':[{'conditions':{'motion':'static'}}]}, {})
+
     def test_gpu_check_reports_missing_or_incompatible_dependencies_without_training(self):
         for error in (ModuleNotFoundError("missing", name='torch'),
                       OSError("private path must not be included"), RuntimeError("operator mismatch")):

@@ -58,6 +58,7 @@ try {
   await editor
     .locator('[data-stairs-evidence="0"]')
     .fill("Fictional scene: no visible evidence for an up/down decision.");
+  await editor.locator('#condition-motion').selectOption('unknown_stairs_still');
   await editor
     .locator("#reason")
     .fill("Synthetic stairs annotation save and independent review test");
@@ -90,6 +91,7 @@ try {
     await editor.locator('[data-stairs-evidence="0"]').inputValue(),
     /Fictional scene/
   );
+  assert.equal(await editor.locator('#condition-motion').inputValue(), 'unknown_stairs_still');
   let item = await studio.workspace.item(initial.key);
   assert.equal(item.version, 1);
   assert.equal(item.sample.annotation.annotator, "editor");
@@ -126,6 +128,7 @@ try {
   item = await studio.workspace.item(item.key);
   assert.equal(item.sample.annotation.reviewer, "reviewer");
   assert.equal(item.sample.annotation.status, "reviewed");
+  assert.equal(item.sample.conditions.motion, 'unknown_stairs_still');
   assert.notEqual(item.status, "approved");
   assert.equal(
     item.sample.annotation.objects[0].stairsDirection.label,
@@ -143,6 +146,7 @@ try {
       status: "passed",
       syntheticOnly: true,
       saveReopen: true,
+      explicitlySelectedUnknownCaptureMotionPersisted: true,
       independentLabelReview: true,
       selfReviewBlocked: true,
       rightsPrivacyStillPending: true,

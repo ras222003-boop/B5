@@ -1,12 +1,13 @@
 import { detectionMetrics, timingMetrics, boxIoU } from '../perception-evaluation.mjs';
 import { readJson, jsonHash, fileHash, requireValue as check, nonempty, sha, finite, asBox, validBox, taxonomyPath } from './common.mjs';
 import { validateDataset } from './data.mjs';
-import { stairsTruth, stairsMetrics } from './stairs-task.mjs';
+import { stairsTruth, stairsMetrics, assertStairsMotionTask } from './stairs-task.mjs';
 
 export async function evaluateRun(data, root, run, { verifyFiles = true, allowSynthetic = false } = {}) {
   const quality = await validateDataset(data, root, { verifyFiles, allowSynthetic });
   const taxonomy = await readJson(taxonomyPath);
   const stairs = run.task === 'basira-stairs-v1';
+  assertStairsMotionTask(data, run.task);
   check(run.task == null || stairs, 'unsupported evaluation task');
   const taskPolicy = stairs ? await readJson(new URL('../../ml/vision/stairs-task.v1.json', import.meta.url)) : null;
   if (stairs) check(run.taskPolicySha256 === await fileHash(new URL('../../ml/vision/stairs-task.v1.json', import.meta.url)), 'stairs policy hash mismatch');

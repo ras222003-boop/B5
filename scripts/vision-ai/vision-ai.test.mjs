@@ -362,10 +362,12 @@ test('stairs evaluation uses three reviewed directions, presence and image posit
   const {root,data}=await fixture(t),output=frozen(data);
   output.contentKind='synthetic';
   for(const s of output.samples)for(const o of s.annotation.objects){o.classId=23;o.stairsDirection={label:'stairs_up',evidence:'synthetic fixture: visible fictional ascent'};}
+  for(const s of output.samples)s.conditions.motion='unknown_stairs_still';
   const run=predictions(output);
   run.task='basira-stairs-v1';run.taskPolicySha256=await fileHash(resolve(repo,'ml/vision/stairs-task.v1.json'));
   for(const s of run.samples)for(const p of s.predictions)p.classId=2301;
   const report=await evaluateRun(output,root,run,{allowSynthetic:true});
+  await assert.rejects(evaluateRun(output,root,{...run,task:null},{allowSynthetic:true}),/restricted to the stairs/);
   assert.equal(report.detection.microRecall,1);assert.equal(report.stairs.position.horizontalCorrect,report.stairs.position.matchedBoxes);
   assert.equal(report.stairs.position.metricDistance,null);assert.equal(report.scope,'synthetic-arithmetic-only');
   const incompatible=structuredClone(report);incompatible.task=null;

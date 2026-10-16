@@ -3,7 +3,7 @@ import { resolve, dirname } from 'node:path';
 import { readJson, writeJson, requireValue as check, nonempty, sha, finite, fileHash, jsonHash,
   checkedFile, localPath, validBox, taxonomyPath, hash } from './common.mjs';
 import { proximityPolicy, validateSpatial, validateMotion } from './spatial.mjs';
-import { validateStairsDirection } from './stairs-task.mjs';
+import { validateStairsDirection, knownSceneConditions } from './stairs-task.mjs';
 
 export const splits = ['train', 'validation', 'test'];
 const review = item => item?.status === 'approved' && nonempty(item.reviewer) &&
@@ -77,8 +77,7 @@ export async function validateDataset(data, root, { verifyFiles = true, requireS
     check(review(s.privacy) && s.privacy.metadataStripped === true &&
       ['absent', 'redacted'].includes(s.privacy.faces) && ['absent', 'redacted'].includes(s.privacy.plates) &&
       ['absent', 'redacted'].includes(s.privacy.personalText), `${s.id}: privacy review/redaction required`);
-    check(['daylight', 'indoor', 'low_light', 'mixed'].includes(s.conditions?.lighting) &&
-      ['indoor', 'outdoor'].includes(s.conditions.scene) && ['static', 'moving'].includes(s.conditions.motion), `${s.id}: scene conditions required`);
+    check(knownSceneConditions(s), `${s.id}: scene conditions required; unknown capture motion is only for stairs still images without metric measurements`);
     check(Array.isArray(s.hardNegatives) && s.hardNegatives.every(k => taxonomy.hardNegatives.includes(k)), `${s.id}: invalid hard negatives`);
     const a = s.annotation;
     check(a?.status === 'reviewed' && nonempty(a.annotator) && nonempty(a.reviewer) && a.annotator !== a.reviewer &&
