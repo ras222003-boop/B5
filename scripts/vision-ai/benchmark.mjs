@@ -11,27 +11,38 @@ import { readJson, writeJson, repo, taxonomyPath, fileHash, hash, checkedFile, r
 import { validateDataset } from './data.mjs';
 import { evaluateRun } from './evaluation.mjs';
 
-const positional = process.argv.slice(2).filter(v => v !== '--synthetic-smoke');
+const positional = process.argv.slice(2).filter(v => !['--synthetic-smoke','--stairs'].includes(v));
+const stairs = process.argv.includes('--stairs');
 const syntheticSmoke = process.argv.includes('--synthetic-smoke');
 const [manifestPath, split, variant, output, modelDirectory] = positional;
 check(manifestPath && ['validation', 'test'].includes(split) && ['baseline', 'baseline-worker', 'candidate'].includes(variant) && output,
-  'Usage: node scripts/vision-ai/benchmark.mjs manifest.json validation|test baseline|baseline-worker|candidate new-run.json [candidate-export-directory]');
+  'Usage: node scripts/vision-ai/benchmark.mjs manifest.json validation|test baseline|baseline-worker|candidate new-run.json [candidate-export-directory] [--stairs]');
 check(variant === 'candidate' ? !!modelDirectory : !modelDirectory, 'candidate requires its exported model directory only');
 const root = dirname(resolve(manifestPath)), data = await readJson(manifestPath);
 if (syntheticSmoke) check(data.contentKind === 'synthetic', '--synthetic-smoke accepts only explicitly synthetic fixtures');
 const quality = await validateDataset(data, root, { allowSynthetic: syntheticSmoke }), taxonomy = await readJson(taxonomyPath);
 const selected = data.samples.filter(s => s.split === split).sort((a, b) => a.id.localeCompare(b.id));
 const contract = modelDirectory ? await readJson(resolve(modelDirectory, 'browser-contract.json')) : null;
+const stairsPolicy = stairs ? await readJson(resolve(repo,'ml/vision/stairs-task.v1.json')) : null;
+const stairsHash = stairs ? await fileHash(resolve(repo,'ml/vision/stairs-task.v1.json')) : null;
+check((contract?.task??null) === (stairs ? 'basira-stairs-v1' : null) || !contract, 'candidate task requires matching explicit --stairs flag');
+if (stairs && !syntheticSmoke) {
+  const {finalCohort} = await import('./test-cohort.mjs');
+  const cohort=await finalCohort(root);
+  check(cohort && await fileHash(resolve(root,'.studio/batch-review/final-test.json')) === data.splitPolicy?.finalTestCohortSha256, 'registered frozen independent stairs test required');
+}
 check(contract?.syntheticOnly !== true || syntheticSmoke, 'synthetic model fixtures cannot evaluate real datasets');
 if (contract) check(contract.schemaVersion === 1 && contract.taxonomySha256 === quality.taxonomySha256 && contract.scoreThreshold === .45 &&
   contract.nmsIoU === .6 && contract.maxDetections === 12 && JSON.stringify(contract.categories.map(c => c.id)) ===
-  JSON.stringify(taxonomy.classes.filter(c => c.kind !== 'surface').map(c => c.id)), 'candidate contract mismatch');
+  JSON.stringify(stairs ? stairsPolicy.categories.map(c=>c.id) : taxonomy.classes.filter(c => c.kind !== 'surface').map(c => c.id)), 'candidate contract mismatch');
+if (contract && stairs) check(contract.taskPolicySha256===stairsHash && JSON.stringify(contract.categories)===JSON.stringify(stairsPolicy.categories), 'stairs candidate policy mismatch');
 const modelPath = contract ? await checkedFile(resolve(modelDirectory), 'model.onnx', contract.modelSha256) : resolve(repo, 'client/public/vision/efficientdet_lite0_int8.tflite');
 const images = [];
 for (const sample of selected) images.push(await readFile(await checkedFile(root, sample.path, sample.sha256)));
 const hardware = { cpu: cpus()[0]?.model ?? 'unknown', logicalCpus: cpus().length, memoryBytes: totalmem(), osRelease: release(), node: process.version };
 const sourceFiles = {};
 for (const path of ['scripts/vision-ai/benchmark.mjs', 'scripts/vision-ai/browser-runner.mjs', 'scripts/vision-ai/evaluation.mjs',
+  'scripts/vision-ai/stairs-task.mjs', 'scripts/vision-ai/stairs-position.mjs', 'ml/vision/stairs-task.v1.json',
   'scripts/perception-evaluation.mjs', 'client/src/lib/vision/providers.ts', 'client/src/lib/vision/workerObjectProvider.ts', 'pnpm-lock.yaml'])
   sourceFiles[path] = await fileHash(resolve(repo, path));
 let browser;
@@ -63,7 +74,7 @@ try {
   const page = await context.newPage(); await page.goto(`${origin}/__lab/`);
   const runner = `/@fs/${resolve(repo, 'scripts/vision-ai/browser-runner.mjs').replaceAll('\\', '/')}`;
   const result = await page.evaluate(async params => (await import(params.runner)).benchmark(params),
-    { runner, variant, samples: selected.map(({ id, sha256 }) => ({ id, sha256 })), taxonomy, contract });
+    { runner, variant, samples: selected.map(({ id, sha256 }) => ({ id, sha256 })), taxonomy, contract, task: stairs ? 'basira-stairs-v1' : null });
   const run = { schemaVersion: 1, datasetSha256: quality.datasetSha256, taxonomySha256: quality.taxonomySha256,
     modelVersion: contract ? `${contract.syntheticOnly ? 'constant-fixture' : 'ssdlite'}-${contract.modelSha256.slice(0, 12)}` : 'efficientdet-lite0-f4ca091', modelSha256: await fileHash(modelPath),
     modelKind: contract?.syntheticOnly ? 'constant-test-fixture-not-trained' : contract ? 'experimental-candidate' : 'existing-baseline',
@@ -71,7 +82,9 @@ try {
     device: `${process.platform}-${process.arch}-${hash(`${hostname()}|${hardware.cpu}|${hardware.memoryBytes}`).slice(0, 16)}`,
     hardware, sourceFiles, modelBytes: (await readFile(modelPath)).length,
     contractSha256: modelDirectory ? await fileHash(resolve(modelDirectory, 'browser-contract.json')) : null,
-    protocol: 'basira-heldout-replay-640x480-v1',
+    task: stairs ? 'basira-stairs-v1' : null, taskPolicySha256: stairsHash,
+    baselineStairsSupported: stairs && !contract ? false : null,
+    protocol: stairs ? 'basira-stairs-heldout-replay-640x480-v1' : 'basira-heldout-replay-640x480-v1',
     scoreThreshold: .45, maxDetections: 12, nmsIoU: .6, ...result };
   const report = await evaluateRun(data, root, run, { allowSynthetic: syntheticSmoke });
   await writeJson(output, run); await writeJson(`${output}.report.json`, report);

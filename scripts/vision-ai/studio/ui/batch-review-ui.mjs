@@ -210,7 +210,8 @@ export function batchReviewUI({
       const proposals = d.report?.proposals ?? [];
       $("batch-labels").innerHTML =
         `<p>${d.sample.annotation.objects.length} أجسام أصلية — ${esc(d.sample.annotation.objects.map(o => className(o.classId)).join("، "))}</p>` +
-        `<p>${esc((d.report?.issues ?? []).map(x => `${x.type}: ${x.action ?? ""}`).join(" · "))}</p>` +
+          d.sample.annotation.objects.filter(o => o.classId === 23).map(o => `<p>اتجاه الدرج: ${esc(o.stairsDirection?.label ?? 'لم يُراجع')} · الدليل: ${esc(o.stairsDirection?.evidence ?? 'مطلوب قبل تدريب الاتجاه')} · موضع داخل الصورة فقط، بلا قياس أمتار.</p>`).join('') +
+          `<p>${esc((d.report?.issues ?? []).map(x => `${x.type}: ${x.action ?? ""}`).join(" · "))}</p>` +
         proposals
           .map(
             x =>

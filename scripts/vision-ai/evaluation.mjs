@@ -1,10 +1,15 @@
 import { detectionMetrics, timingMetrics, boxIoU } from '../perception-evaluation.mjs';
 import { readJson, jsonHash, fileHash, requireValue as check, nonempty, sha, finite, asBox, validBox, taxonomyPath } from './common.mjs';
 import { validateDataset } from './data.mjs';
+import { stairsTruth, stairsMetrics } from './stairs-task.mjs';
 
 export async function evaluateRun(data, root, run, { verifyFiles = true, allowSynthetic = false } = {}) {
   const quality = await validateDataset(data, root, { verifyFiles, allowSynthetic });
   const taxonomy = await readJson(taxonomyPath);
+  const stairs = run.task === 'basira-stairs-v1';
+  check(run.task == null || stairs, 'unsupported evaluation task');
+  const taskPolicy = stairs ? await readJson(new URL('../../ml/vision/stairs-task.v1.json', import.meta.url)) : null;
+  if (stairs) check(run.taskPolicySha256 === await fileHash(new URL('../../ml/vision/stairs-task.v1.json', import.meta.url)), 'stairs policy hash mismatch');
   check(run.schemaVersion === 1 && ['validation', 'test'].includes(run.split), 'only validation/test evaluation allowed');
   check(run.datasetSha256 === quality.datasetSha256 && run.taxonomySha256 === quality.taxonomySha256, 'evaluation data/taxonomy hash mismatch');
   check(sha(run.modelSha256) && nonempty(run.modelVersion) && nonempty(run.sourceCommit) && nonempty(run.device) &&
@@ -12,7 +17,7 @@ export async function evaluateRun(data, root, run, { verifyFiles = true, allowSy
   check(run.scoreThreshold === .45 && run.maxDetections === 12 && run.nmsIoU === .6, 'deployed comparison contract: score=.45, max=12, NMS=.6');
   const selected = data.samples.filter(s => s.split === run.split), samplesById = new Map(selected.map(s => [s.id, s]));
   check(Array.isArray(run.samples) && run.samples.length === selected.length, 'every held-out frame required, including misses/negatives');
-  const classes = new Map(taxonomy.classes.filter(c => c.kind !== 'surface').map(c => [c.id, c.key]));
+  const classes = stairs ? new Map(taskPolicy.categories.map(c=>[c.id,c.name])) : new Map(taxonomy.classes.filter(c => c.kind !== 'surface').map(c => [c.id, c.key]));
   const ids = new Set(), times = [];
   const samples = run.samples.map(p => {
     const s = samplesById.get(p.id);
@@ -23,7 +28,7 @@ export async function evaluateRun(data, root, run, { verifyFiles = true, allowSy
       check((classes.has(o.classId) || o.classId === -1) && validBox(o.box) && finite(o.score) && o.score >= .45 && o.score <= 1, 'invalid prediction');
       return { class: classes.get(o.classId) ?? '__unmapped__', box: asBox(o.box), score: o.score };
     });
-    return { id: s.id, groundTruth: s.annotation.objects.map(o => ({ class: classes.get(o.classId), box: asBox(o.box) })), predictions };
+    return { id: s.id, groundTruth: (stairs ? stairsTruth(s) : s.annotation.objects).map(o => ({ class: classes.get(o.classId), box: asBox(o.box) })), predictions };
   });
   check(finite(run.measurementDurationMs) && run.measurementDurationMs > 0 &&
     run.measurementDurationMs + 1 >= times.reduce((n, t) => n + t, 0), 'invalid measurement window');
@@ -52,6 +57,8 @@ export async function evaluateRun(data, root, run, { verifyFiles = true, allowSy
   return { schemaVersion: 1, scope: data.contentKind === 'synthetic' ? 'synthetic-arithmetic-only' : 'offline-held-out-detection',
     datasetSha256: quality.datasetSha256, taxonomySha256: await fileHash(taxonomyPath), split: run.split,
     runSha256: jsonHash(run), run: Object.fromEntries(Object.entries(run).filter(([k]) => k !== 'samples')),
+    task: stairs ? {id:run.task,policySha256:run.taskPolicySha256} : null,
+    stairs: stairs ? stairsMetrics(samples) : null,
     detection: metrics, slices, sizeRecall, negativeFrames: { count: negativeFrames.length,
       falsePositiveFrames: negativeFrames.filter(s => s.predictions.length).length },
     timing: timingMetrics({ inferenceMs: times, measurementDurationMs: run.measurementDurationMs, framesProcessed: samples.length }),
@@ -63,6 +70,7 @@ export async function evaluateRun(data, root, run, { verifyFiles = true, allowSy
 export function compareReports(baseline, candidate) {
   check(baseline.schemaVersion === 1 && candidate.schemaVersion === 1, 'invalid report');
   for (const key of ['datasetSha256', 'taxonomySha256', 'split', 'scope']) check(baseline[key] === candidate[key], `comparison mismatch: ${key}`);
+  check(JSON.stringify(baseline.task??null) === JSON.stringify(candidate.task??null), 'comparison task mismatch');
   for (const key of ['device', 'browser', 'protocol', 'scoreThreshold', 'maxDetections', 'nmsIoU'])
     check(baseline.run[key] === candidate.run[key], `comparison mismatch: ${key}`);
   const delta = (a, b) => a === null || b === null ? null : b - a;

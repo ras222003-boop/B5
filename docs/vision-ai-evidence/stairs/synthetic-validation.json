@@ -1,0 +1,29 @@
+{
+  "scope": "synthetic-software-validation-only",
+  "checkedAt": "2026-10-16",
+  "node": {"passed": 124, "failed": 0},
+  "python": {"passed": 9, "failed": 0},
+  "chrome": {
+    "stairsDirectionSaveAndReopen": "passed",
+    "independentLabelReview": "passed",
+    "selfReviewBlocked": true,
+    "rightsAndPrivacyStillPending": true,
+    "originalPreserved": true,
+    "unexpectedNetworkErrors": 0,
+    "consoleErrors": 0,
+    "externalRequests": 0,
+    "actualHumanAccountsUsed": false
+  },
+  "isolatedBenchmark": {
+    "baselineSyntheticReplay": "passed",
+    "candidateSyntheticConstantOnnxReplay": "passed",
+    "threeClassContractAndImagePosition": "passed",
+    "privateImagesRead": 0,
+    "actualSSDLiteOnnxExport": false
+  },
+  "actualTrainingPerformed": false,
+  "accuracyMeasuredOnRealData": false,
+  "phoneOrCameraValidation": false,
+  "productionActivation": false,
+  "cloudUpload": false
+}

@@ -44,10 +44,14 @@ def inside(root, relative):
 
 
 def approval_binding(args, lock):
-    return {"datasetSha256": lock["datasetSha256"], "exportLockSha256": digest(Path(args.export) / "dataset.lock.json"),
+    binding = {"datasetSha256": lock["datasetSha256"], "exportLockSha256": digest(Path(args.export) / "dataset.lock.json"),
             "configSha256": digest(args.config), "pretrainedDescriptorSha256": digest(args.pretrained),
             "taxonomySha256": digest(REPO / "ml/vision/taxonomy.v1.json"),
             "proximityPolicySha256": digest(REPO / "ml/vision/proximity-policy.v1.json")}
+    if read(args.config).get('task') == 'basira-stairs-v1':
+        binding.update(stairsTaskPolicySha256=digest(REPO / 'ml/vision/stairs-task.v1.json'),
+                       stairsProjectionSha256=digest(Path(__file__).with_name('stairs_task.py')))
+    return binding
 
 
 def validate_approval(approval, expected):
@@ -125,6 +129,17 @@ def preflight(args, require_approval=True):
     if digest(rights) != checkpoint.get("rightsSha256"):
         raise ValueError("pretrained rights evidence mismatch")
     train, val = read(exports / "train.json"), read(exports / "validation.json")
+    if config.get('task') is not None:
+        if config['task'] != 'basira-stairs-v1':
+            raise ValueError('unsupported experimental task')
+        from stairs_task import project_stairs
+        data = read(args.manifest)
+        cohort_path = inside(root, '.studio/batch-review/final-test.json')
+        if digest(cohort_path) != data.get('splitPolicy', {}).get('finalTestCohortSha256'):
+            raise ValueError('registered frozen independent stairs test binding required')
+        projected, _ = project_stairs(data, {'train': train, 'validation': val, 'test': read(exports / 'test.json')},
+                                      read(REPO / 'ml/vision/stairs-task.v1.json'), read(cohort_path))
+        train, val = projected['train'], projected['validation']
     if len(train["images"]) < 2 or not train["annotations"] or not val["annotations"]:
         raise ValueError("at least two training images and positive train/validation labels required")
     categories = train["categories"]
@@ -170,6 +185,9 @@ def train(args):
     output.mkdir(parents=True, exist_ok=False)
     write(output / 'run-start.json', {"status": "RUNNING", "startedAt": datetime.now(timezone.utc).isoformat(),
           "environment": environment, "binding": approval_binding(args, lock), "approvalSha256": digest(args.approval)})
+    if cfg.get('task'):
+        write(output / 'task-projection.json', {"task": cfg['task'], "categories": training['categories'],
+              "binding": approval_binding(args, lock), "originalExportUnchanged": True, "metricDistance": False})
     args.started_output = output
     random.seed(cfg["seed"])
     np.random.seed(cfg["seed"])
@@ -261,6 +279,7 @@ def train(args):
           "pretrainedSha256": provenance["sha256"], "weightsSha256": digest(output / "weights.pt"),
           "approvalSha256": digest(args.approval), "environment": environment,
           "categories": categories, "history": history, "device": args.device, "python": platform.python_version(),
+          "taskPolicySha256": digest(REPO / 'ml/vision/stairs-task.v1.json') if cfg.get('task') else None,
           "torch": torch.__version__, "torchvision": torchvision.__version__, "testUsedForOptimization": False,
           "browserCompatible": None, "productionEligible": False})
 
@@ -314,6 +333,8 @@ def export_onnx(args):
           "dtype": "float32", "range": [0, 1], "color": "RGB", "resize": "stretch", "normalization": "inside graph"},
           "output": {"boxes": "normalized xyxy", "labels": "1-based contiguous categories", "scores": "float32"},
           "categories": run["categories"], "taxonomySha256": run["taxonomySha256"], "trainingRunSha256": digest(run_dir / "training-run.json"),
+          "task": run['config'].get('task'),
+          "taskPolicySha256": run.get('taskPolicySha256'),
           "scoreThreshold": .45, "maxDetections": 12, "nmsIoU": .6,
           "exportParity": {"scope": "three synthetic tensors on CPU", "maxAbsoluteError": max_error}, "webVerified": False})
     print(json.dumps({"status": "EXPORTED_REQUIRES_BROWSER_AND_PHONE_VALIDATION", "modelSha256": digest(output / "model.onnx")}))

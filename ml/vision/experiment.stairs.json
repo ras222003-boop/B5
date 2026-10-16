@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "name": "basira-stairs-only-pilot",
+  "task": "basira-stairs-v1",
+  "architecture": "ssdlite320_mobilenet_v3_large",
+  "seed": 20261014,
+  "epochs": 5,
+  "batchSize": 4,
+  "learningRate": 0.001,
+  "freezeBackboneEpochs": 1,
+  "inputSize": 320,
+  "scoreThreshold": 0.45,
+  "nmsIoU": 0.6,
+  "maxDetections": 12,
+  "onnxOpset": 17,
+  "automaticDownload": false,
+  "userDataAllowed": false,
+  "autoLearning": false,
+  "productionActivation": false
+}

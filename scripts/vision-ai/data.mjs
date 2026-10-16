@@ -3,6 +3,7 @@ import { resolve, dirname } from 'node:path';
 import { readJson, writeJson, requireValue as check, nonempty, sha, finite, fileHash, jsonHash,
   checkedFile, localPath, validBox, taxonomyPath, hash } from './common.mjs';
 import { proximityPolicy, validateSpatial, validateMotion } from './spatial.mjs';
+import { validateStairsDirection } from './stairs-task.mjs';
 
 export const splits = ['train', 'validation', 'test'];
 const review = item => item?.status === 'approved' && nonempty(item.reviewer) &&
@@ -84,6 +85,7 @@ export async function validateDataset(data, root, { verifyFiles = true, requireS
       a.exhaustive === true && Array.isArray(a.objects) && Array.isArray(a.surfaces), `${s.id}: independent exhaustive annotation review required`);
     const objectIds = new Set(), frameTracks = new Set(), identicalBoxes = new Set();
     for (const o of a.objects) {
+      validateStairsDirection(o);
       check(nonempty(o.id) && !objectIds.has(o.id), 'duplicate/empty object id'); objectIds.add(o.id);
       check(classes.has(o.classId) && classes.get(o.classId).kind !== 'surface' && validBox(o.box), `${s.id}: invalid class/box`);
       const boxKey = `${o.classId}:${o.box.join(',')}`;

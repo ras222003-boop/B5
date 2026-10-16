@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "id": "basira-stairs-v1",
+  "sourceClassId": 23,
+  "categories": [
+    { "id": 2301, "name": "stairs_up", "supercategory": "stairs" },
+    { "id": 2302, "name": "stairs_down", "supercategory": "stairs" },
+    {
+      "id": 2303,
+      "name": "stairs_present_uncertain_direction",
+      "supercategory": "stairs"
+    }
+  ],
+  "position": {
+    "space": "normalized-image",
+    "thirds": [0.3333333333333333, 0.6666666666666666],
+    "centralRegion": [0.3333333333333333, 0, 0.3333333333333333, 1]
+  },
+  "minimumEngineeringCohort": {
+    "positiveImagesPerClass": { "train": 4, "validation": 2, "test": 2 },
+    "negativeImages": { "train": 2, "validation": 2, "test": 2 },
+    "independentGroups": { "train": 2, "validation": 1, "test": 2 }
+  },
+  "realOnly": true,
+  "metricDistance": false,
+  "navigationSafetyClaim": false,
+  "productionActivation": false
+}

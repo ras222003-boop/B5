@@ -2,8 +2,9 @@
 import { MediaPipeVisionProvider } from '../../client/src/lib/vision/providers';
 import { WorkerObjectProvider } from '../../client/src/lib/vision/workerObjectProvider';
 import { DEFAULT_VISION_CONFIG } from '../../client/src/lib/vision/config';
+import { imagePosition } from './stairs-position.mjs';
 
-export async function benchmark({ variant, samples, taxonomy, contract }) {
+export async function benchmark({ variant, samples, taxonomy, contract, task }) {
   const start = performance.now();
   let detect, close, backend;
   if (variant === 'baseline' || variant === 'baseline-worker') {
@@ -51,7 +52,9 @@ export async function benchmark({ variant, samples, taxonomy, contract }) {
     const measuredAt = performance.now();
     for (let i = 0; i < samples.length; i++) {
       await draw(i); const before = performance.now(), predictions = await detect(canvas), inferenceMs = performance.now() - before;
-      result.push({ id: samples[i].id, imageSha256: samples[i].sha256, predictions, inferenceMs });
+      const scoped = task === 'basira-stairs-v1' ? predictions.filter(p=>contract ? [2301,2302,2303].includes(p.classId) : p.classId===23)
+        .map(p=>({...p,position:imagePosition(p.box)})) : predictions;
+      result.push({ id: samples[i].id, imageSha256: samples[i].sha256, predictions:scoped, inferenceMs });
       await new Promise(r => setTimeout(r, 25));
     }
     return { samples: result, backend, browser: navigator.userAgent, loadMs, measurementDurationMs: performance.now() - measuredAt,
