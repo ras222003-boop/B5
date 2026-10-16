@@ -15,6 +15,7 @@ import * as prereview from "./prereview.mjs";
 import * as assistant from "./assistant.mjs";
 import { finalCohort, exposures } from "../test-cohort.mjs";
 import { assignSplits, exportCoco, validateDataset } from "../data.mjs";
+import { reviewPlan } from "./review-plan.mjs";
 
 const base = ".studio/batch-review";
 const stamp = i =>
@@ -61,12 +62,16 @@ export class BatchReview {
             at: new Date().toISOString(),
             purpose:
               "Exclude existing diagnostic library from an independent final test",
-            samples: c.items.map(i => ({
-              key: i.key,
-              sha256: i.sample.sha256,
-              group: i.sample.leakageGroup,
-              videoSha256: i.sample.media?.video?.sha256 ?? null,
-            })),
+            samples: c.items
+              .filter(
+                i => i.sample.intendedUse !== "independent_test_candidate"
+              )
+              .map(i => ({
+                key: i.key,
+                sha256: i.sample.sha256,
+                group: i.sample.leakageGroup,
+                videoSha256: i.sample.media?.video?.sha256 ?? null,
+              })),
           },
           null,
           2
@@ -166,6 +171,14 @@ export class BatchReview {
         ),
       });
     }
+    const priorities = new Map(
+      (await reviewPlan(this.w)).items.map(i => [i.key, i.priority])
+    );
+    items.sort(
+      (a, b) =>
+        (priorities.get(a.key) ?? 999) - (priorities.get(b.key) ?? 999) ||
+        a.id.localeCompare(b.id)
+    );
     return {
       items,
       pairs: scan.pairs.filter(p => p.requiresReview || p.crossSplit),

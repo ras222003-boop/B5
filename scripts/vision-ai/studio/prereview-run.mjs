@@ -12,16 +12,43 @@ import * as assistant from "./assistant.mjs";
 import * as prereview from "./prereview.mjs";
 import { fileHash, requireValue as check } from "../common.mjs";
 
+export function selectItems(
+  items,
+  { syntheticOnly = false, keys = null } = {}
+) {
+  const kind = syntheticOnly ? "synthetic" : "real";
+  if (keys !== null)
+    check(
+      Array.isArray(keys) &&
+        keys.length > 0 &&
+        keys.length <= 1000 &&
+        new Set(keys).size === keys.length &&
+        keys.every(k => typeof k === "string" && /^[a-f0-9]{32}$/.test(k)),
+      "Explicit unique sample keys required"
+    );
+  const selected = items.filter(
+    i =>
+      i.contentKind === kind &&
+      i.status !== "approved" &&
+      i.sample?.intendedUse !== "independent_test_candidate" &&
+      (keys === null || keys.includes(i.key))
+  );
+  check(
+    keys === null || selected.length === keys.length,
+    "Unknown, approved, reserved test or wrong-kind sample in selection"
+  );
+  check(selected.length > 0, "No unapproved development samples selected");
+  return selected;
+}
+
 export async function run(
   root,
-  { syntheticOnly = false, onProgress = () => {} } = {}
+  { syntheticOnly = false, keys = null, onProgress = () => {} } = {}
 ) {
   const w = await new StudioWorkspace(root).init(),
     c = await w.catalog();
   check(!c.issues.length, "Catalog issues block complete run");
-  const items = c.items.filter(
-    i => i.contentKind === (syntheticOnly ? "synthetic" : "real")
-  );
+  const items = selectItems(c.items, { syntheticOnly, keys });
   const runtime = await modelRuntime(),
     token = randomBytes(32).toString("hex");
   let server, browser, context;
@@ -103,7 +130,7 @@ export async function run(
     await page.goto(origin);
     for (const item of items) {
       try {
-        await (await import('../test-cohort.mjs')).markDevelopment(w,item);
+        await (await import("../test-cohort.mjs")).markDevelopment(w, item);
         const outputs = await page.evaluate(
           async ({ key, taxonomy }) => {
             const model = await import("/local-models.mjs");
@@ -193,6 +220,11 @@ if (
     JSON.stringify(
       await run(root, {
         syntheticOnly: args.includes("--synthetic-only"),
+        keys: args.includes("--keys-json")
+          ? JSON.parse(
+              await readFile(args[args.indexOf("--keys-json") + 1], "utf8")
+            )
+          : null,
         onProgress: p => console.log(JSON.stringify(p)),
       })
     )

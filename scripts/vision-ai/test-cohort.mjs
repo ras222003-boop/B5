@@ -43,6 +43,10 @@ export async function assertNotFinalTest(root, item) {
   );
 }
 export async function markDevelopment(w, item) {
+  check(
+    item.sample.intendedUse !== "independent_test_candidate",
+    "Reserved independent-test candidate: development inference is forbidden before registration too"
+  );
   const lockPath = await w.safe(".studio/write.lock", true),
     lock = await open(lockPath, "wx", 0o600);
   try {
@@ -82,6 +86,12 @@ export async function exposures(w) {
   return result;
 }
 export async function guardFinalSplits(data, root) {
+  for (const s of data.samples ?? [])
+    if (s.intendedUse === "independent_test_candidate")
+      check(
+        s.split === null || s.split === "test",
+        "Reserved independent-test candidate cannot enter training or validation"
+      );
   const c = await finalCohort(root);
   if (!c) return;
   for (const s of data.samples ?? [])
