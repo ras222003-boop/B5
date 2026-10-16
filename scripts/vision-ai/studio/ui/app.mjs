@@ -1,4 +1,7 @@
 import { assistantUI } from "./assistant-ui.mjs";
+import { prereviewUI } from "./prereview-ui.mjs";
+import { reconcileLabels } from "./label-draft.mjs";
+import { batchReviewUI } from "./batch-review-ui.mjs";
 const $ = id => document.getElementById(id),
   esc = v =>
     String(v ?? "").replace(
@@ -18,13 +21,79 @@ let csrf,
   selected,
   objects = [],
   fingerprint = "",
-  drawing = null,
-  polling = false;
+  drawing = null;
 let reviewQueue = { items: [], stale: 0 };
 let visibleKeys = [],
   sequence = [],
   eligibility = { allowedKinds: [] },
   editorRequest = 0;
+let catalogGeneration = 0,
+  refreshPromise = null,
+  mutating = false,
+  editorLoading = false,
+  recovery = null;
+const drafts = new Map();
+const conditionsInput = () =>
+  Object.fromEntries(
+    ["lighting", "scene", "motion"].map(n => [n, $("condition-" + n).value])
+  );
+function editorStatus(text) {
+  $("editor-save-status").textContent = text;
+}
+function freezeEditor(value) {
+  $("editor-fields").disabled = value;
+  $("close-editor").disabled = value;
+  $("rebase-draft").disabled = value;
+  $("reload-saved").disabled = value;
+  $("editor").setAttribute("aria-busy", String(value));
+}
+function rememberDraft() {
+  if (!selected || editorLoading) return;
+  const draft = {
+    base: structuredClone(selected),
+    objects: structuredClone(objects),
+    conditions: conditionsInput(),
+    reason: $("reason").value,
+  };
+  if (
+    JSON.stringify(draft.objects) !==
+      JSON.stringify(selected.sample.annotation?.objects ?? []) ||
+    JSON.stringify(draft.conditions) !==
+      JSON.stringify(selected.sample.conditions) ||
+    draft.reason
+  )
+    drafts.set(selected.key, draft);
+}
+async function freshItem(key) {
+  const item = await api("/api/items/" + key);
+  catalogGeneration++;
+  if (catalog) {
+    const at = catalog.items.findIndex(i => i.key === key);
+    if (at >= 0) catalog.items[at] = item;
+  }
+  return item;
+}
+function showConflict(latest, mine, merged) {
+  recovery = { latest, mine, merged };
+  $("save-conflict").hidden = false;
+  $("confirm-rebase").checked = false;
+  $("rebase-draft").hidden = merged.conflicts.some(x =>
+    x.includes("الفهرس تغير")
+  );
+  $("save-conflict-details").textContent = JSON.stringify(
+    {
+      baseVersion: selected.version,
+      currentVersion: latest.version,
+      conflicts: merged.conflicts,
+      myObjects: mine.objects,
+      savedObjects: latest.sample.annotation.objects,
+      myConditions: mine.conditions,
+      savedConditions: latest.sample.conditions,
+    },
+    null,
+    2
+  );
+}
 const states = {
   approved: "مكتملة المراجعة",
   pending: "بانتظار المراجعة",
@@ -86,7 +155,12 @@ async function api(path, data) {
     body: data ? JSON.stringify(data) : undefined,
   });
   const value = await r.json();
-  if (!r.ok) throw new Error(errorText(value.error));
+  if (!r.ok)
+    throw Object.assign(new Error(errorText(value.error)), {
+      status: r.status,
+      serverError: value.error,
+      details: value,
+    });
   return value;
 }
 const classes = () =>
@@ -199,30 +273,37 @@ function render() {
   renderExport();
 }
 async function refresh() {
-  if (!actor || polling) return;
-  polling = true;
-  try {
-    const c = await api("/api/catalog");
-    reviewQueue = await api("/api/review-plan");
-    const f = JSON.stringify({ catalog: c, reviewQueue });
-    catalog = c;
-    if (f !== fingerprint) {
-      fingerprint = f;
-      render();
+  if (!actor) return;
+  if (refreshPromise) return refreshPromise;
+  const generation = catalogGeneration,
+    identity = actor.id;
+  const request = (async () => {
+    try {
+      const c = await api("/api/catalog"),
+        queue = await api("/api/review-plan");
+      if (!actor || actor.id !== identity || generation !== catalogGeneration)
+        return;
+      reviewQueue = queue;
+      catalog = c;
+      const f = JSON.stringify({ catalog: c, reviewQueue: queue });
+      if (f !== fingerprint) {
+        fingerprint = f;
+        render();
+      }
+      $("sync").textContent =
+        "تم التحديث " + new Date().toLocaleTimeString("ar-SA");
+    } catch (e) {
+      notify(e.message);
     }
-    $("sync").textContent =
-      "تم التحديث " +
-      new Date().toLocaleTimeString("ar-SA", {
-        hour: "2-digit",
-        minute: "2-digit",
-        second: "2-digit",
-      });
-  } catch (e) {
-    notify(e.message);
+  })();
+  refreshPromise = request;
+  try {
+    await request;
   } finally {
-    polling = false;
+    if (refreshPromise === request) refreshPromise = null;
   }
 }
+
 function renderExport() {
   const previous = $("batch-export").value;
   $("batch-export").innerHTML = catalog.batches
@@ -282,6 +363,11 @@ function renderObjects() {
           drawBoxes();
         })
     );
+  $("objects")
+    .querySelectorAll("input,select,button")
+    .forEach(el => {
+      el.disabled = !actor?.roles.includes("annotator");
+    });
   drawBoxes();
 }
 function drawBoxes() {
@@ -292,10 +378,29 @@ function drawBoxes() {
     )
     .join("");
 }
-async function openEditor(key) {
+async function openEditor(key, { discardDraft = false } = {}) {
   const request = ++editorRequest;
+  editorLoading = true;
+  freezeEditor(true);
   if (!sequence.includes(key)) sequence = [key];
-  selected = structuredClone(catalog.items.find(i => i.key === key));
+  let latest;
+  try {
+    latest = await freshItem(key);
+  } catch (e) {
+    if (request === editorRequest) {
+      editorLoading = false;
+      freezeEditor(false);
+      editorStatus("تعذر تحميل الإصدار الحالي: " + e.message);
+    }
+    throw e;
+  }
+  if (request !== editorRequest) return;
+  if (discardDraft) drafts.delete(key);
+  const draft = drafts.get(key);
+  selected = structuredClone(draft?.base ?? latest);
+  recovery = null;
+  $("save-conflict").hidden = true;
+  editorStatus(draft ? "استعيدت مسودتك غير المحفوظة." : "");
   eligibility = { allowedKinds: [] };
   updateReviewButtons();
   const position = sequence.indexOf(key);
@@ -303,8 +408,11 @@ async function openEditor(key) {
     `صورة ${position + 1} من ${sequence.length} · ${selected.contentKind === "synthetic" ? "اصطناعية — مستبعدة من التقييم الحقيقي" : "حقيقية"}`;
   $("review-previous").disabled = position <= 0;
   $("review-next").disabled = position < 0 || position >= sequence.length - 1;
-  objects = structuredClone(selected.sample.annotation?.objects ?? []);
+  objects = structuredClone(
+    draft?.objects ?? selected.sample.annotation?.objects ?? []
+  );
   assistant.reset();
+  prereview.detail(key).catch(e => notify(e.message));
   $("review-task-overlay").replaceChildren();
   const plan = reviewQueue.items.find(
     i => i.key === key && i.version === selected.version
@@ -332,7 +440,7 @@ async function openEditor(key) {
   $("revision").textContent =
     `الإصدار ${selected.version} · ${states[selected.status]}`;
   $("editor-image").src = `/media/image/${key}?v=${selected.version}`;
-  $("reason").value = "";
+  $("reason").value = draft?.reason ?? "";
   $("confirm-review").checked = false;
   for (const name of ["faces", "plates", "personalText"])
     $(name).value = "unreviewed";
@@ -382,8 +490,12 @@ async function openEditor(key) {
     `<p>${selected.motionSegments.length} مقاطع حركة مسجلة؛ التفاصيل في الأدلة أدناه.</p>`;
   for (const name of ["lighting", "scene", "motion"])
     $("condition-" + name).value =
-      selected.sample.conditions?.[name] ?? "unreviewed";
+      draft?.conditions?.[name] ??
+      selected.sample.conditions?.[name] ??
+      "unreviewed";
   renderObjects();
+  for (const name of ["lighting", "scene", "motion"])
+    $("condition-" + name).disabled = !actor?.roles.includes("annotator");
   try {
     const e = await api("/api/review-eligibility/" + key);
     if (request !== editorRequest) return;
@@ -395,14 +507,21 @@ async function openEditor(key) {
   updateReviewButtons();
   $("save-labels").disabled = !actor.roles.includes("annotator");
   $("derivative").disabled = !actor.roles.includes("annotator");
+  editorLoading = false;
+  freezeEditor(mutating);
   if (!$("editor").open) $("editor").showModal();
+  if (draft && latest.version !== selected.version) {
+    const mine = { objects, conditions: conditionsInput() };
+    showConflict(latest, mine, reconcileLabels(selected, mine, latest));
+    editorStatus("يوجد إصدار أحدث. مسودتك لم تتغير؛ راجع الفروق قبل الحفظ.");
+  }
   const h = await api("/api/history/" + key);
   if (request !== editorRequest) return;
   $("history").innerHTML = h.revisions.length
     ? h.revisions
         .map(
           r =>
-            `<div class="history-row">إصدار ${r.version} · ${esc(r.actor)} · ${esc(r.at)}<br>${esc(r.action)} — ${esc(r.reason)}</div>`
+            `<div class="history-row">إصدار ${r.version} · ${esc(r.actor)} · ${esc(r.at)}<br>${esc(r.action)} — ${esc(r.reason)}${r.proposalAudit ? `<p>منتج الاقتراح: ${esc(r.proposalAudit.producer?.id)} · أكد التصحيح: ${esc(r.proposalAudit.confirmedBy)} · مقترحات مختارة: ${r.proposalAudit.proposalIds.length} · بصمة التقرير ${esc(r.proposalAudit.reportSha256)}</p>` : ""}</div>`
         )
         .join("")
     : '<p class="muted">لم تُسجل تعديلات بعد.</p>';
@@ -414,7 +533,8 @@ function startReview(key = visibleKeys[0]) {
 $("start-final-review").onclick = () => startReview();
 async function moveReview(offset) {
   const key = sequence[sequence.indexOf(selected?.key) + offset];
-  if (!key) return;
+  if (!key || mutating || editorLoading) return;
+  rememberDraft();
   await refresh();
   if (!catalog.items.some(i => i.key === key)) {
     notify("العينة لم تعد متاحة. أعد بدء المراجعة من المكتبة.");
@@ -443,30 +563,136 @@ function updateReviewButtons() {
 }
 $("review-kind").onchange = updateReviewButtons;
 async function change(payload) {
-  if (!selected) return;
+  if (!selected || mutating || editorLoading) return;
+  mutating = true;
+  freezeEditor(true);
+  editorStatus("جارٍ التحقق من الإصدار وحفظ التعديلات…");
+  const key = selected.key,
+    reason = $("reason").value,
+    snapshot = structuredClone(payload);
+  let committed = null;
   try {
-    await api("/api/items/" + selected.key, {
-      ...payload,
+    if (reason.trim().length < 3 || reason.length > 2000)
+      throw new Error(
+        "اكتب سبب التعديل من 3 إلى 2000 حرف. لم تُرسل مسودتك ولم تُحذف."
+      );
+    const latest = await freshItem(key);
+    if (
+      latest.version !== selected.version ||
+      latest.baseHash !== selected.baseHash ||
+      (latest.activeSha256 ?? latest.sample.sha256) !==
+        (selected.activeSha256 ?? selected.sample.sha256)
+    ) {
+      if (snapshot.action !== "labels")
+        throw new Error(
+          "الإصدار تغير؛ أعد فحص الصورة والأدلة قبل قرار المراجعة أو التنقيح."
+        );
+      const merged = reconcileLabels(selected, snapshot, latest);
+      if (merged.conflicts.length) {
+        showConflict(latest, snapshot, merged);
+        throw new Error(
+          "تعارض في التعديلات؛ مسودتك محفوظة. راجع المقارنة أعلاه وحدد كيفية المتابعة."
+        );
+      }
+      selected = latest;
+      objects = structuredClone(merged.objects);
+      snapshot.objects = merged.objects;
+      snapshot.conditions = merged.conditions;
+      for (const n of ["lighting", "scene", "motion"])
+        $("condition-" + n).value = merged.conditions?.[n] ?? "unreviewed";
+      renderObjects();
+    }
+    committed = await api("/api/items/" + key, {
+      ...snapshot,
       version: selected.version,
-      reason: $("reason").value,
+      baseHash: selected.baseHash,
+      imageSha256: selected.activeSha256 ?? selected.sample.sha256,
+      reason,
     });
-    const key = selected.key;
-    await refresh();
-    $("editor").close();
-    await openEditor(key);
-    notify("حُفظ إصدار مستقل مع هويتك ووقت القرار.");
+    catalogGeneration++;
+    drafts.delete(key);
+    selected.version = committed.version;
+    await openEditor(key, { discardDraft: true });
+    editorStatus(
+      "تم حفظ الإصدار " +
+        committed.version +
+        " باسم " +
+        actor.id +
+        " مع سبب التعديل. المراجعة المستقلة لم تُمنح تلقائيًا."
+    );
+    refresh();
   } catch (e) {
-    notify(e.message);
+    if (committed) {
+      editorStatus(
+        "تم حفظ الإصدار " +
+          committed.version +
+          "، لكن تعذر إعادة عرضه. أعد فتح الصورة؛ لا حاجة إلى إرسال الحفظ مرة أخرى."
+      );
+    } else {
+      rememberDraft();
+      editorStatus(
+        e.message +
+          (e.status ? " — HTTP " + e.status + ": " + e.serverError : "")
+      );
+      if (e.status === 409) {
+        try {
+          const latest = await freshItem(key);
+          showConflict(
+            latest,
+            snapshot,
+            reconcileLabels(selected, snapshot, latest)
+          );
+        } catch {}
+      }
+    }
+  } finally {
+    mutating = false;
+    editorLoading = false;
+    freezeEditor(false);
+    updateReviewButtons();
   }
 }
 $("save-labels").onclick = () =>
   change({
     action: "labels",
-    objects,
-    conditions: Object.fromEntries(
-      ["lighting", "scene", "motion"].map(n => [n, $("condition-" + n).value])
-    ),
+    objects: structuredClone(objects),
+    conditions: conditionsInput(),
   });
+$("rebase-draft").onclick = async () => {
+  if (mutating || !recovery || !recovery.merged.objects) return;
+  if (recovery.merged.conflicts.length && !$("confirm-rebase").checked) {
+    editorStatus("أكد فحص الفروق قبل اختيار تعديلاتك المتعارضة.");
+    return;
+  }
+  const key = selected.key,
+    reason = $("reason").value;
+  // Re-fetch on save again; this prepares a draft, never overwrites the server.
+  selected = structuredClone(recovery.latest);
+  objects = structuredClone(recovery.merged.objects);
+  for (const n of ["lighting", "scene", "motion"])
+    $("condition-" + n).value = recovery.merged.conditions?.[n] ?? "unreviewed";
+  renderObjects();
+  $("reason").value = reason;
+  $("revision").textContent =
+    "الإصدار " + selected.version + " · مسودة غير محفوظة";
+  recovery = null;
+  $("save-conflict").hidden = true;
+  rememberDraft();
+  editorStatus(
+    "جُهزت المسودة فوق الإصدار الحالي. افحصها ثم اضغط حفظ إصدار الوسوم."
+  );
+};
+$("reload-saved").onclick = async () => {
+  if (mutating || !selected) return;
+  if (
+    !window.confirm(
+      "هل تريد عرض النسخة المحفوظة بدل التعديلات غير المحفوظة في هذه الصورة؟"
+    )
+  )
+    return;
+  await openEditor(selected.key, { discardDraft: true });
+};
+
 $("batch-export").onchange = renderExport;
 $("export-reviewed").onclick = async () => {
   try {
@@ -560,7 +786,13 @@ $("overlay").onpointerup = e => {
 $("overlay").onpointercancel = () => {
   drawing = null;
 };
-$("close-editor").onclick = () => $("editor").close();
+$("close-editor").onclick = () => {
+  if (mutating || editorLoading) return;
+  rememberDraft();
+  editorRequest++;
+  prereview.cancel();
+  $("editor").close();
+};
 for (const id of [
   "search",
   "class-filter",
@@ -570,12 +802,17 @@ for (const id of [
 ])
   $(id).addEventListener(id === "search" ? "input" : "change", render);
 async function setActor(a) {
+  catalogGeneration++;
   actor = a;
+  batchReview.reset();
   $("identity").textContent = a ? `${a.name} · ${a.id}` : "لم تسجّل الدخول";
   $("login-panel").hidden = !!a;
   $("workspace").hidden = !a;
   $("logout").hidden = !a;
-  if (a) await refresh();
+  if (a) {
+    await refresh();
+    if (!$("batch-panel").hidden) await batchReview.open();
+  }
 }
 $("login").onsubmit = async e => {
   e.preventDefault();
@@ -595,7 +832,12 @@ $("login").onsubmit = async e => {
 $("logout").onclick = async () => {
   const r = await api("/api/logout", {});
   csrf = r.csrf;
+  editorRequest++;
+  prereview.cancel();
   if ($("editor").open) $("editor").close();
+  drafts.clear();
+  selected = null;
+  catalogGeneration++;
   catalog = null;
   fingerprint = "";
   $("grid").replaceChildren();
@@ -610,7 +852,12 @@ document.querySelectorAll("[data-tab]").forEach(
       $("gallery-panel").hidden = b.dataset.tab !== "gallery";
       $("experiments-panel").hidden = b.dataset.tab !== "experiments";
       $("assistant-panel").hidden = b.dataset.tab !== "assistant";
-      if (b.dataset.tab === "assistant" && actor) await assistant.open();
+      $("batch-panel").hidden = b.dataset.tab !== "batch";
+      if (b.dataset.tab === "batch" && actor) await batchReview.open();
+      if (b.dataset.tab === "assistant" && actor) {
+        await assistant.open();
+        await prereview.open();
+      }
       if (b.dataset.tab === "experiments" && actor) {
         const r = await api("/api/experiments");
         $("experiment-list").innerHTML = r.results.length
@@ -651,6 +898,25 @@ const assistant = assistantUI({
     renderObjects();
   },
 });
+const prereview = prereviewUI({
+  api,
+  getCatalog: () => catalog,
+  getActor: () => actor,
+  openEditor,
+  refresh,
+  notify,
+  editRegions: report => assistant.useRegions(report),
+  setSequence: keys => {
+    sequence = keys;
+  },
+});
+const batchReview = batchReviewUI({
+  api,
+  getActor: () => actor,
+  getCatalog: () => catalog,
+  openEditor,
+  refresh,
+});
 try {
   const bootstrap = await api("/api/bootstrap");
   csrf = bootstrap.csrf;
@@ -658,4 +924,19 @@ try {
 } catch (e) {
   notify(e.message);
 }
+$("editor").addEventListener("cancel", event => {
+  if (mutating || editorLoading) event.preventDefault();
+  else {
+    rememberDraft();
+    editorRequest++;
+    prereview.cancel();
+  }
+});
+window.addEventListener("beforeunload", event => {
+  rememberDraft();
+  if (drafts.size || mutating || batchReview.hasPending()) {
+    event.preventDefault();
+    event.returnValue = "";
+  }
+});
 setInterval(refresh, 2000);

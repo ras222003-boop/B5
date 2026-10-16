@@ -1,21 +1,34 @@
 import http from "node:http";
-import { readFile, writeFile, open } from "node:fs/promises";
+import { readFile, open } from "node:fs/promises";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
+import { randomBytes, timingSafeEqual } from "node:crypto";
 import { createInterface } from "node:readline/promises";
 import { StudioWorkspace } from "./workspace.mjs";
 import { requireValue as check, fileHash } from "../common.mjs";
 import * as assistant from "./assistant.mjs";
+import * as prereview from "./prereview.mjs";
+import { BatchReview } from "./batch-review.mjs";
 import { modelRuntime, assetMime } from "./model-runtime.mjs";
 import { reviewPlan } from "./review-plan.mjs";
+import {
+  checkLocalRequest,
+  localCookieName,
+  readLocalCookie,
+} from "./local-http.mjs";
+import {
+  passwordHash,
+  confirmedPassword,
+  resetPassword,
+  updateIdentities,
+} from "./identities.mjs";
+export { passwordHash } from "./identities.mjs";
 
 const ui = resolve(dirname(fileURLToPath(import.meta.url)), "ui");
 const secret = () => randomBytes(32).toString("hex");
-export const passwordHash = (password, salt) =>
-  scryptSync(password, salt, 64).toString("hex");
 export async function createStudio(root, { port = 0 } = {}) {
   const workspace = await new StudioWorkspace(root).init();
+  const batchReview = await new BatchReview(workspace).init();
   const runtime = await modelRuntime();
   const sessions = new Map(),
     failures = new Map();
@@ -57,20 +70,9 @@ export async function createStudio(root, { port = 0 } = {}) {
     };
     try {
       const origin = `http://127.0.0.1:${server.address().port}`;
-      check(
-        req.socket.remoteAddress === "127.0.0.1" &&
-          req.headers.host === `127.0.0.1:${server.address().port}`,
-        "Loopback Host required"
-      );
-      check(
-        !req.headers.origin || req.headers.origin === origin,
-        "Cross-origin request forbidden"
-      );
-      check(
-        !req.headers["sec-fetch-site"] ||
-          ["same-origin", "none"].includes(req.headers["sec-fetch-site"]),
-        "Cross-site request forbidden"
-      );
+      const url = checkLocalRequest(req, origin);
+      const cookieName = localCookieName("studio", server.address().port);
+      const cookie = readLocalCookie(req.headers.cookie, cookieName);
       res.setHeader("Cache-Control", "no-store");
       res.setHeader("X-Content-Type-Options", "nosniff");
       res.setHeader("Referrer-Policy", "no-referrer");
@@ -78,23 +80,54 @@ export async function createStudio(root, { port = 0 } = {}) {
         "Content-Security-Policy",
         "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self'; style-src 'self'; img-src 'self' blob:; media-src 'self' blob:; connect-src 'self'; font-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'"
       );
-      const url = new URL(req.url, origin),
-        pathname = url.pathname;
+      const pathname = url.pathname;
+      if (req.method === "GET" && pathname === "/entry.mjs") {
+        res.setHeader("Content-Type", "text/javascript; charset=utf-8");
+        res.end('location.replace("/");');
+        return;
+      }
       if (
         req.method === "GET" &&
-        ["/", "/app.mjs", "/assistant-ui.mjs", "/styles.css"].includes(pathname)
+        pathname === "/" &&
+        ["same-site", "cross-site"].includes(req.headers["sec-fetch-site"])
+      ) {
+        // A Strict cookie can be withheld on entry from another site. Do not overwrite it
+        // with an anonymous session: establish a document, then re-enter from this origin.
+        res.setHeader("Content-Type", "text/html; charset=utf-8");
+        res.end(
+          '<!doctype html><html lang="ar" dir="rtl"><meta charset="utf-8"><title>فتح بصيرة محليًا</title><p>جارٍ فتح الاستوديو… <a href="/">متابعة</a></p><script src="/entry.mjs"></script></html>'
+        );
+        return;
+      }
+      if (
+        req.method === "GET" &&
+        [
+          "/",
+          "/app.mjs",
+          "/assistant-ui.mjs",
+          "/prereview-ui.mjs",
+          "/label-draft.mjs",
+          "/batch-review-ui.mjs",
+          "/styles.css",
+        ].includes(pathname)
       ) {
         if (pathname === "/") {
-          const id = secret();
-          sessions.set(id, {
-            csrf: secret(),
-            actor: null,
-            expires: Date.now() + 8 * 3600_000,
-          });
-          res.setHeader(
-            "Set-Cookie",
-            `basira_studio=${id}; HttpOnly; SameSite=Strict; Path=/`
-          );
+          const existing = sessions.get(cookie);
+          // Reloading/opening another tab must not replace the shared authenticated session.
+          if (!existing || existing.expires <= Date.now()) {
+            for (const [id, session] of sessions)
+              if (session.expires <= Date.now()) sessions.delete(id);
+            const id = secret();
+            sessions.set(id, {
+              csrf: secret(),
+              actor: null,
+              expires: Date.now() + 8 * 3600_000,
+            });
+            res.setHeader(
+              "Set-Cookie",
+              `${cookieName}=${id}; HttpOnly; SameSite=Strict; Path=/`
+            );
+          }
         }
         res.setHeader(
           "Content-Type",
@@ -111,9 +144,6 @@ export async function createStudio(root, { port = 0 } = {}) {
         );
         return;
       }
-      const cookie = /(?:^|;\s*)basira_studio=([a-f0-9]{64})(?:;|$)/.exec(
-        req.headers.cookie ?? ""
-      )?.[1];
       const session = sessions.get(cookie);
       check(session && session.expires > Date.now(), "Session expired; reload");
       const body = async () => {
@@ -190,6 +220,96 @@ export async function createStudio(root, { port = 0 } = {}) {
         return;
       }
       check(session.actor, "Local account login required");
+      if (pathname === "/api/batch/board" && req.method === "GET") {
+        json(200, await batchReview.board(session.actor));
+        return;
+      }
+      const batchMedia =
+        /^\/api\/batch\/media\/([a-f0-9-]{36})\/(original|preview)$/.exec(
+          pathname
+        );
+      if (batchMedia && req.method === "GET") {
+        // Sniffing is disabled; sharp determines format without changing original bytes.
+        const bytes = await batchReview.media(
+          batchMedia[1],
+          batchMedia[2],
+          session.actor,
+          cookie
+        );
+        const { default: sharp } = await import("sharp");
+        const meta = await sharp(bytes).metadata();
+        res.setHeader(
+          "Content-Type",
+          meta.format === "jpeg" ? "image/jpeg" : `image/${meta.format}`
+        );
+        res.end(bytes);
+        return;
+      }
+      if (pathname.startsWith("/api/batch/") && req.method === "POST") {
+        const p = await body();
+        let result;
+        if (pathname === "/api/batch/inspect")
+          result = await batchReview.inspect(
+            p.key,
+            p.stage,
+            session.actor,
+            cookie
+          );
+        else if (pathname === "/api/batch/attest")
+          result = await batchReview.attest(p, session.actor, cookie);
+        else if (pathname === "/api/batch/commit") {
+          result = await batchReview.commit(p, session.actor, cookie);
+          invalidateCatalog();
+        } else if (pathname === "/api/batch/register-test")
+          result = await batchReview.registerTest(p, session.actor);
+        else if (pathname === "/api/batch/prepare-training")
+          result = await batchReview.prepareTraining(p.keys, session.actor);
+        else throw new Error("Unknown batch action");
+        json(200, result);
+        return;
+      }
+      if (pathname === "/api/prereview" && req.method === "GET") {
+        json(200, await prereview.board(workspace));
+        return;
+      }
+      if (pathname === "/api/prereview/packet" && req.method === "GET") {
+        json(200, await prereview.shareable(workspace));
+        return;
+      }
+      if (pathname === "/api/prereview/analyze" && req.method === "POST") {
+        const p = await body();
+        json(200, await prereview.analyze(workspace, p.key));
+        return;
+      }
+      if (pathname === "/api/prereview/confirm" && req.method === "POST") {
+        json(
+          200,
+          await prereview.confirm(workspace, await body(), session.actor)
+        );
+        invalidateCatalog();
+        return;
+      }
+      if (
+        pathname === "/api/export-reviewed-selection" &&
+        req.method === "POST"
+      ) {
+        const p = await body();
+        json(
+          200,
+          await workspace.exportBatch(null, session.actor, { keys: p.keys })
+        );
+        return;
+      }
+      const proposedMedia = /^\/media\/prereview\/([a-f0-9-]{36})$/.exec(
+        pathname
+      );
+      if (proposedMedia && req.method === "GET") {
+        res.setHeader("Content-Type", "image/png");
+        res.end(
+          await readFile(await prereview.draftPath(workspace, proposedMedia[1]))
+        );
+        return;
+      }
       if (pathname === "/api/review-plan" && req.method === "GET") {
         json(200, await reviewPlan(workspace));
         return;
@@ -309,6 +429,11 @@ export async function createStudio(root, { port = 0 } = {}) {
         return;
       }
       const itemRoute = /^\/api\/items\/([a-f0-9]{32})$/.exec(pathname);
+      if (itemRoute && req.method === "GET") {
+        const { data, ...item } = await workspace.item(itemRoute[1]);
+        json(200, item);
+        return;
+      }
       if (itemRoute && req.method === "POST") {
         const result = await workspace.change(
           itemRoute[1],
@@ -414,6 +539,10 @@ export async function createStudio(root, { port = 0 } = {}) {
       if (!res.headersSent)
         json(e.message.includes("Revision conflict") ? 409 : 400, {
           error: e.message,
+          code: e.code === "REVISION_CONFLICT" ? e.code : "VALIDATION_FAILED",
+          ...(e.currentVersion !== undefined
+            ? { currentVersion: e.currentVersion }
+            : {}),
         });
       else res.destroy();
     } finally {
@@ -460,64 +589,30 @@ async function addUser(root) {
     "Unknown role"
   );
   rl.close();
-  check(
-    process.stdin.isTTY,
-    "Interactive terminal required for hidden password entry"
+  let password = await confirmedPassword();
+  await updateIdentities(
+    workspace,
+    identities => {
+      check(
+        !identities.users.some(
+          u =>
+            u.id === id ||
+            u.name.trim().toLowerCase() === name.trim().toLowerCase()
+        ),
+        "Identity exists; administrator reconciliation required"
+      );
+      const salt = secret();
+      identities.users.push({
+        id,
+        name,
+        roles: [...new Set(roles)],
+        salt,
+        passwordHash: passwordHash(password, salt),
+      });
+    },
+    { existing: false }
   );
-  const hidden = () =>
-    new Promise(ok => {
-      process.stdout.write("Password (min 12 characters; hidden): ");
-      let value = "";
-      process.stdin.setRawMode(true);
-      process.stdin.resume();
-      const read = chunk => {
-        for (const c of chunk.toString()) {
-          if (c === "\r" || c === "\n") {
-            process.stdin.off("data", read);
-            process.stdin.setRawMode(false);
-            process.stdin.pause();
-            process.stdout.write("\n");
-            ok(value);
-            return;
-          }
-          if (c === "\u0003") process.exit(130);
-          if (c === "\u007f" || c === "\b") value = value.slice(0, -1);
-          else if (c.charCodeAt(0) >= 32) value += c;
-        }
-      };
-      process.stdin.on("data", read);
-    });
-  const password = await hidden();
-  check(
-    password.length >= 12 && password.length <= 512,
-    "Password length must be 12–512"
-  );
-  let identities;
-  try {
-    identities = await workspace.json(".studio/identities.json");
-  } catch (e) {
-    if (e.code !== "ENOENT") throw e;
-    identities = { users: [] };
-  }
-  check(
-    !identities.users.some(
-      u =>
-        u.id === id || u.name.trim().toLowerCase() === name.trim().toLowerCase()
-    ),
-    "Identity exists; administrator reconciliation required"
-  );
-  const salt = secret();
-  identities.users.push({
-    id,
-    name,
-    roles: [...new Set(roles)],
-    salt,
-    passwordHash: passwordHash(password, salt),
-  });
-  const path = await workspace.safe(".studio/identities.json", true);
-  await writeFile(path, JSON.stringify(identities, null, 2) + "\n", {
-    mode: 0o600,
-  });
+  password = "";
   console.log(
     `Local identity ${id} created. Keep one identity per human; this is an administrator trust boundary.`
   );
@@ -529,7 +624,32 @@ if (
   const args = process.argv.slice(2);
   const root = args[args.indexOf("--data-root") + 1];
   check(args.includes("--data-root") && root, "--data-root required");
-  if (args.includes("--add-user")) await addUser(root);
+  check(
+    !(args.includes("--add-user") && args.includes("--reset-password")),
+    "Choose --add-user or --reset-password, not both"
+  );
+  if (args.includes("--reset-password")) {
+    check(
+      args.length === 4 &&
+        args.filter(a => a === "--data-root").length === 1 &&
+        args.filter(a => a === "--reset-password").length === 1,
+      "Use --data-root <directory> --reset-password <account>; no password arguments accepted"
+    );
+    const id = args[args.indexOf("--reset-password") + 1];
+    try {
+      const result = await resetPassword(root, id);
+      console.log(
+        `Local password reset for ${result.id}. Private backup: ${result.backupPath}\nRestart ALL Studio server processes for this data root to revoke old sessions and clear temporary login locks.`
+      );
+    } catch (e) {
+      console.error(
+        e.code === "EEXIST"
+          ? "Credential edit locked; another edit is active. Do not remove a lock while an administrator is editing."
+          : e.message
+      );
+      process.exitCode = 1;
+    }
+  } else if (args.includes("--add-user")) await addUser(root);
   else {
     const port = args.includes("--port")
       ? Number(args[args.indexOf("--port") + 1])

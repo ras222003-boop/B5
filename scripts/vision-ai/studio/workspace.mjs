@@ -9,6 +9,7 @@ import {
   writeFile,
   open,
   unlink,
+  link,
 } from "node:fs/promises";
 import { resolve, relative, sep } from "node:path";
 import { randomUUID } from "node:crypto";
@@ -440,7 +441,12 @@ export class StudioWorkspace {
     }
     return people;
   }
-  async change(key, payload, actor) {
+  async change(
+    key,
+    payload,
+    actor,
+    { proposalAudit = null, batchAudit = null } = {}
+  ) {
     check(!this.busy, "Another edit is active; retry");
     this.busy = true;
     let lock;
@@ -451,6 +457,9 @@ export class StudioWorkspace {
         0o600
       );
       const item = await this.item(key);
+      await (
+        await import("../test-cohort.mjs")
+      ).assertNotFinalTest(this.root, item);
       check(
         !item.conflict,
         "Manifest changed; reconcile into a new batch before editing"
@@ -460,10 +469,21 @@ export class StudioWorkspace {
           (item.activeSha256 ?? item.sample.sha256),
         "Media SHA-256 mismatch; reconcile changed input"
       );
-      check(
-        payload.version === item.version,
-        "Revision conflict; refresh before saving"
-      );
+      if (payload.version !== item.version)
+        throw Object.assign(
+          new Error("Revision conflict; refresh before saving"),
+          { code: "REVISION_CONFLICT", currentVersion: item.version }
+        );
+      if (payload.baseHash !== undefined)
+        check(
+          payload.baseHash === item.baseHash,
+          "Manifest changed; reload before saving"
+        );
+      if (payload.imageSha256 !== undefined)
+        check(
+          payload.imageSha256 === (item.activeSha256 ?? item.sample.sha256),
+          "Media SHA mismatch; reload before saving"
+        );
       check(
         typeof payload.reason === "string" &&
           payload.reason.trim().length >= 3 &&
@@ -508,266 +528,308 @@ export class StudioWorkspace {
           : {};
       };
       const at = new Date().toISOString();
-      if (payload.action === "labels") {
-        can("annotator");
+      const bundled = ["prepare-bundle", "review-bundle"].includes(
+        payload.action
+      );
+      if (bundled)
         check(
-          Array.isArray(payload.objects) && payload.objects.length <= 1000,
-          "Invalid annotations"
+          batchAudit?.verified === true,
+          "Batch receipt required; use authenticated batch review"
         );
-        const ids = new Set(),
-          boxes = new Set(),
-          tracks = new Set();
-        for (const o of payload.objects) {
+      const applyAction = async payload => {
+        if (payload.action === "labels") {
+          can("annotator");
           check(
-            typeof o.id === "string" && o.id.length > 0 && !ids.has(o.id),
-            "Unique object ID required"
+            Array.isArray(payload.objects) && payload.objects.length <= 1000,
+            "Invalid annotations"
           );
-          ids.add(o.id);
-          check(
-            this.taxonomy.classes.some(
-              c => c.id === o.classId && c.kind !== "surface"
-            ) && validBox(o.box),
-            "Invalid class or bounding box"
-          );
-          const geometry = `${o.classId}:${o.box}`;
-          check(!boxes.has(geometry), "Duplicate box");
-          boxes.add(geometry);
-          check(
-            typeof o.occluded === "boolean" &&
-              typeof o.truncated === "boolean" &&
-              ["yes", "no", "unknown"].includes(o.groundContact),
-            "Object attributes required"
-          );
-          check(
-            item.sample.media?.kind === "video_frame"
-              ? typeof o.trackId === "string" && !!o.trackId
-              : o.trackId === null,
-            "Track identity mismatch"
-          );
-          if (o.trackId !== null) {
-            check(!tracks.has(o.trackId), "Duplicate frame track");
-            tracks.add(o.trackId);
-          }
-          const prior = item.sample.annotation?.objects?.find(
-            p => p.id === o.id
-          );
-          check(
-            JSON.stringify(o.spatial) === JSON.stringify(prior?.spatial),
-            "Measured spatial evidence must be edited using existing spatial tools"
-          );
-          if (o.spatial) {
-            await this.checkReferences(o.spatial, item.prefix);
-            await validateSpatial(
-              o.spatial,
-              item.sample,
-              resolve(this.root, item.prefix),
-              true
-            );
-          }
-        }
-        if (payload.conditions) {
-          check(
-            ["daylight", "indoor", "low_light", "mixed"].includes(
-              payload.conditions.lighting
-            ) &&
-              ["indoor", "outdoor"].includes(payload.conditions.scene) &&
-              ["static", "moving"].includes(payload.conditions.motion),
-            "Scene conditions required"
-          );
-          item.sample.conditions = payload.conditions;
-        }
-        reset();
-        item.sample.annotation.objects = payload.objects.map(o =>
-          item.data.spatialPolicyVersion
-            ? { ...o, spatial: o.spatial ?? unknownSpatial() }
-            : o
-        );
-      } else if (payload.action === "derivative") {
-        can("annotator");
-        check(
-          !rightsBlocked(item),
-          "Rights rejected: derivatives cannot bypass rights"
-        );
-        const { default: sharp } = await import("sharp");
-        let bytes;
-        if (payload.normalizeOrientation === true) {
-          // Only unlabelled stills: transformed annotations/calibration require
-          // an explicit new intake, never a silent box-coordinate conversion.
-          check(
-            !item.sample.annotation.objects.length &&
-              !(item.sample.annotation.surfaces ?? []).length &&
-              item.sample.media?.kind === "image" &&
-              !item.motionSegments.length,
-            "Orientation normalization requires an unlabelled still image"
-          );
-          const original = await this.mediaPath(item, true);
-          check(
-            (await fileHash(original)) === item.sample.sha256,
-            "Original media SHA-256 mismatch; cannot normalize changed input"
-          );
-          const metadata = await sharp(original).metadata();
-          check(
-            metadata.orientation >= 2 && metadata.orientation <= 8,
-            "Original has no EXIF orientation to normalize"
-          );
-          bytes = await sharp(original).autoOrient().png().toBuffer();
-          const normalized = await sharp(bytes).metadata();
-          item.sample.width = normalized.width;
-          item.sample.height = normalized.height;
-        } else {
-          check(
-            typeof payload.image === "string" &&
-              payload.image.length < 24_000_000,
-            "Image upload limit exceeded"
-          );
-          bytes = Buffer.from(payload.image, "base64");
-        }
-        const m = await sharp(bytes, {
-          limitInputPixels: 100_000_000,
-        }).metadata();
-        check(
-          ["jpeg", "png", "webp"].includes(m.format) &&
-            (m.pages ?? 1) === 1 &&
-            (!m.orientation || m.orientation === 1) &&
-            m.width === item.sample.width &&
-            m.height === item.sample.height,
-          "Derivative must preserve dimensions/orientation and be single-frame"
-        );
-        const clean = await sharp(bytes).png().toBuffer();
-        const sha = hash(clean),
-          path = `.studio/derived/${sha}.png`;
-        try {
-          await writeFile(await this.safe(path, true), clean, {
-            flag: "wx",
-            mode: 0o600,
-          });
-        } catch (e) {
-          if (e.code !== "EEXIST") throw e;
-          check(
-            (await fileHash(await this.safe(path))) === sha,
-            "Derivative collision"
-          );
-        }
-        reset();
-        item.activePath = path;
-        item.activeSha256 = sha;
-      } else if (payload.action === "review") {
-        check(
-          ["rights", "privacy", "labels"].includes(payload.kind) &&
-            ["approved", "rejected"].includes(payload.status),
-          "Invalid review"
-        );
-        can(payload.kind);
-        const contributor = item.sample.annotation?.annotator;
-        check(
-          contributor && !(await this.contributors(item)).has(actor.id),
-          "Independent reviewer must differ from contributor"
-        );
-        if (payload.status === "approved") {
-          if (payload.kind === "rights") {
+          const ids = new Set(),
+            boxes = new Set(),
+            tracks = new Set();
+          for (const o of payload.objects) {
             check(
-              !rightsBlocked(item),
-              "Rights rejected: use a new independent licensed source, not modified rejected pixels"
+              typeof o.id === "string" && o.id.length > 0 && !ids.has(o.id),
+              "Unique object ID required"
             );
-            check(item.sources.length > 0, "Rights sources missing");
-            await this.sourceEvidence(item);
-            for (const s of item.sources) {
-              s.trainingAllowed = true;
-              s.rightsReview = {
-                ...s.rightsReview,
+            ids.add(o.id);
+            check(
+              this.taxonomy.classes.some(
+                c => c.id === o.classId && c.kind !== "surface"
+              ) && validBox(o.box),
+              "Invalid class or bounding box"
+            );
+            const geometry = `${o.classId}:${o.box}`;
+            check(!boxes.has(geometry), "Duplicate box");
+            boxes.add(geometry);
+            check(
+              typeof o.occluded === "boolean" &&
+                typeof o.truncated === "boolean" &&
+                ["yes", "no", "unknown"].includes(o.groundContact),
+              "Object attributes required"
+            );
+            check(
+              item.sample.media?.kind === "video_frame"
+                ? typeof o.trackId === "string" && !!o.trackId
+                : o.trackId === null,
+              "Track identity mismatch"
+            );
+            if (o.trackId !== null) {
+              check(!tracks.has(o.trackId), "Duplicate frame track");
+              tracks.add(o.trackId);
+            }
+            const prior = item.sample.annotation?.objects?.find(
+              p => p.id === o.id
+            );
+            check(
+              JSON.stringify(o.spatial) === JSON.stringify(prior?.spatial),
+              "Measured spatial evidence must be edited using existing spatial tools"
+            );
+            if (o.spatial) {
+              await this.checkReferences(o.spatial, item.prefix);
+              await validateSpatial(
+                o.spatial,
+                item.sample,
+                resolve(this.root, item.prefix),
+                true
+              );
+            }
+          }
+          if (payload.conditions) {
+            check(
+              [
+                "unreviewed",
+                "daylight",
+                "indoor",
+                "low_light",
+                "mixed",
+              ].includes(payload.conditions.lighting) &&
+                ["unreviewed", "indoor", "outdoor"].includes(
+                  payload.conditions.scene
+                ) &&
+                ["unreviewed", "static", "moving"].includes(
+                  payload.conditions.motion
+                ),
+              "Scene conditions required"
+            );
+            item.sample.conditions = payload.conditions;
+          }
+          reset();
+          item.sample.annotation.objects = payload.objects.map(o =>
+            item.data.spatialPolicyVersion
+              ? { ...o, spatial: o.spatial ?? unknownSpatial() }
+              : o
+          );
+        } else if (payload.action === "derivative") {
+          can("annotator");
+          check(
+            !rightsBlocked(item),
+            "Rights rejected: derivatives cannot bypass rights"
+          );
+          const { default: sharp } = await import("sharp");
+          let bytes;
+          if (payload.normalizeOrientation === true) {
+            // Only unlabelled stills: transformed annotations/calibration require
+            // an explicit new intake, never a silent box-coordinate conversion.
+            check(
+              !item.sample.annotation.objects.length &&
+                !(item.sample.annotation.surfaces ?? []).length &&
+                item.sample.media?.kind === "image" &&
+                !item.motionSegments.length,
+              "Orientation normalization requires an unlabelled still image"
+            );
+            const original = await this.mediaPath(item, true);
+            check(
+              (await fileHash(original)) === item.sample.sha256,
+              "Original media SHA-256 mismatch; cannot normalize changed input"
+            );
+            const metadata = await sharp(original).metadata();
+            check(
+              metadata.orientation >= 2 && metadata.orientation <= 8,
+              "Original has no EXIF orientation to normalize"
+            );
+            bytes = await sharp(original).autoOrient().png().toBuffer();
+            const normalized = await sharp(bytes).metadata();
+            item.sample.width = normalized.width;
+            item.sample.height = normalized.height;
+          } else {
+            check(
+              typeof payload.image === "string" &&
+                payload.image.length < 24_000_000,
+              "Image upload limit exceeded"
+            );
+            bytes = Buffer.from(payload.image, "base64");
+          }
+          const m = await sharp(bytes, {
+            limitInputPixels: 100_000_000,
+          }).metadata();
+          check(
+            ["jpeg", "png", "webp"].includes(m.format) &&
+              (m.pages ?? 1) === 1 &&
+              (!m.orientation || m.orientation === 1) &&
+              m.width === item.sample.width &&
+              m.height === item.sample.height,
+            "Derivative must preserve dimensions/orientation and be single-frame"
+          );
+          const clean = await sharp(bytes).png().toBuffer();
+          const sha = hash(clean),
+            path = `.studio/derived/${sha}.png`;
+          try {
+            await writeFile(await this.safe(path, true), clean, {
+              flag: "wx",
+              mode: 0o600,
+            });
+          } catch (e) {
+            if (e.code !== "EEXIST") throw e;
+            check(
+              (await fileHash(await this.safe(path))) === sha,
+              "Derivative collision"
+            );
+          }
+          reset();
+          item.activePath = path;
+          item.activeSha256 = sha;
+        } else if (payload.action === "review") {
+          check(
+            ["rights", "privacy", "labels"].includes(payload.kind) &&
+              ["approved", "rejected"].includes(payload.status),
+            "Invalid review"
+          );
+          can(payload.kind);
+          const contributor = item.sample.annotation?.annotator;
+          check(
+            contributor && !(await this.contributors(item)).has(actor.id),
+            "Independent reviewer must differ from contributor"
+          );
+          if (payload.status === "approved") {
+            if (payload.kind === "rights") {
+              check(
+                !rightsBlocked(item),
+                "Rights rejected: use a new independent licensed source, not modified rejected pixels"
+              );
+              check(item.sources.length > 0, "Rights sources missing");
+              await this.sourceEvidence(item);
+              for (const s of item.sources) {
+                s.trainingAllowed = true;
+                s.rightsReview = {
+                  ...s.rightsReview,
+                  status: "approved",
+                  reviewer: actor.id,
+                  at,
+                  reason: payload.reason,
+                };
+                await validateSource(s, resolve(this.root, item.prefix), true);
+              }
+            } else if (payload.kind === "privacy") {
+              check(
+                payload.metadataStripped === true &&
+                  ["absent", "redacted"].includes(payload.faces) &&
+                  ["absent", "redacted"].includes(payload.plates) &&
+                  ["absent", "redacted"].includes(payload.personalText),
+                "Explicit privacy decisions required"
+              );
+              const { default: sharp } = await import("sharp");
+              const m = await sharp(await this.mediaPath(item)).metadata();
+              check(
+                !m.exif && !m.xmp && !m.iptc && !m.comments?.length,
+                "Strip metadata in a derivative before privacy approval"
+              );
+              item.sample.privacy = {
                 status: "approved",
                 reviewer: actor.id,
                 at,
                 reason: payload.reason,
+                faces: payload.faces,
+                plates: payload.plates,
+                personalText: payload.personalText,
+                metadataStripped: true,
               };
-              await validateSource(s, resolve(this.root, item.prefix), true);
+            } else {
+              check(
+                payload.exhaustive === true,
+                "Exhaustive independent label review required"
+              );
+              check(
+                ["daylight", "indoor", "low_light", "mixed"].includes(
+                  item.sample.conditions?.lighting
+                ) &&
+                  ["indoor", "outdoor"].includes(
+                    item.sample.conditions?.scene
+                  ) &&
+                  ["static", "moving"].includes(item.sample.conditions?.motion),
+                "Scene conditions required"
+              );
+              item.sample.annotation = {
+                ...item.sample.annotation,
+                status: "reviewed",
+                reviewer: actor.id,
+                at,
+                reason: payload.reason,
+                exhaustive: true,
+              };
             }
-          } else if (payload.kind === "privacy") {
-            check(
-              payload.metadataStripped === true &&
-                ["absent", "redacted"].includes(payload.faces) &&
-                ["absent", "redacted"].includes(payload.plates) &&
-                ["absent", "redacted"].includes(payload.personalText),
-              "Explicit privacy decisions required"
-            );
-            const { default: sharp } = await import("sharp");
-            const m = await sharp(await this.mediaPath(item)).metadata();
-            check(
-              !m.exif && !m.xmp && !m.iptc && !m.comments?.length,
-              "Strip metadata in a derivative before privacy approval"
-            );
-            item.sample.privacy = {
-              status: "approved",
-              reviewer: actor.id,
-              at,
-              reason: payload.reason,
-              faces: payload.faces,
-              plates: payload.plates,
-              personalText: payload.personalText,
-              metadataStripped: true,
-            };
-          } else {
-            check(
-              payload.exhaustive === true,
-              "Exhaustive independent label review required"
-            );
-            check(
-              ["daylight", "indoor", "low_light", "mixed"].includes(
-                item.sample.conditions?.lighting
-              ) &&
-                ["indoor", "outdoor"].includes(item.sample.conditions?.scene) &&
-                ["static", "moving"].includes(item.sample.conditions?.motion),
-              "Scene conditions required"
-            );
-            item.sample.annotation = {
-              ...item.sample.annotation,
-              status: "reviewed",
-              reviewer: actor.id,
-              at,
-              reason: payload.reason,
-              exhaustive: true,
-            };
           }
-        }
-        if (payload.status === "rejected") {
-          if (payload.kind === "rights")
-            item.sources = item.sources.map(s => ({
-              ...s,
-              trainingAllowed: false,
-              rightsReview: {
-                ...s.rightsReview,
+          if (payload.status === "rejected") {
+            if (payload.kind === "rights")
+              item.sources = item.sources.map(s => ({
+                ...s,
+                trainingAllowed: false,
+                rightsReview: {
+                  ...s.rightsReview,
+                  status: "rejected",
+                  reviewer: actor.id,
+                  at,
+                  reason: payload.reason,
+                },
+              }));
+            if (payload.kind === "privacy")
+              item.sample.privacy = {
+                ...item.sample.privacy,
                 status: "rejected",
                 reviewer: actor.id,
                 at,
                 reason: payload.reason,
-              },
-            }));
-          if (payload.kind === "privacy")
-            item.sample.privacy = {
-              ...item.sample.privacy,
-              status: "rejected",
-              reviewer: actor.id,
-              at,
-              reason: payload.reason,
-            };
-          if (payload.kind === "labels")
-            item.sample.annotation = {
-              ...item.sample.annotation,
-              status: "rejected",
-              reviewer: actor.id,
-              at,
-              reason: payload.reason,
-              exhaustive: false,
-            };
-        }
-        item.decisions ??= {};
-        item.decisions[payload.kind] = {
-          status: payload.status,
-          reviewer: actor.id,
-          at,
-          reason: payload.reason,
-        };
-      } else throw new Error("Unknown action");
+              };
+            if (payload.kind === "labels")
+              item.sample.annotation = {
+                ...item.sample.annotation,
+                status: "rejected",
+                reviewer: actor.id,
+                at,
+                reason: payload.reason,
+                exhaustive: false,
+              };
+          }
+          item.decisions ??= {};
+          item.decisions[payload.kind] = {
+            status: payload.status,
+            reviewer: actor.id,
+            at,
+            reason: payload.reason,
+            itemKey: key,
+            imageSha256: item.activeSha256 ?? item.sample.sha256,
+            evidence: item.sources.map(s => ({
+              sourceId: s.id,
+              ...s.rightsReview?.evidence,
+            })),
+            version: item.version + 1,
+          };
+        } else throw new Error("Unknown action");
+      };
+      const steps =
+        payload.action === "prepare-bundle"
+          ? [
+              { ...payload, action: "labels" },
+              ...(payload.image ? [{ ...payload, action: "derivative" }] : []),
+            ]
+          : payload.action === "review-bundle"
+            ? ["rights", "privacy", "labels"].map(kind => ({
+                ...payload,
+                action: "review",
+                kind,
+                status: "approved",
+              }))
+            : [payload];
+      for (const step of steps) await applyAction(step);
       const history = await this.revisions(key);
       const prev = history.length
         ? await fileHash(await this.safe(history.at(-1)))
@@ -782,13 +844,25 @@ export class StudioWorkspace {
         parentSha256: prev,
         actor: actor.id,
         at,
-        action: payload.action,
+        action:
+          payload.action === "review-bundle"
+            ? "review"
+            : payload.action === "prepare-bundle"
+              ? "labels"
+              : payload.action,
+        steps: steps.map(s => ({
+          action: s.action,
+          ...(s.kind ? { kind: s.kind } : {}),
+        })),
+        batchAudit,
         reason: payload.reason,
         sample: item.sample,
         sources: item.sources,
         activePath: item.activePath ?? null,
         activeSha256: item.activeSha256 ?? null,
         decisions: item.decisions ?? {},
+        // Only an internal call can supply verified proposal provenance. Never read it from payload.
+        proposalAudit,
         assistantAudit: payload.assistantAudit
           ? {
               method:
@@ -816,11 +890,21 @@ export class StudioWorkspace {
           : null,
       };
       const path = `.studio/items/${key}/${String(version).padStart(6, "0")}.json`;
-      await writeFile(
-        await this.safe(path, true),
-        JSON.stringify(revision, null, 2) + "\n",
-        { flag: "wx", mode: 0o600 }
-      );
+      // Publish a complete immutable revision without overwriting an existing version.
+      const temporary = `${path}.${randomUUID()}.tmp`;
+      const temporaryPath = await this.safe(temporary, true);
+      const handle = await open(temporaryPath, "wx", 0o600);
+      try {
+        await handle.writeFile(JSON.stringify(revision, null, 2) + "\n");
+        await handle.sync();
+      } finally {
+        await handle.close();
+      }
+      try {
+        await link(temporaryPath, await this.safe(path, true));
+      } finally {
+        await unlink(temporaryPath);
+      }
       return { version, status: this.status(item) };
     } finally {
       try {
@@ -834,7 +918,7 @@ export class StudioWorkspace {
     }
   }
   /** Snapshot for the existing validator/split/export pipeline. Never modifies input manifests or starts training. */
-  async exportBatch(batch, actor) {
+  async exportBatch(batch, actor, { keys = null } = {}) {
     check(
       actor.roles.includes("labels"),
       "Independent label reviewer role required"
@@ -849,21 +933,42 @@ export class StudioWorkspace {
         0o600
       );
       const catalog = await this.catalog();
+      if (keys !== null)
+        check(
+          Array.isArray(keys) &&
+            keys.length > 0 &&
+            keys.length <= 1000 &&
+            new Set(keys).size === keys.length &&
+            keys.every(k => /^[a-f0-9]{32}$/.test(k)),
+          "Explicit unique selection required"
+        );
       const matches = catalog.batches.filter(
         b => b.key === batch || b.id === batch
       );
       check(
-        matches.length === 1,
+        keys !== null || matches.length === 1,
         "Choose one batch folder; ambiguous batch identifiers cannot be combined"
       );
-      const selected = catalog.items.filter(i => i.batchKey === matches[0].key);
+      const selected = catalog.items.filter(i =>
+        keys !== null ? keys.includes(i.key) : i.batchKey === matches[0].key
+      );
       check(
-        selected.length === matches[0].sampleCount &&
+        selected.length ===
+          (keys !== null ? keys.length : matches[0].sampleCount) &&
           selected.length &&
           selected.every(
             i => i.status === "approved" && i.contentKind === "real"
           ),
         "Entire batch must have real, independently reviewed data"
+      );
+      check(
+        selected.every(
+          i =>
+            i.data.taxonomyVersion === selected[0].data.taxonomyVersion &&
+            i.data.spatialPolicyVersion ===
+              selected[0].data.spatialPolicyVersion
+        ),
+        "Selection policies differ"
       );
       check(
         new Set(selected.map(i => i.activeSha256 ?? i.sample.sha256)).size ===

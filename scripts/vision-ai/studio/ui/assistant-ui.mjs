@@ -221,6 +221,7 @@ export function assistantUI({
       runner ??= await import("/local-models.mjs");
       let n = 0;
       for (const item of getCatalog().items) {
+        await api("/api/assistant/analyze", { key: item.key });
         const out = await runner.analyzeLocalImage(
           `/media/image/${item.key}?v=${item.version}`,
           getCatalog().taxonomy,
@@ -295,6 +296,22 @@ export function assistantUI({
     }
   };
   return {
+    useRegions: report => {
+      const item = getSelected();
+      if (
+        !getActor()?.roles.includes("annotator") ||
+        item?.key !== report.itemKey ||
+        item.version !== report.itemVersion
+      )
+        throw new Error("Current preparer and image version required");
+      latest = report;
+      regions = (report.privacy?.regions ?? []).map(r =>
+        structuredClone(r.box)
+      );
+      $("confirm-redaction").checked = false;
+      renderRegions();
+      $("redaction-regions").scrollIntoView({ block: "center" });
+    },
     addRegion: box => {
       regions.push(box);
       renderRegions();
@@ -313,7 +330,7 @@ export function assistantUI({
       try {
         const r = await api("/api/assistant/capabilities");
         $("assistant-capabilities").textContent =
-          `الكشف: ${r.objectDetector.status} · OCR: ${r.ocr.status} · الوجوه/اللوحات: تحتاج نموذجًا إضافيًا · السحابة: معطلة. إطارات الفيديو المستوردة تُحلل كصور؛ الأصل والصوت يحتاجان مراجعة مستقلة.`;
+          `نماذج المتصفح: الكشف ${r.objectDetector.status} · OCR ${r.ocr.status}. حالة كواشف الخصوصية الإضافية تظهر في تقرير المراجعة المسبقة لكل عينة. السحابة معطلة. إطارات الفيديو تُحلل كصور؛ الأصل والصوت يحتاجان مراجعة مستقلة.`;
         const reports = await api("/api/assistant/reports");
         $("issue-summary").innerHTML =
           reports.reports
