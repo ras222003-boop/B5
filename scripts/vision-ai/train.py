@@ -364,6 +364,10 @@ def main():
         approval.add_argument('--' + key, required=True)
     approval.add_argument('--config', default=str(REPO / 'ml/vision/experiment.json'))
     gpu = sub.add_parser('gpu-check')
+    data_check = sub.add_parser('data-preflight')
+    for key in ('manifest', 'data-root', 'export', 'pretrained'):
+        data_check.add_argument('--' + key, required=True)
+    data_check.add_argument('--config', default=str(REPO / 'ml/vision/experiment.stairs.json'))
     gpu.add_argument('--output', required=True)
     exporting = sub.add_parser("export")
     exporting.add_argument("--run", required=True)
@@ -385,6 +389,10 @@ def main():
               "reviewer": "", "dataReviewer": "", "at": "", "contentKind": "real", "containsUserData": False,
               "testSetSealed": False, "productionActivation": False, "binding": approval_binding(args, lock)})
         print('PENDING_HUMAN_DATASET_AND_TRAINING_REVIEW; trainingPerformed=false')
+    elif args.command == 'data-preflight':
+        _, lock, *_ = preflight(args, require_approval=False)
+        print(json.dumps({'status': 'DATA_PREFLIGHT_ONLY', 'trainingPerformed': False,
+                          'datasetSha256': lock['datasetSha256'], 'requiresExplicitTrainingPermission': True}))
     elif args.command == 'gpu-check':
         report = inspect_gpu()
         write(args.output, report)

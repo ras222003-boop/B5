@@ -3,6 +3,8 @@ import importlib.util
 import tempfile
 import unittest
 import json
+import io
+from unittest.mock import patch
 import subprocess
 from types import SimpleNamespace
 from pathlib import Path
@@ -13,6 +15,16 @@ spec.loader.exec_module(training)
 
 
 class TrainingPreparationTests(unittest.TestCase):
+    def test_data_preflight_cli_checks_data_without_run_approval_or_training(self):
+        args=['train.py','data-preflight','--manifest','fixture.json','--data-root','fixture-root','--export','fixture-export','--pretrained','fixture-weights.json']
+        with patch('sys.argv',args), patch('sys.stdout',new_callable=io.StringIO) as output, patch.object(training,'preflight',return_value=(None,{'datasetSha256':'fictional-only'})) as check:
+            training.main()
+        self.assertEqual(check.call_args.kwargs,{'require_approval':False})
+        result=json.loads(output.getvalue())
+        self.assertEqual(result['status'],'DATA_PREFLIGHT_ONLY')
+        self.assertFalse(result['trainingPerformed'])
+        self.assertTrue(result['requiresExplicitTrainingPermission'])
+
     def test_unknown_capture_motion_cannot_enter_other_training_tasks(self):
         data={'samples':[{'conditions':{'motion':'unknown_stairs_still'}}]}
         training.validate_capture_motion_task(data,{'task':'basira-stairs-v1'})

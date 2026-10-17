@@ -9,14 +9,32 @@ import {
   link,
 } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
-import sharp from "sharp";
-import { hash, fileHash, requireValue as check } from "../common.mjs";
+import {
+  hash,
+  fileHash,
+  requireValue as check,
+  validBox,
+  readJson,
+} from "../common.mjs";
 import * as prereview from "./prereview.mjs";
 import * as assistant from "./assistant.mjs";
 import { finalCohort, exposures } from "../test-cohort.mjs";
 import { assignSplits, exportCoco, validateDataset } from "../data.mjs";
 import { reviewPlan } from "./review-plan.mjs";
-import { knownSceneConditions } from "../stairs-task.mjs";
+import {
+  knownSceneConditions,
+  validateStairsDirection,
+} from "../stairs-task.mjs";
+import {
+  readProgress,
+  updateProgress,
+  progressKey,
+} from "./review-progress.mjs";
+import {
+  prepareApprovedStairs,
+  stairsSplits,
+  coverage,
+} from "./stairs-readiness.mjs";
 
 const base = ".studio/batch-review";
 const stamp = i =>
@@ -116,6 +134,7 @@ export class BatchReview {
     const catalog = await this.w.catalog(),
       scan = await assistant.scan(this.w),
       items = [];
+    const plan = await reviewPlan(this.w);
     for (const i of catalog.items) {
       const p = await this.proof(i),
         prepared = await this.preparation(i);
@@ -124,10 +143,20 @@ export class BatchReview {
           (x.a === i.key || x.b === i.key) && (x.requiresReview || x.crossSplit)
       );
       const exceptions = [...p.problems];
+      const tasks = plan.items.find(x => x.key === i.key)?.tasks ?? [];
+      if (tasks.some(t => t.kind === "photographic_origin"))
+        exceptions.push("source_provenance");
+      if (tasks.some(t => t.kind === "excluded_ramp"))
+        exceptions.push("unsupported_ramp");
+      if (
+        i.sample.annotation.objects.some(
+          o => o.classId === 23 && !o.stairsDirection
+        )
+      )
+        exceptions.push("stairs_direction_pending");
       if (cohort?.samples.some(s => s.key === i.key))
         exceptions.push("protected_final_test");
-      if (!knownSceneConditions(i.sample))
-        exceptions.push("scene_evidence");
+      if (!knownSceneConditions(i.sample)) exceptions.push("scene_evidence");
       if (related.length) exceptions.push("similarity_unresolved");
       if (!prepared) exceptions.push("preparer_inspection");
       if (i.sample.media?.kind !== "image")
@@ -139,12 +168,15 @@ export class BatchReview {
           "manifest_conflict",
           "media_changed",
           "similarity_unresolved",
+          "source_provenance",
+          "unsupported_ramp",
         ].includes(x)
       );
       items.push({
         key: i.key,
         id: i.sample.id,
         version: i.version,
+        stamp: stamp(i),
         contentKind: i.contentKind,
         status: i.status,
         classes: i.sample.annotation.objects.map(o => o.classId),
@@ -166,11 +198,13 @@ export class BatchReview {
             !r.used &&
             r.expires > Date.now()
         ),
+        stairsCandidate:
+          i.sample.annotation.objects.some(o => o.classId === 23) ||
+          i.sample.candidateClassId === 23 ||
+          i.sample.taskCandidate?.task === "basira-stairs-v1",
       });
     }
-    const priorities = new Map(
-      (await reviewPlan(this.w)).items.map(i => [i.key, i.priority])
-    );
+    const priorities = new Map(plan.items.map(i => [i.key, i.priority]));
     items.sort(
       (a, b) =>
         (priorities.get(a.key) ?? 999) - (priorities.get(b.key) ?? 999) ||
@@ -178,6 +212,10 @@ export class BatchReview {
     );
     return {
       items,
+      readiness: await this.w.json(`${base}/stairs-readiness.json`).catch(e => {
+        if (e.code === "ENOENT") return null;
+        throw e;
+      }),
       pairs: scan.pairs.filter(p => p.requiresReview || p.crossSplit),
       trainingStarted: false,
       finalTest: "NEW_INDEPENDENT_CAPTURE_SESSIONS_REQUIRED",
@@ -223,6 +261,23 @@ export class BatchReview {
     );
     const id = randomUUID(),
       prepared = await this.preparation(i);
+    let preparerReport = null;
+    if (stage === "approve" && prepared?.reportId) {
+      check(
+        (await fileHash(
+          await this.w.safe(
+            `.studio/prereview/reports/${prepared.reportId}.json`
+          )
+        )) === prepared.reportSha256,
+        "Preparer analysis evidence changed"
+      );
+      preparerReport = await prereview.getReport(this.w, prepared.reportId);
+      check(
+        preparerReport.itemVersion === prepared.inputVersion &&
+          preparerReport.imageSha256 === prepared.inputSha256,
+        "Preparer analysis binding changed"
+      );
+    }
     const r = {
       id,
       key,
@@ -254,10 +309,146 @@ export class BatchReview {
       problems: proof.problems,
       report,
       preparation: prepared,
+      preparerReport,
       original: `/api/batch/media/${id}/original`,
       preview: `/api/batch/media/${id}/preview`,
       humanReviewRequired: true,
+      stamp: r.stamp,
+      sourceObjects:
+        i.data.samples.find(s => s.id === i.sample.id)?.annotation.objects ??
+        [],
+      tasks:
+        (await reviewPlan(this.w)).items.find(x => x.key === i.key)?.tasks ??
+        [],
     };
+  }
+  async progress(actor, session) {
+    const p = await readProgress(this, actor),
+      queued = [],
+      stale = [];
+    for (const s of Object.values(p.inspections)) {
+      try {
+        this.role(s.stage, actor);
+        check(
+          s.expiresAt > Date.now(),
+          "Saved inspection expired; inspect again"
+        );
+        let r = [...this.receipts.values()].find(
+          r =>
+            !r.used &&
+            r.actor === actor.id &&
+            r.session === session &&
+            r.stage === s.stage &&
+            r.key === s.key &&
+            r.stamp === s.stamp &&
+            r.assessment
+        );
+        if (!r) {
+          const i = await this.w.item(s.key);
+          if (s.stage === "approve")
+            check(
+              !(await this.w.contributors(i)).has(actor.id),
+              "Independent reviewer must differ from every contributor"
+            );
+          const report = s.reportId
+            ? await prereview.getReport(this.w, s.reportId)
+            : null;
+          r = {
+            ...s,
+            id: randomUUID(),
+            actor: actor.id,
+            session,
+            report,
+            prepared: await this.preparation(i),
+            loaded: new Set(["original", "preview"]),
+            expires: Math.min(s.expiresAt, Date.now() + 2 * 3600_000),
+          };
+          await this.fresh(r);
+          check(this.receipts.size < 2000, "Too many pending inspections");
+          this.receipts.set(r.id, r);
+        } else await this.fresh(r);
+        queued.push({
+          key: r.key,
+          stage: r.stage,
+          receipt: r.id,
+          version: (await this.w.item(r.key)).version,
+          inspectedAt: r.assessment.at,
+        });
+      } catch (e) {
+        stale.push({ key: s.key, stage: s.stage, reason: e.message });
+      }
+    }
+    let operation = null;
+    if (p.operation) {
+      try {
+        const j = await this.w.json(
+          `${base}/jobs/${p.operation.operationId}.json`
+        );
+        check(j.actor === actor.id, "Invalid operation owner");
+        operation = { ...p.operation, status: j.status, results: j.results };
+      } catch (e) {
+        if (e.code !== "ENOENT") throw e;
+      }
+    }
+    return {
+      revision: p.revision,
+      drafts: p.drafts,
+      queued,
+      stale,
+      operation,
+      humanApproval: false,
+    };
+  }
+  async saveDraft(p, actor, session) {
+    const r = this.receipt(p.receipt, actor, session);
+    this.role(r.stage, actor);
+    check(
+      Number.isSafeInteger(p.expectedRevision) && p.expectedRevision >= 0,
+      "Review progress revision required"
+    );
+    check(
+      p.draft &&
+        typeof p.draft === "object" &&
+        !Array.isArray(p.draft) &&
+        Buffer.byteLength(JSON.stringify(p.draft)) <= 150_000,
+      "Bounded review draft required"
+    );
+    const draft = Object.fromEntries(
+      [
+        "conditions",
+        "privacy",
+        "proposalChoices",
+        "objects",
+        "reason",
+        "deferReason",
+      ]
+        .filter(k => p.draft[k] !== undefined)
+        .map(k => [k, p.draft[k]])
+    );
+    const result = await updateProgress(this, actor, p.expectedRevision, q => {
+      const key = progressKey(r),
+        previous = q.drafts[key];
+      q.drafts[key] = {
+        key: r.key,
+        stage: r.stage,
+        stamp: r.stamp,
+        version: p.version,
+        values: draft,
+        at: new Date().toISOString(),
+        previous:
+          previous?.stamp !== r.stamp && previous
+            ? [
+                { ...previous, previous: undefined },
+                ...(previous.previous ?? []),
+              ].slice(0, 5)
+            : (previous?.previous ?? []),
+      };
+      delete q.inspections[key];
+    });
+    for (const x of this.receipts.values())
+      if (x.actor === actor.id && progressKey(x) === progressKey(r))
+        delete x.assessment;
+    return { saved: true, revision: result.revision, approval: false };
   }
   role(stage, actor) {
     check(
@@ -304,6 +495,15 @@ export class BatchReview {
           await this.w.safe(`.studio/prereview/reports/${r.report.id}.json`)
         )) === r.reportSha256,
         "Analysis evidence changed; inspect again"
+      );
+    if (r.stage === "approve" && r.prepared?.reportId)
+      check(
+        (await fileHash(
+          await this.w.safe(
+            `.studio/prereview/reports/${r.prepared.reportId}.json`
+          )
+        )) === r.prepared.reportSha256,
+        "Preparer analysis evidence changed; inspect again"
       );
     return i;
   }
@@ -352,10 +552,6 @@ export class BatchReview {
     );
     const conditions =
       r.stage === "prepare" ? p.conditions : i.sample.conditions;
-    check(
-      knownSceneConditions(i.sample, conditions),
-      "Scene conditions need evidence; keep this image in exceptions if uncertain"
-    );
     let proposalIds = [],
       rejectedProposalIds = [],
       objects = structuredClone(i.sample.annotation.objects);
@@ -417,6 +613,84 @@ export class BatchReview {
       );
       await assistant.releaseGroups(this.w, [i]);
     }
+    if (r.stage === "prepare" && p.objects !== undefined) {
+      check(
+        Array.isArray(p.objects) && p.objects.length <= 1000,
+        "Bounded reviewed annotations required"
+      );
+      const ids = new Set(),
+        geometry = new Set();
+      for (const o of p.objects) {
+        check(
+          typeof o.id === "string" &&
+            o.id.length > 0 &&
+            !ids.has(o.id) &&
+            validBox(o.box) &&
+            this.w.taxonomy.classes.some(
+              c => c.id === o.classId && c.kind !== "surface"
+            ),
+          "Invalid reviewed class, ID or box"
+        );
+        ids.add(o.id);
+        const boxKey = `${o.classId}:${o.box.join(",")}`;
+        check(
+          !geometry.has(boxKey) &&
+            typeof o.occluded === "boolean" &&
+            typeof o.truncated === "boolean" &&
+            ["yes", "no", "unknown"].includes(o.groundContact) &&
+            o.trackId === null,
+          "Duplicate geometry or missing still-image annotation attributes"
+        );
+        geometry.add(boxKey);
+        validateStairsDirection(o);
+        const prior = i.sample.annotation.objects.find(x => x.id === o.id);
+        check(
+          JSON.stringify(prior?.spatial) === JSON.stringify(o.spatial),
+          "Measured spatial evidence must be edited using existing spatial tools"
+        );
+      }
+      objects = structuredClone(p.objects);
+    }
+    check(
+      knownSceneConditions(
+        { ...i.sample, annotation: { ...i.sample.annotation, objects } },
+        conditions
+      ),
+      "Scene conditions need evidence; keep this image in exceptions if uncertain"
+    );
+    if (p.task === "basira-stairs-v1") {
+      const tasks =
+        (await reviewPlan(this.w)).items.find(x => x.key === i.key)?.tasks ??
+        [];
+      check(
+        !tasks.some(t =>
+          ["excluded_ramp", "photographic_origin"].includes(t.kind)
+        ),
+        "Unresolved source/negative exception: supply missing evidence before quick acceptance"
+      );
+      check(
+        i.sample.media.kind === "image",
+        "Stairs quick review requires still images"
+      );
+      check(
+        objects.some(o => o.classId === 23) ||
+          i.sample.hardNegatives.length > 0,
+        "Reviewed stairs or hard-negative evidence required"
+      );
+      for (const o of objects.filter(o => o.classId === 23))
+        check(
+          o.stairsDirection,
+          "Review every stairs direction; missing is not uncertain"
+        );
+      check(
+        !(await assistant.scan(this.w)).pairs.some(
+          x =>
+            (x.a === i.key || x.b === i.key) &&
+            (x.requiresReview || x.crossSplit)
+        ),
+        "Unresolved similarity must stay outside quick acceptance"
+      );
+    }
     r.assessment = {
       objects,
       conditions,
@@ -429,8 +703,28 @@ export class BatchReview {
       commercialTrainingRights: r.stage === "approve",
       reason: p.reason.trim(),
       at: new Date().toISOString(),
+      task: p.task === "basira-stairs-v1" ? p.task : null,
     };
-    return { queued: true, key: r.key, version: i.version, receipt: r.id };
+    const progress = await updateProgress(this, actor, null, q => {
+      q.inspections[progressKey(r)] = {
+        key: r.key,
+        stage: r.stage,
+        stamp: r.stamp,
+        evidenceHash: r.evidenceHash,
+        reportId: r.report?.id ?? null,
+        reportSha256: r.reportSha256,
+        assessment: r.assessment,
+        expiresAt: Date.now() + 24 * 3600_000,
+      };
+    });
+    return {
+      queued: true,
+      key: r.key,
+      stage: r.stage,
+      version: i.version,
+      receipt: r.id,
+      progressRevision: progress.revision,
+    };
   }
   async jobWrite(path, job) {
     const temporary = `${path}.${randomUUID()}.tmp`,
@@ -442,7 +736,7 @@ export class BatchReview {
     } finally {
       await f.close();
     }
-    await rename(p, await this.w.safe(path));
+    await rename(p, await this.w.safe(path, true));
   }
   async newJob(path, job) {
     const temporary = await this.w.safe(`${path}.${randomUUID()}.tmp`, true);
@@ -472,7 +766,11 @@ export class BatchReview {
     );
     const path = `${base}/jobs/${p.operationId}.json`,
       payloadHash = hash(
-        JSON.stringify({ stage: p.stage, receipts: p.receipts })
+        JSON.stringify({
+          stage: p.stage,
+          receipts: p.receipts,
+          ...(p.task ? { task: p.task } : {}),
+        })
       );
     let existing;
     try {
@@ -518,6 +816,14 @@ export class BatchReview {
     };
     this.running = job;
     try {
+      await updateProgress(this, actor, null, q => {
+        q.operation = {
+          operationId: p.operationId,
+          stage: p.stage,
+          receipts: p.receipts,
+          ...(p.task ? { task: p.task } : {}),
+        };
+      });
       try {
         await this.newJob(path, job);
       } catch (e) {
@@ -548,6 +854,19 @@ export class BatchReview {
           seen.add(r.key);
           const i = await this.fresh(r),
             a = r.assessment;
+          const savedInspection = (await readProgress(this, actor)).inspections[
+            progressKey(r)
+          ];
+          check(
+            savedInspection?.stamp === r.stamp &&
+              hash(JSON.stringify(savedInspection.assessment)) ===
+                hash(JSON.stringify(a)),
+            "Saved inspection choices changed; inspect the current pending review again"
+          );
+          check(
+            (p.task ?? null) === (a.task ?? null),
+            "Inspection task differs from final operation"
+          );
           const batchAudit = {
             verified: true,
             stage: r.stage,
@@ -561,6 +880,7 @@ export class BatchReview {
             assessment: a,
             reportId: r.report?.id ?? null,
             reportSha256: r.reportSha256,
+            task: a.task ?? null,
           };
           let image;
           if (r.stage === "prepare") {
@@ -568,7 +888,7 @@ export class BatchReview {
               ? await prereview.draftPath(this.w, r.report.id)
               : await this.w.mediaPath(i);
             // Original pixels are immutable. Even an unmasked candidate is a separate metadata-free PNG.
-            image = (await sharp(input).png().toBuffer()).toString("base64");
+            image = (await readFile(input)).toString("base64");
           } else {
             check(await this.preparation(i), "Preparer confirmation changed");
             await assistant.releaseGroups(this.w, [i]);
@@ -594,6 +914,14 @@ export class BatchReview {
           );
           r.used = true;
           job.results.push({ key: i.key, ...result, saved: true });
+          try {
+            await updateProgress(this, actor, null, q => {
+              delete q.inspections[progressKey(r)];
+              delete q.drafts[progressKey(r)];
+            });
+          } catch {
+            job.progressCleanupPending = true;
+          }
         } catch (e) {
           job.results.push({
             key: r?.key ?? null,
@@ -604,7 +932,9 @@ export class BatchReview {
         }
         await this.jobWrite(path, job);
       }
-      if (p.stage === "approve") {
+      if (p.stage === "approve" && p.task === "basira-stairs-v1")
+        job.preparation = await prepareApprovedStairs(this, actor);
+      else if (p.stage === "approve") {
         const real = [];
         for (const result of job.results.filter(x => x.saved)) {
           const i = await this.w.item(result.key);
@@ -635,7 +965,7 @@ export class BatchReview {
       this.running = false;
     }
   }
-  async prepareTraining(keys, actor) {
+  async prepareTraining(keys, actor, { task } = {}) {
     this.role("approve", actor);
     check(
       Array.isArray(keys) &&
@@ -671,6 +1001,16 @@ export class BatchReview {
         report = await validateDataset(manifest, this.w.root),
         lock = await this.w.json(`${prior.result.export}/dataset.lock.json`),
         cohort = await finalCohort(this.w.root);
+      if (task === "basira-stairs-v1")
+        check(
+          coverage(
+            manifest.samples,
+            await readJson(
+              new URL("../../../ml/vision/stairs-task.v1.json", import.meta.url)
+            )
+          ).passed,
+          "Existing frozen stairs coverage incomplete; preserve the release and review a new dataset version"
+        );
       check(
         cohort &&
           (await fileHash(await this.w.safe(cohort.evidence.path))) ===
@@ -741,7 +1081,17 @@ export class BatchReview {
       ),
       "Final-test sessions overlap development"
     );
-    const grouped = assignSplits(trainPool);
+    const stairs =
+      task === "basira-stairs-v1"
+        ? stairsSplits(
+            data,
+            cohort,
+            await readJson(
+              new URL("../../../ml/vision/stairs-task.v1.json", import.meta.url)
+            )
+          )
+        : null;
+    const grouped = stairs ?? assignSplits(trainPool);
     const assignments = new Map(
       grouped.samples.map(s => [s.id, s.split === "test" ? "train" : s.split])
     );
@@ -749,7 +1099,7 @@ export class BatchReview {
       ...data,
       splitPolicy: {
         ...grouped.splitPolicy,
-        targetGroupRatios: null,
+        targetGroupRatios: stairs ? stairs.splitPolicy.targetGroupRatios : null,
         finalTestCohortSha256: await fileHash(
           await this.w.safe(`${base}/final-test.json`)
         ),

@@ -128,8 +128,9 @@ export async function validateDataset(data, root, { verifyFiles = true, requireS
     counts, classCounts, warnings, rightsAndPrivacy: 'operator attestations checked; human review still required' };
 }
 
-export function assignSplits(data, seed = 20261014) {
+export function assignSplits(data, seed = 20261014, {validationRatio=.15,testRatio=.15}={}) {
   check(Number.isSafeInteger(seed) && data.samples.every(s => s.split === null), 'seed must be integer; cannot re-split a frozen dataset');
+  check(Number.isFinite(validationRatio)&&validationRatio>0&&Number.isFinite(testRatio)&&testRatio>=0&&validationRatio+testRatio<1,'invalid group ratios');
   // Union groups sharing any video, even if an operator used different site/session names.
   const parents = new Map();
   const find = x => { if (!parents.has(x)) parents.set(x, x); if (parents.get(x) !== x) parents.set(x, find(parents.get(x))); return parents.get(x); };
@@ -141,11 +142,12 @@ export function assignSplits(data, seed = 20261014) {
   for (const s of data.samples) { const k = find(`group:${s.leakageGroup}`); if (!groups.has(k)) groups.set(k, []); groups.get(k).push(s.id); }
   check(groups.size >= 3, 'at least three independent location/session groups required');
   const ordered = [...groups.values()].map(ids => ({ ids, rank: hash(`${seed}:${[...ids].sort().join('|')}`) })).sort((a, b) => a.rank.localeCompare(b.rank));
-  const validationCount = Math.max(1, Math.round(ordered.length * .15));
-  const testCount = Math.max(1, Math.round(ordered.length * .15));
+  const validationCount = Math.max(1, Math.round(ordered.length * validationRatio));
+  const testCount = testRatio===0?0:Math.max(1, Math.round(ordered.length * testRatio));
+  check(validationCount+testCount<ordered.length,'split ratios leave no training groups');
   const assignments = new Map();
   ordered.forEach((g, i) => g.ids.forEach(id => assignments.set(id, i < testCount ? 'test' : i < testCount + validationCount ? 'validation' : 'train')));
-  return { ...data, splitPolicy: { algorithm: 'sha256-group-order-v1', seed, targetGroupRatios: [.7, .15, .15],
+  return { ...data, splitPolicy: { algorithm: 'sha256-group-order-v1', seed, targetGroupRatios: [1-validationRatio-testRatio, validationRatio, testRatio],
     note: 'Grouped by location/session and video SHA. Ratios are group-based, not stratified; review coverage before freezing.' },
   samples: data.samples.map(s => ({ ...s, split: assignments.get(s.id) })) };
 }

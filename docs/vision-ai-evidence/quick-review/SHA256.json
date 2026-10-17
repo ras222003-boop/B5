@@ -1,0 +1,14 @@
+[
+  {
+    "path": "quick-review-mobile-synthetic.png",
+    "sha256": "557d2d8d90cf74f0b5fbcca477359f6345a791a27fd5616c8bc035a394d21f31"
+  },
+  {
+    "path": "quick-review-synthetic.png",
+    "sha256": "78051103f34851adc6b6073852198202b0bce4bfd6bc7d0748090f12fa4a55a3"
+  },
+  {
+    "path": "validation.json",
+    "sha256": "16683361d61ed6b4b5430535bd08fc850457c55e88e4c34f3e074acfe0cc90cb"
+  }
+]

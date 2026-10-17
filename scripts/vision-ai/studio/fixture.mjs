@@ -6,7 +6,7 @@ import { fileHash, readJson, taxonomyPath } from "../common.mjs";
 import { unknownSpatial } from "../spatial.mjs";
 import { passwordHash } from "./server.mjs";
 
-export async function fixture(root, { images = 12 } = {}) {
+export async function fixture(root, { images = 12, classes } = {}) {
   await initStorage(root);
   await mkdir(resolve(root, ".studio"));
   await mkdir(resolve(root, "incoming/demo"), { recursive: true });
@@ -34,7 +34,7 @@ export async function fixture(root, { images = 12 } = {}) {
     "SYNTHETIC ONLY. Test permission, not a real license or human attestation."
   );
   const taxonomy = await readJson(taxonomyPath),
-    classIds = [5, 2, 1, 3, 23, 24];
+    classIds = classes ?? [5, 2, 1, 3, 23, 24];
   const data = {
     schemaVersion: 1,
     id: "synthetic-studio-demo",
