@@ -26,7 +26,8 @@
     "test:vision-batch": "node --test scripts/vision-ai/studio/batch-review.test.mjs",
     "test:vision-batch-browser": "node scripts/vision-ai/studio/batch-review-browser-test.mjs",
     "test:vision-stairs-browser": "node scripts/vision-ai/studio/stairs-browser-test.mjs",
-    "test:vision-quick-browser": "node scripts/vision-ai/studio/quick-review-browser-test.mjs"
+    "test:vision-quick-browser": "node scripts/vision-ai/studio/quick-review-browser-test.mjs",
+    "test:vision-quick-conflict-browser": "node scripts/vision-ai/studio/quick-review-conflict-browser-test.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",

@@ -137,13 +137,21 @@ export function batchReviewUI({
   }
   function remember() {
     if (!detail || busy || $("batch-fields").disabled) return;
-    dirty = true;
     const d = detail,
       values = draftValues();
+    const serialized = JSON.stringify(values);
+    if (d.lastDraftSnapshot === serialized) return;
+    d.lastDraftSnapshot = serialized;
+    dirty = true;
     try {
       localStorage.setItem(
         localKey(d),
-        JSON.stringify({ stamp: d.stamp, values, at: new Date().toISOString() })
+        JSON.stringify({
+          stamp: d.stamp,
+          values,
+          baseRevision: d.progressRevision,
+          at: new Date().toISOString(),
+        })
       );
     } catch {
       $("batch-draft-status").textContent =
@@ -160,35 +168,63 @@ export function batchReviewUI({
       values = draftValues(),
       actor = owner;
     dirty = false;
-    saveChain = saveChain
-      .catch(() => {})
-      .then(async () => {
-        try {
-          const r = await api(
-            "/api/batch/draft",
-            {
-              receipt: d.receipt,
-              version: d.version,
-              expectedRevision: progress.revision,
-              draft: values,
-            },
-            { keepalive: true }
+    const request = saveChain.then(async () => {
+      try {
+        if (d.blockedDraft)
+          throw new Error(
+            "Reopen the image to compare saved and local drafts before replacing progress"
           );
-          if (owner !== actor) return;
-          progress.revision = r.revision;
-          progress.drafts[draftKey(d)] = { stamp: d.stamp, values };
+        const r = await api(
+          "/api/batch/draft",
+          {
+            receipt: d.receipt,
+            version: d.version,
+            expectedRevision: d.progressRevision,
+            draft: values,
+          },
+          { keepalive: true }
+        );
+        if (owner !== actor || detail !== d) return;
+        progress.revision = r.revision;
+        d.progressRevision = r.revision;
+        progress.drafts[draftKey(d)] = { stamp: d.stamp, values };
+        $("batch-draft-status").textContent =
+          "حُفظت مسودة حسابك محليًا؛ ليست تأكيد تجهيز أو اعتمادًا.";
+      } catch (e) {
+        if (owner === actor && detail === d) {
+          dirty = false;
+          d.blockedDraft = true;
+          try {
+            localStorage.setItem(
+              localKey(d),
+              JSON.stringify({
+                stamp: d.stamp,
+                values: detail === d ? draftValues() : values,
+                baseRevision: d.progressRevision,
+                conflict: e.status === 409,
+                at: new Date().toISOString(),
+              })
+            );
+          } catch {}
           $("batch-draft-status").textContent =
-            "حُفظت مسودة حسابك محليًا؛ ليست تأكيد تجهيز أو اعتمادًا.";
-        } catch (e) {
-          if (owner === actor) {
-            dirty = true;
-            $("batch-draft-status").textContent =
-              `المسودة باقية في المتصفح؛ لم تُكتب فوق تقدم آخر: ${e.serverError ?? e.message}`;
-            throw e;
-          }
+            `المسودة باقية في المتصفح؛ لم تُكتب فوق تقدم آخر: ${e.serverError ?? e.message}`;
+          throw e;
         }
-      });
-    return saveChain;
+      }
+    });
+    saveChain = request.catch(() => {});
+    return request;
+  }
+  function restoreValues(v) {
+    detail.deferReason = v.deferReason;
+    for (const [k, value] of Object.entries(v.conditions ?? {}))
+      if ($(`batch-condition-${k}`)) $(`batch-condition-${k}`).value = value;
+    for (const [k, value] of Object.entries(v.privacy ?? {}))
+      $(`batch-privacy-${k}`).value = value;
+    for (const [k, value] of Object.entries(v.proposalChoices ?? {}))
+      if ($(`batch-proposal-${k}`)) $(`batch-proposal-${k}`).value = value;
+    if (quick && v.objects) detail.customObjects = structuredClone(v.objects);
+    $("batch-reason").value = v.reason ?? $("batch-reason").value;
   }
   function objectFields() {
     if (!quick || !detail) return;
@@ -288,6 +324,7 @@ export function batchReviewUI({
         }
   }
   async function advance(delta = 1) {
+    if(busy)return;
     await flushDraft();
     const items = sequence(),
       n = items.findIndex(i => i.key === detail?.key),
@@ -314,6 +351,7 @@ export function batchReviewUI({
       operation = null;
       detail = null;
       progress = { revision: 0, drafts: {} };
+      saveChain = Promise.resolve();
       dirty = false;
       clearTimeout(draftTimer);
       epoch++;
@@ -465,6 +503,7 @@ export function batchReviewUI({
       const d = await api("/api/batch/inspect", { key, stage: stage() });
       if (request !== epoch) return;
       detail = d;
+      progress.revision = d.progressRevision;
       detail.customObjects = structuredClone(d.sample.annotation.objects);
       selectedObject = Math.max(
         0,
@@ -609,24 +648,27 @@ export function batchReviewUI({
       $("batch-diff").innerHTML = quick
         ? `${d.preparerReport ? "<p>نعرض تحليل إصدار المُعدّ المحفوظ للسياق فقط، وليس استدلالًا جديدًا على الإصدار الحالي.</p>" : ""}<p>مناطق خصوصية آلية مرشحة: ${cached?.privacy?.regions?.length ?? "لا تقرير"}. غياب الكشف لا ينفي المخاطر.</p>${d.preparation ? `<details><summary>مقارنة وسوم المصدر بالإصدار الذي جهزه ${esc(d.preparation.actor)}</summary><pre>${esc(JSON.stringify({ source: d.sourceObjects, prepared: d.sample.annotation.objects, preparerPrivacy: d.preparation.assessment.privacy, reportId: d.preparation.reportId }, null, 2))}</pre></details>` : ""}`
         : "";
-      let own = progress.drafts[draftKey(d)];
+      let own = d.savedDraft;
+      $("batch-draft-recovery").hidden = true;
       try {
         const local = JSON.parse(localStorage.getItem(localKey(d)) ?? "null");
-        if (local && (!own?.at || local.at > own.at)) own = local;
+        if (
+          local?.stamp === d.stamp &&
+          own?.stamp === d.stamp &&
+          JSON.stringify(local.values) !== JSON.stringify(own.values) &&
+          (local.conflict || local.baseRevision !== progress.revision)
+        ) {
+          d.localRecovery = local;
+          $("batch-draft-recovery").hidden = false;
+          $("batch-draft-diff").textContent = JSON.stringify(
+            { saved: own.values, local: local.values },
+            null,
+            2
+          );
+        } else if (local && (!own?.at || local.at > own.at)) own = local;
       } catch {}
       if (own?.stamp === d.stamp) {
-        const v = own.values;
-        detail.deferReason = v.deferReason;
-        for (const [k, value] of Object.entries(v.conditions ?? {}))
-          if ($(`batch-condition-${k}`))
-            $(`batch-condition-${k}`).value = value;
-        for (const [k, value] of Object.entries(v.privacy ?? {}))
-          $(`batch-privacy-${k}`).value = value;
-        for (const [k, value] of Object.entries(v.proposalChoices ?? {}))
-          if ($(`batch-proposal-${k}`)) $(`batch-proposal-${k}`).value = value;
-        if (quick && v.objects)
-          detail.customObjects = structuredClone(v.objects);
-        $("batch-reason").value = v.reason ?? $("batch-reason").value;
+        restoreValues(own.values);
         $("batch-draft-status").textContent =
           "استُعيدت مسودتك فقط؛ يجب تأكيد الفحص بنفسك.";
       } else
@@ -661,6 +703,7 @@ export function batchReviewUI({
       $("batch-previous").disabled = list.findIndex(i => i.key === key) <= 0;
       objectFields();
       redraw();
+      d.lastDraftSnapshot = JSON.stringify(d.savedDraft?.values ?? null);
       $("batch-fields").disabled = false;
     } catch (e) {
       if (request === epoch)
@@ -669,6 +712,11 @@ export function batchReviewUI({
   }
   $("batch-attest").onclick = async () => {
     if (busy || !detail) return;
+    if (detail.blockedDraft) {
+      $("batch-detail-status").textContent =
+        "أغلق الصورة وأعد فتحها لمقارنة مسودتك بالمحفوظة قبل التأكيد.";
+      return;
+    }
     try {
       await flushDraft();
     } catch {
@@ -694,6 +742,7 @@ export function batchReviewUI({
       sourcesInspected: $("batch-seen-sources").checked,
       commercialTrainingRights: $("batch-commercial").checked,
       reason: $("batch-reason").value,
+      ...(quick ? { expectedProgressRevision: d.progressRevision } : {}),
       conditions: Object.fromEntries(
         Object.keys(choices).map(k => [k, $(`batch-condition-${k}`).value])
       ),
@@ -727,6 +776,22 @@ export function batchReviewUI({
     } catch (e) {
       $("batch-detail-status").textContent =
         `لم تُضف الصورة؛ اختياراتك باقية: ${e.serverError ?? e.message}`;
+      if (e.status === 409) {
+        d.blockedDraft = true;
+        dirty = false;
+        try {
+          localStorage.setItem(
+            localKey(d),
+            JSON.stringify({
+              stamp: d.stamp,
+              values: draftValues(),
+              baseRevision: d.progressRevision,
+              conflict: true,
+              at: new Date().toISOString(),
+            })
+          );
+        } catch {}
+      }
     } finally {
       busy = false;
       $("batch-fields").disabled = false;
@@ -782,9 +847,13 @@ export function batchReviewUI({
       render();
     }
   };
-  $("batch-close").onclick = () => {
+  $("batch-close").onclick = async () => {
     if (!busy) {
-      flushDraft().catch(() => {});
+      try {
+        await flushDraft();
+      } catch {}
+      dirty = false;
+      detail = null;
       epoch++;
       $("batch-detail").close();
     }
@@ -812,6 +881,16 @@ export function batchReviewUI({
     if (key) openEditor(key);
   };
   $("batch-refresh").onclick = open;
+  $("batch-recover-local").onclick = () => {
+    if (busy||!detail?.localRecovery) return;
+    restoreValues(detail.localRecovery.values);
+    detail.blockedDraft = false;
+    detail.localRecovery = null;
+    $("batch-draft-recovery").hidden = true;
+    objectFields();
+    redraw();
+    remember();
+  };
   $("batch-fast-start").onclick = async () => {
     quick = true;
     await open();

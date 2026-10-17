@@ -48,6 +48,7 @@ async function inspect(b, key, stage, actor, session = "session") {
 }
 const assessment = d => ({
   receipt: d.receipt,
+  expectedProgressRevision: d.progressRevision,
   task: "basira-stairs-v1",
   conditions: d.sample.conditions,
   privacy: { faces: "absent", plates: "absent", personalText: "absent" },
@@ -210,6 +211,26 @@ test("a newer draft in another session invalidates an older in-memory final comm
   );
   assert.equal(result.results[0].saved, false);
   assert.match(result.results[0].error, /Saved inspection/);
+  assert.equal((await w.item(item.key)).version, 0);
+});
+test("quick inspection cannot silently accept a newer draft revision it did not inspect", async t => {
+  const { w, b, item } = await setup(t),
+    a = await inspect(b, item.key, "prepare", editor),
+    c = await inspect(b, item.key, "prepare", editor, "other");
+  await b.saveDraft(
+    {
+      receipt: c.receipt,
+      expectedRevision: c.progressRevision,
+      draft: { reason: "newer parallel draft" },
+    },
+    editor,
+    "other"
+  );
+  await assert.rejects(
+    b.attest(assessment(a), editor, "session"),
+    /Revision conflict/
+  );
+  assert.equal((await b.progress(editor, "check")).queued.length, 0);
   assert.equal((await w.item(item.key)).version, 0);
 });
 test("quick acceptance never infers privacy or stairs direction and never accepts unresolved source exceptions", async t => {

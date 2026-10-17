@@ -934,3 +934,9 @@ summary {
   z-index: 2;
   box-shadow: 0 -3px 10px #0002;
 }
+#batch-draft-diff {
+  max-height: 260px;
+  overflow: auto;
+  direction: ltr;
+  text-align: left;
+}

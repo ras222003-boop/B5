@@ -297,8 +297,11 @@ export class BatchReview {
         : null,
     };
     this.receipts.set(id, r);
+    const savedProgress = await readProgress(this, actor);
     return {
       receipt: id,
+      progressRevision: savedProgress.revision,
+      savedDraft: savedProgress.drafts[`${stage}:${key}`] ?? null,
       key,
       stage,
       version: i.version,
@@ -705,18 +708,34 @@ export class BatchReview {
       at: new Date().toISOString(),
       task: p.task === "basira-stairs-v1" ? p.task : null,
     };
-    const progress = await updateProgress(this, actor, null, q => {
-      q.inspections[progressKey(r)] = {
-        key: r.key,
-        stage: r.stage,
-        stamp: r.stamp,
-        evidenceHash: r.evidenceHash,
-        reportId: r.report?.id ?? null,
-        reportSha256: r.reportSha256,
-        assessment: r.assessment,
-        expiresAt: Date.now() + 24 * 3600_000,
-      };
-    });
+    if (p.task === "basira-stairs-v1")
+      check(
+        Number.isSafeInteger(p.expectedProgressRevision),
+        "Quick inspection progress revision required"
+      );
+    let progress;
+    try {
+      progress = await updateProgress(
+        this,
+        actor,
+        p.task === "basira-stairs-v1" ? p.expectedProgressRevision : null,
+        q => {
+          q.inspections[progressKey(r)] = {
+            key: r.key,
+            stage: r.stage,
+            stamp: r.stamp,
+            evidenceHash: r.evidenceHash,
+            reportId: r.report?.id ?? null,
+            reportSha256: r.reportSha256,
+            assessment: r.assessment,
+            expiresAt: Date.now() + 24 * 3600_000,
+          };
+        }
+      );
+    } catch (e) {
+      delete r.assessment;
+      throw e;
+    }
     return {
       queued: true,
       key: r.key,
