@@ -811,6 +811,35 @@ summary {
 .snapshot label {
   min-width: 200px;
 }
+.quick-object {
+  border: 1px solid #aec8be;
+  border-radius: 10px;
+  padding: 10px;
+  margin: 8px 0;
+}
+.quick-object details label {
+  display: inline-block;
+  max-width: 90px;
+  margin: 5px;
+}
+#batch-fast-nav {
+  position: sticky;
+  top: 0;
+  padding: 10px;
+  background: #edf5f0;
+  z-index: 2;
+}
+#batch-fast-nav[hidden],
+#batch-inline-objects[hidden],
+#batch-fast-privacy[hidden] {
+  display: none;
+}
+#batch-preview {
+  touch-action: none;
+}
+#batch-draft-status {
+  color: #285e4e;
+}
 
 .assistant-tools {
   margin-top: 20px;
@@ -889,4 +918,25 @@ summary {
   height: auto;
   max-height: 420px;
   object-fit: contain;
+}
+#batch-fields.quick-review .batch-comparison canvas {
+  width: min(100%, 390px);
+  display: block;
+  margin-inline: auto;
+}
+#batch-fields.quick-review .panel {
+  padding: 12px;
+  margin-block: 8px;
+}
+#batch-fields.quick-review #batch-attest {
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+  box-shadow: 0 -3px 10px #0002;
+}
+#batch-draft-diff {
+  max-height: 260px;
+  overflow: auto;
+  direction: ltr;
+  text-align: left;
 }

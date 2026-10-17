@@ -9,6 +9,7 @@ import { requireValue as check, fileHash } from "../common.mjs";
 import * as assistant from "./assistant.mjs";
 import * as prereview from "./prereview.mjs";
 import { BatchReview } from "./batch-review.mjs";
+import { prepareApprovedStairs } from "./stairs-readiness.mjs";
 import { modelRuntime, assetMime } from "./model-runtime.mjs";
 import { reviewPlan } from "./review-plan.mjs";
 import {
@@ -224,6 +225,10 @@ export async function createStudio(root, { port = 0 } = {}) {
         json(200, await batchReview.board(session.actor));
         return;
       }
+      if (pathname === "/api/batch/progress" && req.method === "GET") {
+        json(200, await batchReview.progress(session.actor, cookie));
+        return;
+      }
       const batchMedia =
         /^\/api\/batch\/media\/([a-f0-9-]{36})\/(original|preview)$/.exec(
           pathname
@@ -248,7 +253,9 @@ export async function createStudio(root, { port = 0 } = {}) {
       if (pathname.startsWith("/api/batch/") && req.method === "POST") {
         const p = await body();
         let result;
-        if (pathname === "/api/batch/inspect")
+        if (pathname === "/api/batch/draft")
+          result = await batchReview.saveDraft(p, session.actor, cookie);
+        else if (pathname === "/api/batch/inspect")
           result = await batchReview.inspect(
             p.key,
             p.stage,
@@ -260,10 +267,20 @@ export async function createStudio(root, { port = 0 } = {}) {
         else if (pathname === "/api/batch/commit") {
           result = await batchReview.commit(p, session.actor, cookie);
           invalidateCatalog();
-        } else if (pathname === "/api/batch/register-test")
+        } else if (pathname === "/api/batch/register-test") {
           result = await batchReview.registerTest(p, session.actor);
+          if (p.task === "basira-stairs-v1")
+            result.preparation = await prepareApprovedStairs(
+              batchReview,
+              session.actor
+            );
+        } else if (pathname === "/api/batch/stairs-readiness")
+          result = await prepareApprovedStairs(batchReview, session.actor);
         else if (pathname === "/api/batch/prepare-training")
-          result = await batchReview.prepareTraining(p.keys, session.actor);
+          result =
+            p.task === "basira-stairs-v1"
+              ? await prepareApprovedStairs(batchReview, session.actor)
+              : await batchReview.prepareTraining(p.keys, session.actor);
         else throw new Error("Unknown batch action");
         json(200, result);
         return;

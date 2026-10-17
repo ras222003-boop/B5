@@ -337,6 +337,15 @@
               <button id="batch-refresh" class="quiet">تحديث</button>
             </div>
             <p id="batch-counts" role="status"></p>
+            <div class="button-row">
+              <button id="batch-fast-start" class="primary">
+                المراجعة السريعة للسلالم — متابعة
+              </button>
+              <button id="batch-show-all" class="quiet">عرض كل الصور</button>
+            </div>
+            <p id="batch-progress-status" role="status">
+              تُحفظ المسودات والفحوصات لحسابك فقط؛ لا اعتماد عند استعادة التقدم.
+            </p>
             <button id="batch-commit" class="primary" disabled>
               تأكيد تجهيز الدفعة
             </button>
@@ -556,7 +565,9 @@
               ><label
                 >حركة الالتقاط<select id="condition-motion">
                   <option value="unreviewed">غير مراجع</option>
-                  <option value="unknown_stairs_still">غير معروفة — صور الدرج الثابتة فقط؛ لا للحركة أو المسافة</option>
+                  <option value="unknown_stairs_still">
+                    غير معروفة — صور الدرج الثابتة فقط؛ لا للحركة أو المسافة
+                  </option>
                   <option value="static">ثابت</option>
                   <option value="moving">متحرك</option>
                 </select></label
@@ -638,6 +649,23 @@
         <button id="batch-close" class="quiet">إغلاق</button>
       </div>
       <p id="batch-detail-status" role="alert"></p>
+      <nav id="batch-fast-nav" class="review-navigation" hidden>
+        <button id="batch-previous" class="quiet">السابقة</button
+        ><strong id="batch-position"></strong>
+        <button id="batch-next" class="quiet">التالية دون تأكيد</button>
+        <span
+          >Ctrl+Enter: فحص وإضافة · J/K: تنقل · S: تأجيل · 0: تأكيد خلو الخصوصية
+          بعد الفحص</span
+        >
+      </nav>
+      <p id="batch-draft-status" role="status"></p>
+      <details id="batch-draft-recovery" hidden>
+        <summary>توجد مسودتان مختلفتان — قارن قبل الاستبدال</summary>
+        <pre id="batch-draft-diff"></pre>
+        <button id="batch-recover-local" class="quiet">
+          قارنت المسودتين وأريد استعادة مسودتي المحلية للتعديل فقط
+        </button>
+      </details>
       <fieldset id="batch-fields">
         <div class="batch-comparison">
           <figure>
@@ -656,6 +684,11 @@
         <section class="panel">
           <h3>الوسوم والاقتراحات</h3>
           <div id="batch-labels"></div>
+          <div id="batch-inline-objects" hidden></div>
+          <div id="batch-diff"></div>
+          <button id="batch-add-stairs" class="quiet" hidden>
+            إضافة مربع درج للفحص
+          </button>
           <button id="batch-keep-labels" class="quiet">
             فحصت الاقتراحات وأبقي الوسوم الحالية لهذه الصورة</button
           ><button id="batch-edit" class="quiet">
@@ -667,6 +700,14 @@
           <div id="batch-conditions" class="filters"></div>
           <p id="batch-condition-note"></p>
           <div id="batch-privacy" class="filters"></div>
+          <div id="batch-fast-privacy" class="button-row" hidden>
+            <button id="batch-privacy-absent" class="quiet">
+              فحصت الأصل والنسخة: لا وجوه أو لوحات أو نصوص شخصية
+            </button>
+            <button id="batch-privacy-preparer" class="quiet">
+              فحصت مستقلاً وأؤكد نتائج خصوصية المُعدّ المعروضة
+            </button>
+          </div>
         </section>
         <section class="panel">
           <h3>أدلة الحقوق والمصدر</h3>
@@ -702,6 +743,9 @@
         </label>
         <button id="batch-attest" class="primary">
           فحصت هذه الصورة وأدلتها — أضفها لقائمة الدفعة
+        </button>
+        <button id="batch-defer" class="quiet" hidden>
+          تأجيل — تحتاج معلومات أو إصلاح
         </button>
       </fieldset>
     </dialog>

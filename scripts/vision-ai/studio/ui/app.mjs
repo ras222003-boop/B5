@@ -146,13 +146,14 @@ const errorText = text => {
     if (pattern.test(text)) return message;
   return text;
 };
-async function api(path, data) {
+async function api(path, data, options = {}) {
   const r = await fetch(path, {
     headers: data
       ? { "Content-Type": "application/json", "X-Studio-CSRF": csrf }
       : {},
     method: data ? "POST" : "GET",
     body: data ? JSON.stringify(data) : undefined,
+    keepalive: options.keepalive === true,
   });
   const value = await r.json();
   if (!r.ok)

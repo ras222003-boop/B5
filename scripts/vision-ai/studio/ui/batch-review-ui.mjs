@@ -23,6 +23,11 @@ const issues = {
   similarity_unresolved: "تشابه أو فصل مجموعات يحتاج قرارًا",
   preparer_inspection: "تحتاج تأكيد المُعدّ",
   video_requires_frame_review: "تحتاج محرر الفيديو والتتبع",
+  source_provenance:
+    "إثبات أن الأصل صورة حقيقية ناقص — أرفق دليل المصدر قبل القبول",
+  unsupported_ramp: "منحدر خارج أول دفعة — لا تُعد تصنيفه لتمرير الفحص",
+  stairs_direction_pending:
+    "اتجاه الدرج يحتاج اختيارًا بصريًا ودليلًا داخل شاشة المراجعة",
 };
 const choices = {
   lighting: {
@@ -41,8 +46,29 @@ const choices = {
     unreviewed: "غير مؤكدة — تحتاج أدلة التقاط",
     static: "التقاط ثابت",
     moving: "كاميرا متحركة",
-    unknown_stairs_still: "غير معروفة — صور الدرج الثابتة فقط؛ لا للحركة أو المسافة",
+    unknown_stairs_still:
+      "غير معروفة — صور الدرج الثابتة فقط؛ لا للحركة أو المسافة",
   },
+};
+const readinessText = r => {
+  if (!r)
+    return "تبدأ فحوص التغطية والتجميد تلقائيًا بعد الاعتماد الحقيقي. لا يبدأ التدريب.";
+  const code = r.preflight?.status ?? r.status,
+    labels = {
+      WAITING_APPROVED_STAIRS_DATA:
+        "تنتظر صور درج معتمدة الاتجاهات والوسوم والحقوق والخصوصية.",
+      WAITING_INDEPENDENT_TEST_REGISTRATION:
+        "تنتظر اعتماد وتسجيل جلسات الاختبار المستقلة وأدلتها. لا تُستبدل بصور التطوير.",
+      WAITING_LOCAL_PREFLIGHT_CONFIGURATION:
+        "التقسيم مجمد؛ يلزم تهيئة مفسر Python ووصف الأوزان محليًا.",
+      WAITING_PRETRAINED_RIGHTS_REVIEW:
+        "التقسيم مجمد؛ حقوق الأوزان المسبقة لم تُعتمد بعد.",
+      DATA_GATES_BLOCKED: "التغطية أو أدلة البيانات ناقصة؛ بقيت البوابة مغلقة.",
+      DATA_PREFLIGHT_BLOCKED: "لم ينجح الفحص المسبق؛ لا إذن لتشغيل التدريب.",
+      READY_REQUEST_EXPLICIT_TRAINING_PERMISSION:
+        "نجحت بوابات البيانات والأوزان والفحص المسبق. أطلب موافقة صاحب المشروع الصريحة على إعداد التدريب والتكلفة قبل أي تشغيل.",
+    };
+  return `${labels[code] ?? code} ${r.reason ?? ""} لم يبدأ تدريب أو استخدام خدمة مدفوعة.`;
 };
 export function batchReviewUI({
   api,
@@ -57,16 +83,277 @@ export function batchReviewUI({
     busy = false,
     operation = null;
   const queue = new Map();
+  let quick = false,
+    progress = { revision: 0, drafts: {} },
+    dirty = false,
+    draftTimer,
+    saveChain = Promise.resolve(),
+    selectedObject = 0;
+  const draftKey = (d = detail) => `${d.stage}:${d.key}`;
+  const localKey = d => `basira-review-draft-v1:${owner}:${draftKey(d)}`;
+  const filtered = () =>
+    board.items.filter(
+      i =>
+        i.contentKind === $("batch-kind").value &&
+        (!quick || i.stairsCandidate) &&
+        (!$("batch-category").value ||
+          i.category === $("batch-category").value) &&
+        (!$("batch-search").value ||
+          `${i.id} ${i.batch}`
+            .toLowerCase()
+            .includes($("batch-search").value.trim().toLowerCase()))
+    );
+  const sequence = () =>
+    filtered().filter(
+      i =>
+        i.category !== "high_risk" &&
+        (stage() === "approve"
+          ? i.preparedBy && i.independent && i.status !== "approved"
+          : !(
+              i.preparedBy && !i.exceptions.includes("stairs_direction_pending")
+            ))
+    );
+  function draftValues() {
+    return {
+      conditions: Object.fromEntries(
+        Object.keys(choices).map(k => [k, $(`batch-condition-${k}`).value])
+      ),
+      privacy: Object.fromEntries(
+        ["faces", "plates", "personalText"].map(k => [
+          k,
+          $(`batch-privacy-${k}`).value,
+        ])
+      ),
+      proposalChoices: Object.fromEntries(
+        (detail.report?.proposals ?? []).map(p => [
+          p.id,
+          $(`batch-proposal-${p.id}`).value,
+        ])
+      ),
+      objects: quick ? proposalObjects() : undefined,
+      reason: $("batch-reason").value,
+      deferReason: detail.deferReason,
+    };
+  }
+  function remember() {
+    if (!detail || busy || $("batch-fields").disabled) return;
+    const d = detail,
+      values = draftValues();
+    const serialized = JSON.stringify(values);
+    if (d.lastDraftSnapshot === serialized) return;
+    d.lastDraftSnapshot = serialized;
+    dirty = true;
+    try {
+      localStorage.setItem(
+        localKey(d),
+        JSON.stringify({
+          stamp: d.stamp,
+          values,
+          baseRevision: d.progressRevision,
+          at: new Date().toISOString(),
+        })
+      );
+    } catch {
+      $("batch-draft-status").textContent =
+        "تعذر حفظ المسودة في المتصفح؛ أبقِ الصفحة حتى تأكيد الحفظ المحلي.";
+    }
+    queue.delete(draftKey(d));
+    clearTimeout(draftTimer);
+    draftTimer = setTimeout(() => flushDraft().catch(() => {}), 350);
+  }
+  async function flushDraft() {
+    clearTimeout(draftTimer);
+    if (!detail || !dirty) return saveChain;
+    const d = detail,
+      values = draftValues(),
+      actor = owner;
+    dirty = false;
+    const request = saveChain.then(async () => {
+      try {
+        if (d.blockedDraft)
+          throw new Error(
+            "Reopen the image to compare saved and local drafts before replacing progress"
+          );
+        const r = await api(
+          "/api/batch/draft",
+          {
+            receipt: d.receipt,
+            version: d.version,
+            expectedRevision: d.progressRevision,
+            draft: values,
+          },
+          { keepalive: true }
+        );
+        if (owner !== actor || detail !== d) return;
+        progress.revision = r.revision;
+        d.progressRevision = r.revision;
+        progress.drafts[draftKey(d)] = { stamp: d.stamp, values };
+        $("batch-draft-status").textContent =
+          "حُفظت مسودة حسابك محليًا؛ ليست تأكيد تجهيز أو اعتمادًا.";
+      } catch (e) {
+        if (owner === actor && detail === d) {
+          dirty = false;
+          d.blockedDraft = true;
+          try {
+            localStorage.setItem(
+              localKey(d),
+              JSON.stringify({
+                stamp: d.stamp,
+                values: detail === d ? draftValues() : values,
+                baseRevision: d.progressRevision,
+                conflict: e.status === 409,
+                at: new Date().toISOString(),
+              })
+            );
+          } catch {}
+          $("batch-draft-status").textContent =
+            `المسودة باقية في المتصفح؛ لم تُكتب فوق تقدم آخر: ${e.serverError ?? e.message}`;
+          throw e;
+        }
+      }
+    });
+    saveChain = request.catch(() => {});
+    return request;
+  }
+  function restoreValues(v) {
+    detail.deferReason = v.deferReason;
+    for (const [k, value] of Object.entries(v.conditions ?? {}))
+      if ($(`batch-condition-${k}`)) $(`batch-condition-${k}`).value = value;
+    for (const [k, value] of Object.entries(v.privacy ?? {}))
+      $(`batch-privacy-${k}`).value = value;
+    for (const [k, value] of Object.entries(v.proposalChoices ?? {}))
+      if ($(`batch-proposal-${k}`)) $(`batch-proposal-${k}`).value = value;
+    if (quick && v.objects) detail.customObjects = structuredClone(v.objects);
+    $("batch-reason").value = v.reason ?? $("batch-reason").value;
+  }
+  function objectFields() {
+    if (!quick || !detail) return;
+    const objects = detail.customObjects,
+      editable = detail.stage === "prepare";
+    $("batch-inline-objects").innerHTML = objects
+      .map(
+        (o, n) =>
+          `<article class="quick-object"><strong>جسم ${n + 1}: ${esc(className(o.classId))}</strong>${o.classId === 23 ? `<label>اتجاه الدرج<select data-quick-direction="${n}" ${editable ? "" : "disabled"}><option value="">غير مراجع — ليس اتجاهًا غير مؤكد</option>${["stairs_up", "stairs_down", "stairs_present_uncertain_direction"].map(k => `<option value="${k}" ${o.stairsDirection?.label === k ? "selected" : ""}>${k}</option>`).join("")}</select></label><label>دليل الاتجاه أو سبب الالتباس<input data-quick-evidence="${n}" value="${esc(o.stairsDirection?.evidence ?? "")}" ${editable ? "" : "disabled"}/></label>` : ""}<details><summary>تصحيح المربع أو التصنيف — اسحب على الصورة لتعديل المربع المحدد</summary><select data-quick-class="${n}" ${editable ? "" : "disabled"}>${getCatalog()
+            .taxonomy.classes.filter(c => c.kind !== "surface")
+            .map(
+              c =>
+                `<option value="${c.id}" ${o.classId === c.id ? "selected" : ""}>${esc(c.ar)}</option>`
+            )
+            .join(
+              ""
+            )}</select>${o.box.map((v, j) => `<label>${["X", "Y", "W", "H"][j]}<input type="number" min="0" max="1" step="0.001" data-quick-box="${n}:${j}" value="${v}" ${editable ? "" : "disabled"}/></label>`).join("")}<button class="quiet" data-quick-select="${n}" ${editable ? "" : "disabled"}>تحديد هذا المربع للسحب</button></details></article>`
+      )
+      .join("");
+    $("batch-inline-objects")
+      .querySelectorAll(
+        "[data-quick-direction],[data-quick-evidence],[data-quick-class],[data-quick-box]"
+      )
+      .forEach(
+        input =>
+          (input.oninput = () => {
+            const n = +(
+                input.dataset.quickDirection ??
+                input.dataset.quickEvidence ??
+                input.dataset.quickClass ??
+                input.dataset.quickBox?.split(":")[0]
+              ),
+              o = detail.customObjects[n];
+            if (input.dataset.quickBox)
+              o.box[+input.dataset.quickBox.split(":")[1]] = +input.value;
+            else if (input.dataset.quickClass) {
+              o.classId = +input.value;
+              if (o.classId !== 23) delete o.stairsDirection;
+              objectFields();
+            } else
+              o.stairsDirection = {
+                label: document.querySelector(`[data-quick-direction="${n}"]`)
+                  .value,
+                evidence: document.querySelector(`[data-quick-evidence="${n}"]`)
+                  .value,
+              };
+            redraw();
+            remember();
+          })
+      );
+    $("batch-inline-objects")
+      .querySelectorAll("[data-quick-select]")
+      .forEach(
+        b =>
+          (b.onclick = () => {
+            selectedObject = +b.dataset.quickSelect;
+            $("batch-draft-status").textContent =
+              `اسحب على النسخة لتصحيح مربع الجسم ${selectedObject + 1}.`;
+          })
+      );
+    if (editable)
+      for (const [n, o] of objects.entries())
+        if (o.classId === 23) {
+          const panel = document.createElement("div");
+          panel.className = "button-row";
+          for (const [label, text, evidence] of [
+            [
+              "stairs_up",
+              "أرى درجًا صاعدًا",
+              "فحصت الصورة بصريًا: رحلة الدرج ترتفع بالنسبة إلى موضع الكاميرا.",
+            ],
+            [
+              "stairs_down",
+              "أرى درجًا هابطًا",
+              "فحصت الصورة بصريًا: رحلة الدرج تهبط بالنسبة إلى موضع الكاميرا.",
+            ],
+            [
+              "stairs_present_uncertain_direction",
+              "أرى الدرج ولا أستطيع حسم اتجاهه",
+              "فحصت وجود الدرج؛ الأدلة المرئية غير كافية لحسم صعود أو هبوط بالنسبة إلى الكاميرا.",
+            ],
+          ]) {
+            const b = document.createElement("button");
+            b.type = "button";
+            b.className = "quiet";
+            b.textContent = text;
+            b.dataset.visualDirection = `${n}:${label}`;
+            b.onclick = () => {
+              detail.customObjects[n].stairsDirection = { label, evidence };
+              objectFields();
+              redraw();
+              remember();
+            };
+            panel.append(b);
+          }
+          $("batch-inline-objects").children[n].prepend(panel);
+        }
+  }
+  async function advance(delta = 1) {
+    if(busy)return;
+    await flushDraft();
+    const items = sequence(),
+      n = items.findIndex(i => i.key === detail?.key),
+      next = items[n + delta];
+    if (next) await inspect(next.key);
+    else {
+      $("batch-detail").close();
+      $("batch-result").textContent =
+        "انتهى المسار الحالي. احفظ الصور المفحوصة بزر الدفعة؛ لا تُقبل الاستثناءات تلقائيًا.";
+    }
+  }
   let owner = null;
   const stage = () => $("batch-stage").value;
   const className = id =>
     getCatalog()?.taxonomy.classes.find(c => c.id === id)?.ar ?? id;
+  const deferred = i =>
+    progress.drafts[`${stage()}:${i.key}`]?.stamp === i.stamp
+      ? (progress.drafts[`${stage()}:${i.key}`]?.values.deferReason ?? "")
+      : "";
   function resetIdentity() {
     if (owner !== getActor()?.id) {
       owner = getActor()?.id;
       queue.clear();
       operation = null;
       detail = null;
+      progress = { revision: 0, drafts: {} };
+      saveChain = Promise.resolve();
+      dirty = false;
+      clearTimeout(draftTimer);
       epoch++;
       $("batch-detail").close();
     }
@@ -79,6 +366,7 @@ export function batchReviewUI({
     const items = board.items.filter(
       i =>
         i.contentKind === kind &&
+        (!quick || i.stairsCandidate) &&
         (!category || i.category === category) &&
         (!search || `${i.id} ${i.batch}`.toLowerCase().includes(search))
     );
@@ -121,10 +409,10 @@ export function batchReviewUI({
       .forEach(b => (b.onclick = () => inspect(b.dataset.batchInspect)));
     $("batch-exceptions").innerHTML =
       items
-        .filter(i => i.exceptions.length)
+        .filter(i => i.exceptions.length || deferred(i))
         .map(
           i =>
-            `<p><strong>${esc(i.id)}</strong> — ${esc(i.exceptions.map(x => issues[x] ?? x).join("، "))}</p>`
+            `<p><strong>${esc(i.id)}</strong> — ${esc(i.exceptions.map(x => issues[x] ?? x).join("، "))} ${esc(deferred(i))}</p>`
         )
         .join("") ||
       "<p>لا توجد استثناءات في العرض الحالي. يلزم فحص كل صورة فعليًا قبل أي قرار.</p>";
@@ -143,6 +431,14 @@ export function batchReviewUI({
     ].every(x => a.roles.includes(x));
     try {
       board = await api("/api/batch/board");
+      progress = await api("/api/batch/progress");
+      queue.clear();
+      for (const r of progress.queued) queue.set(`${r.stage}:${r.key}`, r);
+      operation =
+        progress.operation?.status !== "completed" ? progress.operation : null;
+      $("batch-progress-status").textContent =
+        `فحوص محفوظة لحسابك: ${progress.queued.length} · تحتاج إعادة فحص: ${progress.stale.length}. ${progress.stale.map(r => r.reason).join(" · ")} لا اعتماد تلقائي عند الاستعادة.`;
+      $("batch-training-result").textContent = readinessText(board.readiness);
       render();
     } catch (e) {
       $("batch-result").textContent =
@@ -173,6 +469,8 @@ export function batchReviewUI({
     }
   }
   function proposalObjects() {
+    if (quick && detail.customObjects)
+      return structuredClone(detail.customObjects);
     const objects = structuredClone(detail.sample.annotation.objects);
     for (const x of detail.report?.proposals ?? [])
       if ($(`batch-proposal-${x.id}`).value === "accept") {
@@ -190,14 +488,27 @@ export function batchReviewUI({
   }
   async function inspect(key) {
     if (busy) return;
+    try {
+      await flushDraft();
+    } catch (e) {
+      $("batch-detail-status").textContent = e.serverError ?? e.message;
+      return;
+    }
+    dirty = false;
     const request = ++epoch;
     $("batch-detail-status").textContent = "جارٍ تحميل النسخة والأدلة…";
     $("batch-fields").disabled = true;
-    $("batch-detail").showModal();
+    if (!$("batch-detail").open) $("batch-detail").showModal();
     try {
       const d = await api("/api/batch/inspect", { key, stage: stage() });
       if (request !== epoch) return;
       detail = d;
+      progress.revision = d.progressRevision;
+      detail.customObjects = structuredClone(d.sample.annotation.objects);
+      selectedObject = Math.max(
+        0,
+        detail.customObjects.findIndex(o => o.classId === 23)
+      );
       $("batch-title").textContent =
         `${d.id} · إصدار ${d.version} · ${d.stage === "prepare" ? "فحص المُعدّ" : "فحص مستقل"}`;
       const [original, preview] = await Promise.all([
@@ -211,8 +522,14 @@ export function batchReviewUI({
       const proposals = d.report?.proposals ?? [];
       $("batch-labels").innerHTML =
         `<p>${d.sample.annotation.objects.length} أجسام أصلية — ${esc(d.sample.annotation.objects.map(o => className(o.classId)).join("، "))}</p>` +
-          d.sample.annotation.objects.filter(o => o.classId === 23).map(o => `<p>اتجاه الدرج: ${esc(o.stairsDirection?.label ?? 'لم يُراجع')} · الدليل: ${esc(o.stairsDirection?.evidence ?? 'مطلوب قبل تدريب الاتجاه')} · موضع داخل الصورة فقط، بلا قياس أمتار.</p>`).join('') +
-          `<p>${esc((d.report?.issues ?? []).map(x => `${x.type}: ${x.action ?? ""}`).join(" · "))}</p>` +
+        d.sample.annotation.objects
+          .filter(o => o.classId === 23)
+          .map(
+            o =>
+              `<p>اتجاه الدرج: ${esc(o.stairsDirection?.label ?? "لم يُراجع")} · الدليل: ${esc(o.stairsDirection?.evidence ?? "مطلوب قبل تدريب الاتجاه")} · موضع داخل الصورة فقط، بلا قياس أمتار.</p>`
+          )
+          .join("") +
+        `<p>${esc((d.report?.issues ?? []).map(x => `${x.type}: ${x.action ?? ""}`).join(" · "))}</p>` +
         proposals
           .map(
             x =>
@@ -221,7 +538,45 @@ export function batchReviewUI({
           .join("");
       $("batch-labels")
         .querySelectorAll("select")
-        .forEach(s => (s.onchange = redraw));
+        .forEach(
+          s =>
+            (s.onchange = () => {
+              if (quick) {
+                const x = proposals.find(
+                  x => `batch-proposal-${x.id}` === s.id
+                );
+                if (x) {
+                  const old = d.sample.annotation.objects.find(
+                      o => o.id === x.objectId
+                    ),
+                    id = x.objectId ?? `proposal-${x.id}`,
+                    at = detail.customObjects.findIndex(o => o.id === id);
+                  if (s.value === "accept") {
+                    const o = {
+                      ...(at >= 0
+                        ? detail.customObjects[at]
+                        : {
+                            id,
+                            trackId: null,
+                            occluded: false,
+                            truncated: false,
+                            groundContact: "unknown",
+                          }),
+                      box: x.box,
+                      classId: x.classId,
+                    };
+                    if (at >= 0) detail.customObjects[at] = o;
+                    else detail.customObjects.push(o);
+                  } else if (old && at >= 0)
+                    detail.customObjects[at] = structuredClone(old);
+                  else if (!old && at >= 0) detail.customObjects.splice(at, 1);
+                }
+                objectFields();
+              }
+              redraw();
+              remember();
+            })
+        );
       $("batch-keep-labels").hidden =
         d.stage !== "prepare" || !proposals.length;
       $("batch-conditions").innerHTML = Object.entries(choices)
@@ -252,7 +607,7 @@ export function batchReviewUI({
       $("batch-evidence").innerHTML = d.sources
         .map(
           s =>
-            `<details open><summary>${esc(s.id)} · ${esc(s.license)}</summary><p>${esc(s.origin)}</p><pre>${esc(d.evidence.find(e => e.sourceId === s.id)?.text ?? "الدليل غير متاح")}</pre><small>SHA-256 ${esc(d.evidence.find(e => e.sourceId === s.id)?.sha256 ?? "غير متاح")}</small></details>`
+            `<article><strong>${esc(s.id)} · ${esc(s.license)}</strong><p>${esc(s.origin)}</p><small>SHA-256 ${esc(d.evidence.find(e => e.sourceId === s.id)?.sha256 ?? "غير متاح")} — البصمة تثبت هوية الملف ولا تثبت الإذن التجاري.</small><details ${quick ? "" : "open"}><summary>افتح سجل المصدر والترخيص الكامل للتحقق</summary><pre>${esc(d.evidence.find(e => e.sourceId === s.id)?.text ?? "الدليل غير متاح")}</pre></details></article>`
         )
         .join("");
       for (const id of [
@@ -270,6 +625,85 @@ export function batchReviewUI({
       $("batch-detail-status").textContent = d.problems.length
         ? d.problems.map(x => issues[x] ?? x).join("، ")
         : "الفحص الآلي اقتراح فقط. أكمل فحص هذه الصورة ثم أضفها للقائمة.";
+      if (quick) {
+        const tasks = d.tasks
+            .filter(
+              t =>
+                ![
+                  "actual_preparer",
+                  "source_inspection",
+                  "boxes_exhaustive",
+                  "privacy_actual_inspection",
+                  "capture_motion",
+                ].includes(t.kind)
+            )
+            .map(t => t.label)
+            .join(" · "),
+          before = JSON.stringify(d.sourceObjects),
+          after = JSON.stringify(d.sample.annotation.objects);
+        $("batch-detail-status").textContent +=
+          ` ${tasks} ${d.preparation ? `المُعدّ: ${d.preparation.actor} · ${before === after ? "لا اختلاف هندسي مسجل عن المصدر" : "توجد تغييرات عن وسوم المصدر؛ افحص المربعات والاتجاهات"}` : ""} ${!d.report ? "لا تحليل آلي حالي؛ لا تُستنتج اتجاهات أو خصوصية من غيابه." : ""}`;
+      }
+      const cached = d.report ?? d.preparerReport;
+      $("batch-diff").innerHTML = quick
+        ? `${d.preparerReport ? "<p>نعرض تحليل إصدار المُعدّ المحفوظ للسياق فقط، وليس استدلالًا جديدًا على الإصدار الحالي.</p>" : ""}<p>مناطق خصوصية آلية مرشحة: ${cached?.privacy?.regions?.length ?? "لا تقرير"}. غياب الكشف لا ينفي المخاطر.</p>${d.preparation ? `<details><summary>مقارنة وسوم المصدر بالإصدار الذي جهزه ${esc(d.preparation.actor)}</summary><pre>${esc(JSON.stringify({ source: d.sourceObjects, prepared: d.sample.annotation.objects, preparerPrivacy: d.preparation.assessment.privacy, reportId: d.preparation.reportId }, null, 2))}</pre></details>` : ""}`
+        : "";
+      let own = d.savedDraft;
+      $("batch-draft-recovery").hidden = true;
+      try {
+        const local = JSON.parse(localStorage.getItem(localKey(d)) ?? "null");
+        if (
+          local?.stamp === d.stamp &&
+          own?.stamp === d.stamp &&
+          JSON.stringify(local.values) !== JSON.stringify(own.values) &&
+          (local.conflict || local.baseRevision !== progress.revision)
+        ) {
+          d.localRecovery = local;
+          $("batch-draft-recovery").hidden = false;
+          $("batch-draft-diff").textContent = JSON.stringify(
+            { saved: own.values, local: local.values },
+            null,
+            2
+          );
+        } else if (local && (!own?.at || local.at > own.at)) own = local;
+      } catch {}
+      if (own?.stamp === d.stamp) {
+        restoreValues(own.values);
+        $("batch-draft-status").textContent =
+          "استُعيدت مسودتك فقط؛ يجب تأكيد الفحص بنفسك.";
+      } else
+        $("batch-draft-status").textContent = own
+          ? "مسودة إصدار سابق محفوظة؛ لم تطبق على الإصدار الجديد. افتح المحرر للتسوية أو افحص الإصدار الحالي."
+          : "";
+      $("batch-fast-nav").hidden = !quick;
+      $("batch-fields").classList.toggle("quick-review", quick);
+      $("batch-inline-objects").hidden = !quick;
+      $("batch-fast-privacy").hidden = !quick;
+      $("batch-add-stairs").hidden = !quick || d.stage !== "prepare";
+      $("batch-defer").hidden = !quick;
+      for (const id of [
+        "batch-seen-labels",
+        "batch-seen-privacy",
+        "batch-seen-sources",
+        "batch-commercial",
+      ])
+        $(id).closest("label").hidden =
+          quick || (id === "batch-commercial" && d.stage !== "approve");
+      $("batch-quick-check").hidden = quick;
+      $("batch-privacy-preparer").hidden =
+        d.stage !== "approve" || !d.preparation;
+      $("batch-attest").textContent = quick
+        ? d.stage === "prepare"
+          ? "فحصت الصورة والوسوم والخصوصية وأدلة المصدر — تأكيد تجهيز وإضافة"
+          : "راجعت مستقلاً الصورة والحقوق التجارية والخصوصية والوسوم — إضافة للاعتماد النهائي"
+        : "فحصت هذه الصورة وأدلتها — أضفها لقائمة الدفعة";
+      const list = sequence();
+      $("batch-position").textContent =
+        `${list.findIndex(i => i.key === key) + 1} / ${list.length}`;
+      $("batch-previous").disabled = list.findIndex(i => i.key === key) <= 0;
+      objectFields();
+      redraw();
+      d.lastDraftSnapshot = JSON.stringify(d.savedDraft?.values ?? null);
       $("batch-fields").disabled = false;
     } catch (e) {
       if (request === epoch)
@@ -278,6 +712,25 @@ export function batchReviewUI({
   }
   $("batch-attest").onclick = async () => {
     if (busy || !detail) return;
+    if (detail.blockedDraft) {
+      $("batch-detail-status").textContent =
+        "أغلق الصورة وأعد فتحها لمقارنة مسودتك بالمحفوظة قبل التأكيد.";
+      return;
+    }
+    try {
+      await flushDraft();
+    } catch {
+      return;
+    }
+    if (quick) {
+      for (const k of [
+        "batch-seen-labels",
+        "batch-seen-privacy",
+        "batch-seen-sources",
+      ])
+        $(k).checked = true;
+      $("batch-commercial").checked = detail.stage === "approve";
+    }
     busy = true;
     $("batch-fields").disabled = true;
     const d = detail,
@@ -289,6 +742,7 @@ export function batchReviewUI({
       sourcesInspected: $("batch-seen-sources").checked,
       commercialTrainingRights: $("batch-commercial").checked,
       reason: $("batch-reason").value,
+      ...(quick ? { expectedProgressRevision: d.progressRevision } : {}),
       conditions: Object.fromEntries(
         Object.keys(choices).map(k => [k, $(`batch-condition-${k}`).value])
       ),
@@ -304,21 +758,46 @@ export function batchReviewUI({
       rejectedProposalIds: proposals
         .filter(x => $(`batch-proposal-${x.id}`).value === "reject")
         .map(x => x.id),
+      ...(quick
+        ? { objects: proposalObjects(), task: "basira-stairs-v1" }
+        : {}),
     };
     try {
       const r = await api("/api/batch/attest", payload);
+      progress.revision = r.progressRevision;
+      dirty = false;
+      try {
+        localStorage.removeItem(localKey(d));
+      } catch {}
       queue.set(`${d.stage}:${d.key}`, r);
       operation = null;
-      $("batch-detail").close();
+      if (!quick) $("batch-detail").close();
       render();
     } catch (e) {
       $("batch-detail-status").textContent =
         `لم تُضف الصورة؛ اختياراتك باقية: ${e.serverError ?? e.message}`;
+      if (e.status === 409) {
+        d.blockedDraft = true;
+        dirty = false;
+        try {
+          localStorage.setItem(
+            localKey(d),
+            JSON.stringify({
+              stamp: d.stamp,
+              values: draftValues(),
+              baseRevision: d.progressRevision,
+              conflict: true,
+              at: new Date().toISOString(),
+            })
+          );
+        } catch {}
+      }
     } finally {
       busy = false;
       $("batch-fields").disabled = false;
       render();
     }
+    if (quick && queue.has(`${d.stage}:${d.key}`)) await advance();
   };
   $("batch-commit").onclick = async () => {
     if (busy) return;
@@ -328,7 +807,7 @@ export function batchReviewUI({
       )
     );
     const selected = [...queue.entries()].filter(
-      ([k, r]) => k.startsWith(`${stage()}:`) && visible.has(r.key)
+      ([k, r]) => k.startsWith(`${stage()}:`) && (quick || visible.has(r.key))
     );
     if (!selected.length) return;
     busy = true;
@@ -338,6 +817,7 @@ export function batchReviewUI({
       operationId: crypto.randomUUID(),
       stage: stage(),
       receipts: selected.map(([, r]) => r.receipt),
+      ...(quick ? { task: "basira-stairs-v1" } : {}),
     };
     try {
       const result = await api("/api/batch/commit", operation);
@@ -355,9 +835,7 @@ export function batchReviewUI({
           .filter(x => !x.saved)
           .map(x => `${x.key}: ${x.error}`)
           .join(" · ") +
-        (result.preparation
-          ? ` · تجهيز التدريب: ${result.preparation.status}`
-          : "");
+        (result.preparation ? ` · ${readinessText(result.preparation)}` : "");
       operation = null;
       await refresh();
       await open();
@@ -369,8 +847,13 @@ export function batchReviewUI({
       render();
     }
   };
-  $("batch-close").onclick = () => {
+  $("batch-close").onclick = async () => {
     if (!busy) {
+      try {
+        await flushDraft();
+      } catch {}
+      dirty = false;
+      detail = null;
       epoch++;
       $("batch-detail").close();
     }
@@ -383,15 +866,153 @@ export function batchReviewUI({
     $("batch-labels")
       .querySelectorAll("select")
       .forEach(s => (s.value = "reject"));
+    if (quick) {
+      detail.customObjects = structuredClone(detail.sample.annotation.objects);
+      objectFields();
+    }
     redraw();
+    remember();
   };
   $("batch-edit").onclick = () => {
+    flushDraft().catch(() => {});
     const key = detail?.key;
     epoch++;
     $("batch-detail").close();
     if (key) openEditor(key);
   };
   $("batch-refresh").onclick = open;
+  $("batch-recover-local").onclick = () => {
+    if (busy||!detail?.localRecovery) return;
+    restoreValues(detail.localRecovery.values);
+    detail.blockedDraft = false;
+    detail.localRecovery = null;
+    $("batch-draft-recovery").hidden = true;
+    objectFields();
+    redraw();
+    remember();
+  };
+  $("batch-fast-start").onclick = async () => {
+    quick = true;
+    await open();
+    const items = sequence(),
+      next = items.find(
+        i =>
+          !queue.has(`${stage()}:${i.key}`) &&
+          i.category !== "high_risk" &&
+          !(
+            progress.drafts[`${stage()}:${i.key}`]?.stamp === i.stamp &&
+            progress.drafts[`${stage()}:${i.key}`]?.values.deferReason
+          ) &&
+          (stage() !== "approve" || (i.status !== "approved" && i.independent))
+      );
+    if (next) await inspect(next.key);
+    else
+      $("batch-result").textContent =
+        "لا صور غير مفحوصة في العرض الحالي. راجع القائمة أو احفظ الدفعة المفحوصة.";
+  };
+  $("batch-show-all").onclick = () => {
+    quick = false;
+    render();
+  };
+  $("batch-next").onclick = () =>
+    advance().catch(e => ($("batch-detail-status").textContent = e.message));
+  $("batch-previous").onclick = () =>
+    advance(-1).catch(e => ($("batch-detail-status").textContent = e.message));
+  $("batch-defer").onclick = async () => {
+    try {
+      detail.deferReason =
+        "أجلت هذه الصورة لاستكمال الأدلة أو التصحيحات المعروضة؛ لم أعتمدها.";
+      remember();
+      await flushDraft();
+      await advance();
+    } catch (e) {
+      $("batch-detail-status").textContent = e.serverError ?? e.message;
+    }
+  };
+  $("batch-privacy-absent").onclick = () => {
+    for (const k of ["faces", "plates", "personalText"])
+      $(`batch-privacy-${k}`).value = "absent";
+    remember();
+  };
+  $("batch-privacy-preparer").onclick = () => {
+    for (const [k, v] of Object.entries(detail.preparation.assessment.privacy))
+      $(`batch-privacy-${k}`).value = v;
+    remember();
+  };
+  $("batch-add-stairs").onclick = () => {
+    detail.customObjects.push({
+      id: crypto.randomUUID(),
+      classId: 23,
+      box: [0.1, 0.1, 0.8, 0.8],
+      trackId: null,
+      occluded: false,
+      truncated: false,
+      groundContact: "unknown",
+    });
+    selectedObject = detail.customObjects.length - 1;
+    objectFields();
+    redraw();
+    remember();
+  };
+  $("batch-fields").addEventListener("input", remember);
+  $("batch-fields").addEventListener("change", remember);
+  let drag = null;
+  const point = e => {
+    const r = $("batch-preview").getBoundingClientRect();
+    return [
+      Math.min(1, Math.max(0, (e.clientX - r.left) / r.width)),
+      Math.min(1, Math.max(0, (e.clientY - r.top) / r.height)),
+    ];
+  };
+  $("batch-preview").onpointerdown = e => {
+    if (quick && detail?.stage === "prepare" && !busy) {
+      drag = point(e);
+      e.target.setPointerCapture(e.pointerId);
+    }
+  };
+  $("batch-preview").onpointerup = e => {
+    if (!drag) return;
+    const end = point(e),
+      box = [
+        Math.min(drag[0], end[0]),
+        Math.min(drag[1], end[1]),
+        Math.abs(drag[0] - end[0]),
+        Math.abs(drag[1] - end[1]),
+      ];
+    drag = null;
+    if (
+      box[2] > 0.002 &&
+      box[3] > 0.002 &&
+      detail.customObjects[selectedObject]
+    ) {
+      detail.customObjects[selectedObject].box = box;
+      objectFields();
+      redraw();
+      remember();
+    }
+  };
+  document.addEventListener("keydown", e => {
+    if (!quick || !$("batch-detail").open || busy) return;
+    const typing =
+      /INPUT|TEXTAREA|SELECT/.test(e.target.tagName) ||
+      e.target.isContentEditable;
+    if (e.ctrlKey && e.key === "Enter") {
+      e.preventDefault();
+      $("batch-attest").click();
+    } else if (!typing) {
+      const action = {
+        j: "batch-next",
+        k: "batch-previous",
+        s: "batch-defer",
+        0: "batch-privacy-absent",
+      }[e.key.toLowerCase()];
+      if (action) {
+        e.preventDefault();
+        $(action).click();
+      }
+    }
+  });
+  window.addEventListener("pagehide", () => flushDraft().catch(() => {}));
   $("batch-quick-check").onclick = () => {
     // Explicit assertion for this one open image; never invoked by navigation or bulk commit.
     for (const id of [
@@ -426,6 +1047,7 @@ export function batchReviewUI({
         reason: $("batch-test-reason").value,
         newSessionsInspected: $("batch-test-inspected").checked,
         neverUsedForTuning: $("batch-test-inspected").checked,
+        ...(quick ? { task: "basira-stairs-v1" } : {}),
       });
       $("batch-training-result").textContent =
         `سُجلت ${r.registered} عينات اختبار محمية. لم يبدأ التدريب.`;
@@ -443,8 +1065,11 @@ export function batchReviewUI({
     try {
       const r = await api("/api/batch/prepare-training", {
         keys: trainingKeys(),
+        ...(quick ? { task: "basira-stairs-v1" } : {}),
       });
-      $("batch-training-result").textContent = JSON.stringify(r, null, 2);
+      $("batch-training-result").textContent = quick
+        ? readinessText(r)
+        : JSON.stringify(r, null, 2);
     } catch (e) {
       $("batch-training-result").textContent = e.serverError ?? e.message;
     } finally {
@@ -467,6 +1092,6 @@ export function batchReviewUI({
   return {
     open,
     reset: resetIdentity,
-    hasPending: () => queue.size > 0 || busy,
+    hasPending: () => dirty || busy,
   };
 }
