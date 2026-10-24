@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>مختبر كاميرا السلالم</title><link rel="stylesheet" href="/styles.css"></head>
+<body><main>
+<header><p class="eyebrow">بصيرة · تجربة محلية معزولة</p><h1>مختبر كاميرا السلالم</h1><p>تشغيل النموذج البحثي داخل المتصفح. تبقى صور الكاميرا والملفات على الجهاز.</p></header>
+<aside class="notice"><strong>للاختبار البحثي فقط</strong><p>الأداء على الكاميرا الحقيقية وسلامة الاستخدام الملاحي غير مثبتين. لا يصدر المختبر صوتًا أو توجيهًا ملاحيًا، ولا يغيّر محرك بصيرة الأصلي.</p></aside>
+<section class="panel" aria-labelledby="modelHeading"><h2 id="modelHeading">النموذج</h2><p id="modelStatus" role="status">جارٍ تحميل النموذج المحلي…</p><p id="modelDetails"></p>
+<form id="accessForm" hidden><label for="accessToken">رمز الاتصال المحلي المصرح به</label><div class="row"><input id="accessToken" type="password" autocomplete="off" minlength="32"><button type="submit">فتح المختبر</button></div><p>الرمز مطلوب عند الاتصال الآمن عبر الشبكة المحلية. لا يُحفظ في المتصفح.</p></form>
+<p id="confidenceNote">الثقة غير معايرة؛ لا تعني احتمالًا مثبتًا للصحة.</p></section>
+<section class="panel" aria-labelledby="sourceHeading"><h2 id="sourceHeading">مصدر التجربة</h2>
+<label class="consent"><input id="rightsConsent" type="checkbox"> أؤكد أن استخدام هذه الوسائط مصرح به، وأن مراجعات الحقوق والخصوصية المطلوبة للبيانات الحقيقية مستوفاة.</label>
+<div class="row controls"><button id="cameraButton" disabled>عرض الكاميرا</button><label class="fileButton">اختيار صورة أو فيديو<input id="fileInput" type="file" accept="image/*,video/*" disabled></label><button id="pauseButton" disabled>إيقاف الفيديو مؤقتًا</button><button id="stopButton" disabled>إيقاف التجربة</button></div>
+<p id="sessionStatus" role="status">اختر مصدرًا بعد تحميل النموذج وتأكيد صلاحية الاستخدام.</p>
+<img id="sourceImage" alt="" hidden>
+<div class="viewport"><video id="sourceVideo" muted playsinline aria-hidden="true"></video><canvas id="displayCanvas" width="640" height="480" aria-label="معاينة الصورة ومربع الكشف"></canvas><p id="emptyPreview">ستظهر المعاينة هنا</p></div>
+<p id="lastResult" class="result">لم يُجر استدلال بعد.</p></section>
+<section class="panel" aria-labelledby="metricsHeading"><div class="row spread"><h2 id="metricsHeading">قياسات الجلسة</h2><button id="exportButton" disabled>حفظ النتائج محليًا</button></div>
+<dl class="metrics"><div><dt>إطارات معالجة</dt><dd id="processed">0</dd></div><div><dt>زمن الاستدلال الأخير</dt><dd id="latency">—</dd></div><div><dt>إطارات تخطيت لانشغال النموذج</dt><dd id="skipped">0</dd></div><div><dt>إطارات فاتت في المتصفح</dt><dd id="dropped">0</dd></div><div><dt>أخطاء</dt><dd id="errors">0</dd></div></dl>
+<p>الزمن يقيس تجهيز الصورة وتشغيل ONNX في المتصفح. الإطارات المتخطاة لا تُخزن ولا يعاد إرسالها. ملف النتائج يحتوي على القياسات والتنبؤات، دون صور أو فيديو.</p><ol id="eventLog" aria-label="سجل العمليات"></ol></section>
+</main><script type="module" src="/app.mjs"></script></body></html>
