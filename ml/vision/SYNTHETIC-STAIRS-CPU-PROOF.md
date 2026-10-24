@@ -55,8 +55,11 @@ but every negative was a false alert. Direction was correct on only **3 of 14**
 positive images (0.214): all 11 descending images were called ascending. Only
 three of 17 test images had both the right class and IoU at least 0.5. These
 numbers are a diagnosis of a weak tiny model on a tiny stylized cohort, not a
-claim of accuracy. No real-camera evaluation or independent mobility test has
-been performed.
+claim of accuracy. The test scenes are disjoint from the training scenes, but
+the same rendered images were evaluated in an earlier technical attempt; this
+is not an untouched final test across iterations. No model tuning used those
+test scores. No real-camera evaluation or independent mobility test has been
+performed.
 
 ## Boundaries and next iteration
 
