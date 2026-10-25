@@ -9,7 +9,8 @@ const origin = process.argv[2] ?? "http://127.0.0.1:4350",
   root = resolve(
     process.argv[3] ?? "../.vision-test-fixtures/object-quality-002"
   ),
-  stage = process.argv[4] ?? "validation";
+  stage = process.argv[4] ?? "validation",
+  fineTune = process.argv[5] === "finetune";
 const digest = x => createHash("sha256").update(x).digest("hex"),
   json = async p => JSON.parse(await readFile(p, "utf8"));
 const manifest = await json(resolve(root, "manifest.json")),
@@ -35,16 +36,22 @@ const rows =
       : manifest.samples.filter(r => r.split === stage),
   imageRoot = stage === "legacy" ? legacy : root;
 if (!rows.length) throw new Error("Unknown/empty stage");
-const configs = [
-  { id: "lite0-cap12", model: "lite0", cap: 12 },
-  { id: "lite0", model: "lite0" },
-  { id: "lite2", model: "lite2" },
-  { id: "ssd", model: "ssd" },
-  { id: "yolox-nano", model: "yolox-nano" },
-  { id: "yolox-tiny", model: "yolox-tiny" },
-  { id: "lite0-tiles", model: "lite0", tiles: true },
-  { id: "lite2-tiles", model: "lite2", tiles: true },
-];
+const configs = fineTune
+  ? [
+      { id: "lite0", model: "lite0" },
+      { id: "yolox-tiny", model: "yolox-tiny" },
+      { id: "objects-basira-v1", model: "yolox-tiny" },
+    ]
+  : [
+      { id: "lite0-cap12", model: "lite0", cap: 12 },
+      { id: "lite0", model: "lite0" },
+      { id: "lite2", model: "lite2" },
+      { id: "ssd", model: "ssd" },
+      { id: "yolox-nano", model: "yolox-nano" },
+      { id: "yolox-tiny", model: "yolox-tiny" },
+      { id: "lite0-tiles", model: "lite0", tiles: true },
+      { id: "lite2-tiles", model: "lite2", tiles: true },
+    ];
 const out = resolve(root, "results", stage);
 await mkdir(out, { recursive: true });
 const run = promisify(execFile);
@@ -65,15 +72,19 @@ for (const config of configs) {
     continue;
   } catch {}
   const modelPath =
-    config.model === "lite0"
-      ? resolve("client/public/vision/efficientdet_lite0_int8.tflite")
-      : config.model.startsWith("yolox")
-        ? resolve(
-            root,
-            "assets/yolox",
-            config.model.replace("-", "_") + ".onnx"
-          )
-        : resolve(legacy, "sources", config.model + ".tflite");
+    config.id === "objects-basira-v1"
+      ? resolve(root, "training/basira_objects_v1.onnx")
+      : fineTune && config.model === "yolox-tiny"
+        ? resolve(root, "../object-quality-002/assets/yolox/yolox_tiny.onnx")
+        : config.model === "lite0"
+          ? resolve("client/public/vision/efficientdet_lite0_int8.tflite")
+          : config.model.startsWith("yolox")
+            ? resolve(
+                root,
+                "assets/yolox",
+                config.model.replace("-", "_") + ".onnx"
+              )
+            : resolve(legacy, "sources", config.model + ".tflite");
   const bytes = await readFile(modelPath),
     server = await chromium.launchServer({ channel: "chrome", headless: true }),
     browser = await chromium.connect(server.wsEndpoint());
@@ -188,7 +199,7 @@ for (const config of configs) {
       referencesUsedInInference: false,
       externalRequestsBlocked: external,
       phoneTested: false,
-      training: false,
+      training: config.id === "objects-basira-v1",
     };
     await writeFile(output, JSON.stringify(report, null, 2), { flag: "wx" });
     console.log(

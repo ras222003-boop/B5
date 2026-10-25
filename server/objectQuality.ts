@@ -62,28 +62,52 @@ export function objectQualityHandler({
         send(400, { error: "query_rejected" });
         return;
       }
+      const modelPrefix = prefix + "/models/objects-basira-v1";
+      const trainedRequest = url.pathname.startsWith(modelPrefix + "/");
+      const activePrefix = trainedRequest ? modelPrefix : prefix;
+      const activeRoot = trainedRequest ? resolve(root, "finetuned") : root;
       const profile = JSON.parse(
-        await readFile(resolve(root, "manifest.json"), "utf8")
+        await readFile(resolve(activeRoot, "manifest.json"), "utf8")
       );
-      if (!validObjectQualityProfile(profile))
+      if (
+        !validObjectQualityProfile(profile) ||
+        profile.id !==
+          (trainedRequest ? "objects-basira-v1" : "objects-yolox-tiny")
+      )
         throw new Error("Unqualified object profile");
       if (url.pathname === prefix + "/manifest") {
-        send(200, { enabled: true, profile });
+        const profiles = [profile];
+        try {
+          const trained = JSON.parse(
+            await readFile(resolve(root, "finetuned/manifest.json"), "utf8")
+          );
+          if (
+            validObjectQualityProfile(trained) &&
+            trained.id === "objects-basira-v1"
+          )
+            profiles.push(trained);
+        } catch {
+          /* An absent/unqualified training run cannot hide the previous model. */
+        }
+        send(200, { enabled: true, profile, profiles });
         return;
       }
-      const name = url.pathname.slice((prefix + "/assets/").length),
+      const name = url.pathname.slice((activePrefix + "/assets/").length),
         asset = profile.assets[name];
       if (
-        !url.pathname.startsWith(prefix + "/assets/") ||
+        !url.pathname.startsWith(activePrefix + "/assets/") ||
         !asset ||
         !/^(yolox|slimsam)\/(onnx\/)?[a-zA-Z0-9_.-]+$/.test(name)
       ) {
         send(404, { error: "asset_not_registered" });
         return;
       }
-      const file = await realpath(resolve(root, name)),
-        base = await realpath(root),
+      const file = await realpath(resolve(activeRoot, name)),
+        base = await realpath(activeRoot),
         rel = relative(base, file);
+      const registryRel = relative(await realpath(root), base);
+      if (registryRel.startsWith("..") || isAbsolute(registryRel))
+        throw new Error("Model outside registry");
       if (rel.startsWith("..") || isAbsolute(rel))
         throw new Error("Research asset outside registry");
       if (asset.bytes > 25_000_000) throw new Error("Research asset budget");

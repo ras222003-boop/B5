@@ -1,9 +1,10 @@
 import { afterEach, describe, it, expect } from "vitest";
-import { mkdtemp, mkdir, writeFile, rm } from "node:fs/promises";
+import { mkdtemp, mkdir, writeFile, readFile, rm } from "node:fs/promises";
 import { resolve, dirname } from "node:path";
 import { createHash } from "node:crypto";
 import type { Request, Response, NextFunction } from "express";
 import { objectQualityHandler } from "./objectQuality";
+import { validObjectQualityProfile } from "../shared/objectQuality";
 const base = resolve(".vision-ai");
 let root: string | undefined;
 afterEach(async () => {
@@ -71,6 +72,88 @@ async function request(
   return result;
 }
 describe("local research model boundary", () => {
+  it("requires actual-training evidence for the extra model, isolates its bytes, and preserves the previous profile", async () => {
+    const root = await fixture(),
+      handler = objectQualityHandler({ enabled: true, root });
+    const original = JSON.parse(
+      await readFile(resolve(root, "manifest.json"), "utf8")
+    );
+    const bytes = Buffer.from(
+      "unit fixture for trained registry, not actual inference weights"
+    );
+    const digest = createHash("sha256").update(bytes).digest("hex");
+    const trained = {
+      ...original,
+      id: "objects-basira-v1",
+      name: "test trained profile",
+      modelSha256: digest,
+      assets: {
+        "yolox/yolox_tiny.onnx": { sha256: digest, bytes: bytes.length },
+      },
+      trainingEvidence: {
+        checkpointSha256: "b".repeat(64),
+        optimizerSteps: 8,
+        epochs: 2,
+        onnxValidationSha256: "c".repeat(64),
+        testEvaluationSha256: "d".repeat(64),
+        finalUsedForSelection: false,
+      },
+    };
+    await mkdir(resolve(root, "finetuned/yolox"), { recursive: true });
+    await writeFile(
+      resolve(root, "finetuned/manifest.json"),
+      JSON.stringify(trained)
+    );
+    await writeFile(resolve(root, "finetuned/yolox/yolox_tiny.onnx"), bytes);
+    expect(validObjectQualityProfile(trained)).toBe(true);
+    expect(
+      validObjectQualityProfile({
+        ...trained,
+        maskForStills: true,
+        maskQualification: "QUALIFIED_STILLS_ONLY",
+      })
+    ).toBe(false);
+    expect(
+      validObjectQualityProfile({
+        ...trained,
+        trainingEvidence: { ...trained.trainingEvidence, optimizerSteps: 0 },
+      })
+    ).toBe(false);
+    const listed = JSON.parse(
+      (await request(handler, "/api/vision/object-quality/manifest")).body
+    );
+    expect(listed.profile.id).toBe("objects-yolox-tiny");
+    expect(listed.profiles.map((p: { id: string }) => p.id)).toEqual([
+      "objects-yolox-tiny",
+      "objects-basira-v1",
+    ]);
+    const path =
+      "/api/vision/object-quality/models/objects-basira-v1/assets/yolox/yolox_tiny.onnx";
+    expect((await request(handler, path)).body).toBe(bytes.toString());
+    await writeFile(
+      resolve(root, "finetuned/yolox/yolox_tiny.onnx"),
+      "tampered"
+    );
+    expect((await request(handler, path)).status).toBe(503);
+    trained.trainingEvidence.optimizerSteps = 0;
+    await writeFile(
+      resolve(root, "finetuned/manifest.json"),
+      JSON.stringify(trained)
+    );
+    expect(
+      JSON.parse(
+        (await request(handler, "/api/vision/object-quality/manifest")).body
+      ).profiles
+    ).toHaveLength(1);
+    expect(
+      (
+        await request(
+          handler,
+          "/api/vision/object-quality/assets/yolox/yolox_tiny.onnx"
+        )
+      ).status
+    ).toBe(200);
+  });
   it("is disabled by default and rejects published asset roots", async () => {
     expect(
       JSON.parse(

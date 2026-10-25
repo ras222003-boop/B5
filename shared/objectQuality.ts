@@ -1,6 +1,6 @@
 /** Local experimental object recognition. This contract never grants navigation eligibility. */
 export interface ObjectQualityProfile {
-  id: "objects-yolox-tiny";
+  id: "objects-yolox-tiny" | "objects-basira-v1";
   name: string;
   model: "yolox-tiny";
   modelSha256: string;
@@ -14,6 +14,14 @@ export interface ObjectQualityProfile {
   maskQualification: "REJECTED_FINAL" | "QUALIFIED_STILLS_ONLY";
   colorStatus: "UNPROVEN";
   assets: Record<string, { sha256: string; bytes: number }>;
+  trainingEvidence?: {
+    checkpointSha256: string;
+    optimizerSteps: number;
+    epochs: number;
+    onnxValidationSha256: string;
+    testEvaluationSha256: string;
+    finalUsedForSelection: false;
+  };
 }
 export function validObjectQualityProfile(
   value: unknown
@@ -21,7 +29,7 @@ export function validObjectQualityProfile(
   const p = value as ObjectQualityProfile | undefined;
   return Boolean(
     p &&
-      p.id === "objects-yolox-tiny" &&
+      (p.id === "objects-yolox-tiny" || p.id === "objects-basira-v1") &&
       p.model === "yolox-tiny" &&
       p.navigationEligible === false &&
       p.productionEligible === false &&
@@ -38,6 +46,16 @@ export function validObjectQualityProfile(
         : p.maskQualification === "REJECTED_FINAL") &&
       p.threshold === 0.5 &&
       /^[a-f0-9]{64}$/.test(p.modelSha256) &&
-      p.assets?.["yolox/yolox_tiny.onnx"]?.sha256 === p.modelSha256
+      p.assets?.["yolox/yolox_tiny.onnx"]?.sha256 === p.modelSha256 &&
+      (p.id !== "objects-basira-v1" ||
+        (p.maskForStills === false &&
+          p.trainingEvidence?.finalUsedForSelection === false &&
+          Number.isInteger(p.trainingEvidence.optimizerSteps) &&
+          p.trainingEvidence.optimizerSteps > 0 &&
+          Number.isInteger(p.trainingEvidence.epochs) &&
+          p.trainingEvidence.epochs > 0 &&
+          /^[a-f0-9]{64}$/.test(p.trainingEvidence.checkpointSha256) &&
+          /^[a-f0-9]{64}$/.test(p.trainingEvidence.onnxValidationSha256) &&
+          /^[a-f0-9]{64}$/.test(p.trainingEvidence.testEvaluationSha256)))
   );
 }

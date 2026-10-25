@@ -7,7 +7,8 @@ const origin = process.argv[2] ?? "http://127.0.0.1:4350",
   root = resolve("../.vision-test-fixtures/object-quality-002"),
   out = resolve(
     process.argv[3] ?? "../.vision-test-fixtures/object-quality-browser-002"
-  );
+  ),
+  modelId = process.argv[4] ?? "objects-yolox-tiny";
 await mkdir(out, { recursive: true });
 const photo = resolve(
     "../.vision-test-fixtures/object-colors-development-001/images/de8a8b01519aea3d.png"
@@ -83,13 +84,12 @@ try {
   const select = page.locator("#basira-vision-model");
   await select.waitFor();
   await page.waitForFunction(
-    () =>
-      !!document.querySelector(
-        '#basira-vision-model option[value="objects-yolox-tiny"]'
-      )
+    id =>
+      !!document.querySelector(`#basira-vision-model option[value="${id}"]`),
+    modelId
   );
   assert.equal(await select.inputValue(), "original");
-  await select.selectOption("objects-yolox-tiny");
+  await select.selectOption(modelId);
   await page.evaluate(async () => {
     const { speechEngine } = await import("/src/lib/speechEngine.ts");
     speechEngine.enqueue = async (input, priority) =>
@@ -110,15 +110,16 @@ try {
   );
   const photoText = await page.getByTestId("photo-object-results").innerText();
   assert.ok(Number(await input.getAttribute("data-count")) > 1);
-  const profile = await page.evaluate(async () => {
+  const profile = await page.evaluate(async id => {
     const r = await fetch("/api/vision/object-quality/manifest");
-    return (await r.json()).profile;
-  });
+    const data = await r.json();
+    return (data.profiles ?? [data.profile]).find(p => p.id === id);
+  }, modelId);
   assert.equal(profile.maskForStills, false);
   assert.equal(profile.maskQualification, "REJECTED_FINAL");
   assert.doesNotMatch(photoText, /قناع آلي اجتاز/);
   await page.waitForTimeout(16000);
-  assert.equal(await select.inputValue(), "objects-yolox-tiny");
+  assert.equal(await select.inputValue(), modelId);
   await page.screenshot({
     path: resolve(out, "photo-masks.png"),
     fullPage: true,
@@ -153,6 +154,39 @@ try {
   assert.ok(speech.every(s => s.priority === "INFORMATION"));
   assert.deepEqual(haptics, []);
   await page.screenshot({ path: resolve(out, "camera.png"), fullPage: true });
+  if (modelId === "objects-basira-v1") {
+    await page
+      .getByRole("button", {
+        name: "الرجوع فورًا إلى Tiny السابق",
+        exact: true,
+      })
+      .click();
+    assert.equal(await select.inputValue(), "objects-yolox-tiny");
+    assert.equal(
+      await page.evaluate(() =>
+        window.__tracks.every(t => t.readyState === "ended")
+      ),
+      true
+    );
+    await page
+      .getByRole("button", { name: "تشغيل رؤية بصيرة", exact: true })
+      .click();
+    await page.waitForFunction(
+      () =>
+        document
+          .querySelector("[data-testid=vision-page]")
+          ?.getAttribute("data-state") === "WORKING",
+      {},
+      { timeout: 45000 }
+    );
+    await page.waitForFunction(
+      () =>
+        document.querySelectorAll("[data-testid=perception-objects] li")
+          .length > 0,
+      {},
+      { timeout: 15000 }
+    );
+  }
   await page
     .getByRole("button", { name: "الرجوع فورًا إلى Lite0", exact: true })
     .click();
@@ -179,10 +213,13 @@ try {
   await page.getByRole("button", { name: "إيقاف الرؤية", exact: true }).click();
   // A modified weight file fails closed; no silent replacement with Lite0 in the research session.
   await page.route(
-    origin + "/api/vision/object-quality/assets/yolox/yolox_tiny.onnx",
+    origin +
+      "/api/vision/object-quality" +
+      (modelId === "objects-basira-v1" ? "/models/objects-basira-v1" : "") +
+      "/assets/yolox/yolox_tiny.onnx",
     r => r.fulfill({ status: 200, body: "invalid model bytes" })
   );
-  await select.selectOption("objects-yolox-tiny");
+  await select.selectOption(modelId);
   await page
     .getByRole("button", { name: "تشغيل رؤية بصيرة", exact: true })
     .click();
@@ -225,12 +262,15 @@ try {
         maskDeploymentRejected: true,
         cancelledPhoto: true,
         originalProviderRestarted: true,
+        previousTinyRollbackVerified: modelId === "objects-basira-v1",
         corruptedModelRejected: true,
         tracksStopped: true,
         phoneTested: false,
         physicalCameraTested: false,
         voicesAudiblyTested: false,
-        training: false,
+        modelId,
+        modelSha256: profile.modelSha256,
+        trainedCheckpointTested: modelId === "objects-basira-v1",
         uploads,
         external,
         pageErrors: errors,

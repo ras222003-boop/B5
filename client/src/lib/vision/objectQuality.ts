@@ -19,6 +19,21 @@ export async function availableObjectQuality(
     ? result.profile
     : null;
 }
+export async function availableObjectQualityProfiles(
+  signal?: AbortSignal
+): Promise<ObjectQualityProfile[]> {
+  const response = await fetch("/api/vision/object-quality/manifest", {
+    cache: "no-store",
+    signal,
+  });
+  if (!response.ok) return [];
+  const result = await response.json();
+  if (!result.enabled) return [];
+  const profiles = Array.isArray(result.profiles)
+    ? result.profiles
+    : [result.profile];
+  return profiles.filter(validObjectQualityProfile);
+}
 export class ObjectQualityProvider implements VisionProvider {
   readonly usagePolicy = "EXPERIMENTAL_OBJECTS_ONLY" as const;
   private constructor(
@@ -29,7 +44,9 @@ export class ObjectQualityProvider implements VisionProvider {
     if (!validObjectQualityProfile(profile))
       throw new Error("object_quality_contract");
     const response = await fetch(
-      "/api/vision/object-quality/assets/yolox/yolox_tiny.onnx",
+      (profile.id === "objects-basira-v1"
+        ? "/api/vision/object-quality/models/objects-basira-v1"
+        : "/api/vision/object-quality") + "/assets/yolox/yolox_tiny.onnx",
       { cache: "no-store" }
     );
     if (!response.ok) throw new Error("object_quality_model_unavailable");

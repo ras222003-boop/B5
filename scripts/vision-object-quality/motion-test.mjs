@@ -26,7 +26,9 @@ try {
   );
   const page = await context.newPage();
   await page.goto(origin + "/navigation/vision");
-  for (const model of ["lite0", "yolox-tiny"])
+  for (const model of process.argv[4] === "finetune"
+    ? ["yolox-tiny", "objects-basira-v1"]
+    : ["lite0", "yolox-tiny"])
     for (const clip of manifest.clips) {
       await page.evaluate(async model => {
         const { ObjectTracker } = await import(
@@ -43,11 +45,18 @@ try {
             "/src/lib/vision/providers.ts"
           ),
           { DEFAULT_VISION_CONFIG } = await import("/src/lib/vision/config.ts");
-        const { availableObjectQuality, ObjectQualityProvider } = await import(
-          "/src/lib/vision/objectQuality.ts"
-        );
+        const { availableObjectQualityProfiles, ObjectQualityProvider } =
+          await import("/src/lib/vision/objectQuality.ts");
         const profile =
-          model === "lite0" ? null : await availableObjectQuality();
+          model === "lite0"
+            ? null
+            : (await availableObjectQualityProfiles()).find(
+                p =>
+                  p.id ===
+                  (model === "yolox-tiny" ? "objects-yolox-tiny" : model)
+              );
+        if (model !== "lite0" && !profile)
+          throw new Error("Research model unavailable");
         window.__videoProvider = profile
           ? await ObjectQualityProvider.open(profile, false)
           : await MediaPipeVisionProvider.open(DEFAULT_VISION_CONFIG);

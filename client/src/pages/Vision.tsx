@@ -42,7 +42,7 @@ import {experimentalModels} from '@/lib/vision/experimentalStairs';
 import type {ExperimentalModel} from '@shared/experimentalModels';
 import {getColorSpeechEnabled,saveColorSpeechEnabled} from '@/lib/vision/objectColors';
 import {ObjectPhotoInput} from '@/components/vision/ObjectPhotoInput';
-import {availableObjectQuality} from '@/lib/vision/objectQuality';
+import {availableObjectQualityProfiles} from '@/lib/vision/objectQuality';
 import type {ObjectQualityProfile} from '@shared/objectQuality';
 import {ObjectOnlyPipeline} from '@/lib/vision/objectOnlyPipeline';
 import {objectLabel} from '@/lib/vision/cocoLabels';
@@ -73,13 +73,13 @@ export default function Vision() {
   const [error,setError]=useState('');
   const [researchModels,setResearchModels]=useState<ExperimentalModel[]>([]);
   const [selectedModel,setSelectedModel]=useState('original');
-  const [objectQualityProfile,setObjectQualityProfile]=useState<ObjectQualityProfile|null>(null);
-  const activeObjectProfile=objectQualityProfile?.id===selectedModel?objectQualityProfile:undefined;
-  useEffect(()=>{const abort=new AbortController();void availableObjectQuality(abort.signal).then(setObjectQualityProfile).catch(()=>{});return()=>abort.abort();},[]);
+  const [objectQualityProfiles,setObjectQualityProfiles]=useState<ObjectQualityProfile[]>([]);
+  const activeObjectProfile=objectQualityProfiles.find(profile=>profile.id===selectedModel);
+  useEffect(()=>{const abort=new AbortController();void availableObjectQualityProfiles(abort.signal).then(setObjectQualityProfiles).catch(()=>{});return()=>abort.abort();},[]);
   const [registryNotice,setRegistryNotice]=useState('');
   useEffect(()=>{
     const abort=new AbortController();let active=true;
-    const refresh=()=>experimentalModels(abort.signal).then(models=>{if(active){setResearchModels(models);setSelectedModel(current=>current==='original'||current==='objects-yolox-tiny'||models.some(model=>model.id===current)?current:'original');setRegistryNotice(models.length?'النماذج التجريبية متاحة للاختيار؛ لم تتغير النسخة الأصلية.':'لا توجد نماذج تجريبية محلية مسجلة.');}}).catch(()=>{if(active)setRegistryNotice('قائمة التجربة غير متاحة؛ يبقى النموذج الأصلي متاحًا.');});
+    const refresh=()=>experimentalModels(abort.signal).then(models=>{if(active){setResearchModels(models);setSelectedModel(current=>current==='original'||current==='objects-yolox-tiny'||current==='objects-basira-v1'||models.some(model=>model.id===current)?current:'original');setRegistryNotice(models.length?'النماذج التجريبية متاحة للاختيار؛ لم تتغير النسخة الأصلية.':'لا توجد نماذج تجريبية محلية مسجلة.');}}).catch(()=>{if(active)setRegistryNotice('قائمة التجربة غير متاحة؛ يبقى النموذج الأصلي متاحًا.');});
     void refresh();const timer=window.setInterval(()=>void refresh(),15000);
     return()=>{active=false;abort.abort();window.clearInterval(timer);};
   },[]);
@@ -459,11 +459,11 @@ export default function Vision() {
     <section className="space-y-2 rounded-xl border border-amber-300/40 p-4" aria-label="اختيار نموذج بصيرة">
       <label htmlFor="basira-vision-model">نموذج الرؤية</label>
       <select id="basira-vision-model" className="mx-3 min-h-12 max-w-full rounded-xl bg-stone-900 px-3" value={selectedModel} onChange={event=>chooseModel(event.target.value)}>
-        <option value="original">النموذج الأصلي — افتراضي</option>{objectQualityProfile&&<option value={objectQualityProfile.id}>{objectQualityProfile.name}</option>}{researchModels.map(model=><option key={model.id} value={model.id}>{model.name} — تجريبي</option>)}
+        <option value="original">النموذج الأصلي — افتراضي</option>{objectQualityProfiles.map(profile=><option key={profile.id} value={profile.id}>{profile.name}</option>)}{researchModels.map(model=><option key={model.id} value={model.id}>{model.name} — تجريبي</option>)}
       </select><p className="text-sm text-stone-300">{registryNotice}</p>
     </section>
     {researchModel?<ExperimentalVision key={researchModel.id} model={researchModel} onOriginal={()=>chooseModel('original')}/>:<>
-    {activeObjectProfile&&<div role="status" className="rounded-xl border border-amber-300 p-4"><p>تعرف تجريبي على الأشياء فقط؛ دون قياس مسافة أو توجيه أو تحذير سقوط. الألوان غير مثبتة بشريًا. {activeObjectProfile.maskForStills?'التقسيم المحلي للصور الثابتة فقط وقد يستغرق عدة ثوانٍ.':'أوقف التقسيم الآلي بسبب إخفاق فحص الجودة النهائي؛ اللون تقدير محافظ من الصندوق أو غير واضح.'} لم يختبر هذا النموذج على iPhone.</p><button className={secondary} onClick={()=>chooseModel('original')}>الرجوع فورًا إلى Lite0</button></div>}
+    {activeObjectProfile&&<div role="status" className="rounded-xl border border-amber-300 p-4"><p>تعرف تجريبي على الأشياء فقط؛ دون قياس مسافة أو توجيه أو تحذير سقوط. الألوان غير مثبتة بشريًا. {activeObjectProfile.maskForStills?'التقسيم المحلي للصور الثابتة فقط وقد يستغرق عدة ثوانٍ.':'أوقف التقسيم الآلي بسبب إخفاق فحص الجودة النهائي؛ اللون تقدير محافظ من الصندوق أو غير واضح.'} لم يختبر هذا النموذج على iPhone.</p>{activeObjectProfile.id==='objects-basira-v1'&&<button className={secondary} onClick={()=>chooseModel('objects-yolox-tiny')}>الرجوع فورًا إلى Tiny السابق</button>}<button className={secondary} onClick={()=>chooseModel('original')}>الرجوع فورًا إلى Lite0</button></div>}
     {!activeObjectProfile&&<p className="rounded-xl border border-amber-300/40 bg-amber-300/10 p-4 text-amber-100">{t.advisory}</p>}
     {activeObjectProfile&&error&&<p role="alert" className="rounded-xl border border-red-400/50 p-4 text-red-200">{error}</p>}
     <div className="flex flex-wrap gap-3">{state==='STOPPED'?<button type="button" className={button} onClick={start}>{t.start}</button>:<button type="button" className={button} onClick={()=>void stop()}>{t.stop}</button>}</div>

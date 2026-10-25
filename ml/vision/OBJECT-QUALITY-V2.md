@@ -1,5 +1,7 @@
 # تحسين جودة الأشياء والألوان — الحالة الفعلية
 
+المتابعة: [تجربة Fine-tuning فعلية للأشياء V1 ونتيجتها غير المحسّنة](OBJECT-FINETUNE-V1.md).
+
 التاريخ: 2026-10-25. الفرع: `codex/basira-object-quality-v2`، مبني على
 `codex/basira-object-colors` والتزامه `df401a3`.
 
