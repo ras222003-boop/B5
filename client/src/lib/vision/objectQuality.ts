@@ -1,0 +1,101 @@
+import type { VisionDetection, VisionProvider } from "@shared/vision";
+import {
+  validObjectQualityProfile,
+  type ObjectQualityProfile,
+} from "@shared/objectQuality";
+import { YoloXProvider } from "./qualityProviders";
+import { SlimSamObjectMasks } from "./objectMasks";
+import { sampleColorFrame, analyzeObjectColor } from "./objectColors";
+export async function availableObjectQuality(
+  signal?: AbortSignal
+): Promise<ObjectQualityProfile | null> {
+  const response = await fetch("/api/vision/object-quality/manifest", {
+    cache: "no-store",
+    signal,
+  });
+  if (!response.ok) return null;
+  const result = await response.json();
+  return result.enabled && validObjectQualityProfile(result.profile)
+    ? result.profile
+    : null;
+}
+export class ObjectQualityProvider implements VisionProvider {
+  readonly usagePolicy = "EXPERIMENTAL_OBJECTS_ONLY" as const;
+  private constructor(
+    private detector: YoloXProvider,
+    private masks: SlimSamObjectMasks | null
+  ) {}
+  static async open(profile: ObjectQualityProfile, withMasks = false) {
+    if (!validObjectQualityProfile(profile))
+      throw new Error("object_quality_contract");
+    const response = await fetch(
+      "/api/vision/object-quality/assets/yolox/yolox_tiny.onnx",
+      { cache: "no-store" }
+    );
+    if (!response.ok) throw new Error("object_quality_model_unavailable");
+    const bytes = new Uint8Array(await response.arrayBuffer()),
+      hash = Array.from(
+        new Uint8Array(await crypto.subtle.digest("SHA-256", bytes)),
+        b => b.toString(16).padStart(2, "0")
+      ).join("");
+    if (hash !== profile.modelSha256)
+      throw new Error("object_quality_hash_mismatch");
+    const detector = await YoloXProvider.open(bytes, profile.threshold);
+    try {
+      return new ObjectQualityProvider(
+        detector,
+        withMasks && profile.maskForStills
+          ? await SlimSamObjectMasks.open()
+          : null
+      );
+    } catch (error) {
+      await detector.close();
+      throw error;
+    }
+  }
+  async detect(
+    frame: HTMLVideoElement | HTMLCanvasElement | OffscreenCanvas,
+    timestamp: number
+  ): Promise<VisionDetection[]> {
+    const pixels = this.masks
+        ? sampleColorFrame(frame, timestamp, `quality-${timestamp}`)
+        : null,
+      detections = await this.detector.detect(frame, timestamp);
+    if (!this.masks || !pixels) return detections;
+    const masks = await this.masks.segment(pixels, detections);
+    return detections.map(d => {
+      const proposed = masks.find(m => m.objectId === d.id);
+      const color = proposed?.accepted
+        ? analyzeObjectColor(pixels, d, detections, proposed.mask)
+        : proposed
+          ? {
+              name: null,
+              status: "UNCLEAR" as const,
+              reason: "MIXED_OR_OCCLUDED" as const,
+              samples: 0,
+              supportFraction: 0,
+              timestamp,
+              stableFrames: 0,
+              calibrated: false as const,
+            }
+          : analyzeObjectColor(pixels, d, detections);
+      return {
+        ...d,
+        color,
+        ...(proposed
+          ? {
+              objectMask: {
+                model: "slimsam-q8" as const,
+                accepted: proposed.accepted,
+                predictedIoU: proposed.score,
+                calibrated: false as const,
+              },
+            }
+          : {}),
+      };
+    });
+  }
+  async close() {
+    await Promise.allSettled([this.detector.close(), this.masks?.close()]);
+  }
+}

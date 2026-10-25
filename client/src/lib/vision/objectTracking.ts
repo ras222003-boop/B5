@@ -31,7 +31,7 @@ export class ObjectTracker {
   private serial = 0;
   private lastFrameId = '';
   private lastTimestamp = -Infinity;
-  constructor(private readonly maximumAgeMs = 1200, private readonly maximumGapMs = 1800) {}
+  constructor(private readonly maximumAgeMs = 1200, private readonly maximumGapMs = 1800,private readonly minimumScore=.65) {}
   reset() { this.tracks.clear(); this.lastFrameId = ''; this.lastTimestamp = -Infinity; }
   update(detections: readonly VisionDetection[], frame: TrackingFrame): TrackingResult {
     const { frameId, capturedAt, now } = frame;
@@ -45,7 +45,7 @@ export class ObjectTracker {
     }
     this.lastFrameId = frameId; this.lastTimestamp = capturedAt;
     for (const [id, track] of Array.from(this.tracks)) if (capturedAt - track.detection.timestamp > this.maximumGapMs) this.tracks.delete(id);
-    const current = detections.filter(detection => Number.isFinite(detection.confidence) && detection.confidence >= .65 &&
+    const current = detections.filter(detection => Number.isFinite(detection.confidence) && detection.confidence >= this.minimumScore &&
       detection.confidence <= 1 && validNormalizedBox(detection.boundingBox) &&
       Number.isFinite(detection.timestamp) && Math.abs(detection.timestamp - capturedAt) <= 5);
     const previous = Array.from(this.tracks.values());

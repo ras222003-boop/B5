@@ -26,7 +26,7 @@ try{
   page=await context.newPage();page.on('pageerror',e=>pageErrors.push(e.message));page.on('console',m=>{if(m.type()==='error')consoleErrors.push(m.text());});await page.goto(`${origin}/navigation/vision`,{waitUntil:'domcontentloaded'});
   const select=page.locator('#basira-vision-model');await select.waitFor({timeout:60000});await page.waitForFunction(()=>document.querySelectorAll('#basira-vision-model option').length>=2,{},{timeout:30000});
   assert.equal(await select.inputValue(),'original');
-  const modelId=await select.locator('option').nth(1).getAttribute('value');
+  const modelId=await select.locator('option[value^="stairs-"]').first().getAttribute('value');
   await select.selectOption(modelId);const panel=page.getByTestId('basira-experimental-vision');await panel.waitFor();
   assert.equal(await page.getByRole('button',{name:'تشغيل كاميرا بصيرة بالنموذج التجريبي'}).isDisabled(),true);
   await panel.getByRole('checkbox').check();await panel.locator('input[type=file]').setInputFiles(image);

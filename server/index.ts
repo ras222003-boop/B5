@@ -11,6 +11,7 @@ import { registerExamSubmissionRoutes } from "./examSubmissions";
 import { registerOcrRoute } from "./ocr";
 import { registerVisionDescribeRoute } from "./visionDescribe";
 import { registerExperimentalModelRoutes } from './experimentalModels';
+import { registerObjectQualityRoutes } from './objectQuality';
 import { registerNavigationRoutes } from "./navigation";
 import { toExamLanguage, assistantSystem, guideSystem, aiFallback, pdfLabels, escapeHtml } from "./locale";
 
@@ -80,6 +81,7 @@ async function startServer() {
   registerAccountAndSpeechRoutes(app);
   registerVisionDescribeRoute(app, invokeLLM);
   registerExperimentalModelRoutes(app);
+  registerObjectQualityRoutes(app);
 
   // Parse JSON bodies up to 20MB for image data
   app.use('/api/navigation/organizations',express.json({limit:'1mb'}));

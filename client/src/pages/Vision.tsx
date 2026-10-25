@@ -42,6 +42,11 @@ import {experimentalModels} from '@/lib/vision/experimentalStairs';
 import type {ExperimentalModel} from '@shared/experimentalModels';
 import {getColorSpeechEnabled,saveColorSpeechEnabled} from '@/lib/vision/objectColors';
 import {ObjectPhotoInput} from '@/components/vision/ObjectPhotoInput';
+import {availableObjectQuality} from '@/lib/vision/objectQuality';
+import type {ObjectQualityProfile} from '@shared/objectQuality';
+import {ObjectOnlyPipeline} from '@/lib/vision/objectOnlyPipeline';
+import {objectLabel} from '@/lib/vision/cocoLabels';
+import {colorDescription} from '@/lib/vision/objectColors';
 
 const button='inline-flex min-h-14 items-center justify-center rounded-xl bg-amber-300 px-6 py-3 text-lg font-bold text-stone-950 hover:bg-amber-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-300';
 const secondary='inline-flex min-h-14 items-center justify-center rounded-xl border border-amber-300/50 px-6 py-3 text-lg font-bold text-amber-100 hover:bg-amber-300/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-300';
@@ -54,7 +59,7 @@ export default function Vision() {
   const videoRef=useRef<HTMLVideoElement|null>(null);
   const nativeCanvasRef=useRef<HTMLCanvasElement|null>(null);
   const cameraRef=useRef<CameraService>(new CameraService(DEFAULT_VISION_CONFIG));
-  const pipelineRef=useRef<VisionPipeline|null>(null);
+  const pipelineRef=useRef<VisionPipeline|ObjectOnlyPipeline|null>(null);
   const generation=useRef(0);
   const objectOpenAbort=useRef<AbortController|null>(null);
   const descriptionAbort=useRef<AbortController|null>(null);
@@ -68,10 +73,13 @@ export default function Vision() {
   const [error,setError]=useState('');
   const [researchModels,setResearchModels]=useState<ExperimentalModel[]>([]);
   const [selectedModel,setSelectedModel]=useState('original');
+  const [objectQualityProfile,setObjectQualityProfile]=useState<ObjectQualityProfile|null>(null);
+  const activeObjectProfile=objectQualityProfile?.id===selectedModel?objectQualityProfile:undefined;
+  useEffect(()=>{const abort=new AbortController();void availableObjectQuality(abort.signal).then(setObjectQualityProfile).catch(()=>{});return()=>abort.abort();},[]);
   const [registryNotice,setRegistryNotice]=useState('');
   useEffect(()=>{
     const abort=new AbortController();let active=true;
-    const refresh=()=>experimentalModels(abort.signal).then(models=>{if(active){setResearchModels(models);setSelectedModel(current=>current==='original'||models.some(model=>model.id===current)?current:'original');setRegistryNotice(models.length?'النماذج التجريبية متاحة للاختيار؛ لم تتغير النسخة الأصلية.':'لا توجد نماذج تجريبية محلية مسجلة.');}}).catch(()=>{if(active)setRegistryNotice('قائمة التجربة غير متاحة؛ يبقى النموذج الأصلي متاحًا.');});
+    const refresh=()=>experimentalModels(abort.signal).then(models=>{if(active){setResearchModels(models);setSelectedModel(current=>current==='original'||current==='objects-yolox-tiny'||models.some(model=>model.id===current)?current:'original');setRegistryNotice(models.length?'النماذج التجريبية متاحة للاختيار؛ لم تتغير النسخة الأصلية.':'لا توجد نماذج تجريبية محلية مسجلة.');}}).catch(()=>{if(active)setRegistryNotice('قائمة التجربة غير متاحة؛ يبقى النموذج الأصلي متاحًا.');});
     void refresh();const timer=window.setInterval(()=>void refresh(),15000);
     return()=>{active=false;abort.abort();window.clearInterval(timer);};
   },[]);
@@ -191,7 +199,7 @@ export default function Vision() {
   useEffect(()=>{const onHidden=()=>{if(document.hidden)void stop();};document.addEventListener('visibilitychange',onHidden);return()=>document.removeEventListener('visibilitychange',onHidden);},[stop]);
 
   const start=async()=>{
-    if(selectedModel!=='original')return;
+    if(selectedModel!=='original'&&!activeObjectProfile)return;
     if(state!=='STOPPED'||!videoRef.current||!nativeCanvasRef.current)return;
     const run=++generation.current;
     setVideoPaused(false);
@@ -199,21 +207,22 @@ export default function Vision() {
     try {
       const safetyFlags=await loadSafetyFlags();
       const detected=detectVisionCapabilities();setCapabilities(detected);
-      const visionConfig=DEFAULT_VISION_CONFIG;
-      const nativeFrames=window.BasiraNativeFrames;
+      const visionConfig=activeObjectProfile?{...DEFAULT_VISION_CONFIG,detectionThreshold:activeObjectProfile.threshold}:DEFAULT_VISION_CONFIG;
+      const nativeFrames=activeObjectProfile?undefined:window.BasiraNativeFrames;
       if(!nativeFrames)await cameraRef.current.start(videoRef.current);
       if(run!==generation.current){cameraRef.current.stop(videoRef.current);return;}
       if(!nativeFrames){setCameraPermission('allowed');setCameraSize(videoRef.current.videoWidth&&videoRef.current.videoHeight?{width:videoRef.current.videoWidth,height:videoRef.current.videoHeight}:cameraRef.current.frameSize);}
       else setCameraSize({width:nativeCanvasRef.current.width,height:nativeCanvasRef.current.height});
       const objectAbort=new AbortController();objectOpenAbort.current=objectAbort;
-      const {provider,execution}=await openObjectProvider(visionConfig,objectAbort.signal);objectOpenAbort.current=null;
+      const {provider,execution}=await openObjectProvider(visionConfig,objectAbort.signal,activeObjectProfile);objectOpenAbort.current=null;
       if(execution==='MAIN_THREAD')setAnalysisNotice('يستخدم هذا المتصفح التحليل على خيط الواجهة؛ قد تتأخر الاستجابة.');
       if(run!==generation.current){await provider.close();cameraRef.current.stop(videoRef.current);return;}
-      const currentBuildingId=sessionStorage.getItem('basira-current-building');
+      const currentBuildingId=activeObjectProfile?null:sessionStorage.getItem('basira-current-building');
       graphNodesRef.current=currentBuildingId?(await navApi.graph(currentBuildingId).then(result=>result.nodes).catch(()=>[])):[];
       if(run!==generation.current){await provider.close();cameraRef.current.stop(videoRef.current);return;}
       const announcement=new VisionAnnouncementService(t,(text,priority)=>{void speechEngine.enqueue(speechInput(text,lang,'ENVIRONMENT'),priority??'HIGH_SAFETY',0,undefined,false,(perceptionRef.current?.capturedAt??performance.now())+PERCEPTION_TTL_MS);},new BrowserHapticFeedbackProvider(),visionConfig.alertCooldownMs);
-      const pipeline=new VisionPipeline({video:videoRef.current,nativeCanvas:nativeCanvasRef.current,nativeFrames,
+      const Pipeline=activeObjectProfile?ObjectOnlyPipeline:VisionPipeline;
+      const pipeline=new Pipeline({video:videoRef.current,nativeCanvas:nativeCanvasRef.current,nativeFrames,
         autoMeterEnabled:autoMeterEnabledRef.current,objectSpeechEnabled:objectSpeechRef.current,objectColorsEnabled:true,colorSpeechEnabled:colorSpeechRef.current,approachPhrase:assistant.approach,vision:provider,ocr:new TesseractOCRProvider(),depth:new UnavailableDepthProvider(),
         experimentalApproachEnabled:experimentalAlertsRef.current,
         estimatedMetricModel:nativeFrames?undefined:signal=>WorkerMetricDepthProvider.open(signal),
@@ -277,7 +286,7 @@ export default function Vision() {
       await pipeline.start();
       if(run===generation.current){setState('WORKING');if(nativeFrames)setCameraPermission('allowed');}
       // Optional segmentation loads after the detector is live and cannot hold startup hostage.
-      if(import.meta.env.VITE_BASIRA_RESEARCH_SEGMENTATION==='true')window.setTimeout(()=>{if(run!==generation.current)return;void SegFormerSceneProvider.open().then(model=>{
+      if(!activeObjectProfile&&import.meta.env.VITE_BASIRA_RESEARCH_SEGMENTATION==='true')window.setTimeout(()=>{if(run!==generation.current)return;void SegFormerSceneProvider.open().then(model=>{
         if(run===generation.current)pipeline.setSegmentation(model);else void model.close();
       }).catch(()=>{if(run===generation.current)setModelWarning(t.segmentationFailure);});},2500);
     } catch(caught) {
@@ -287,7 +296,7 @@ export default function Vision() {
       const key=caught instanceof CameraServiceError?caught.code:'MODEL';
       console.warn('Basira vision startup failed',{code:key});
       const nativePermission=caught instanceof Error&&caught.message.includes('camera_permission_required');
-      setError(nativePermission?t.nativePermissionRetry:key==='NO_CAMERA'?t.noCamera:key==='DENIED'?t.denied:key==='DEVICE_SETTINGS'?t.settings:key==='UNAVAILABLE'?t.unavailable:key==='IN_USE'?t.inUse:key==='MODEL'?t.modelFailure:t.cameraFailure);
+      setError(activeObjectProfile&&key==='MODEL'?`تعذر النموذج التجريبي: ${caught instanceof Error?caught.message:'object_quality_unavailable'}؛ يمكنك الرجوع فورًا إلى Lite0.`:nativePermission?t.nativePermissionRetry:key==='NO_CAMERA'?t.noCamera:key==='DENIED'?t.denied:key==='DEVICE_SETTINGS'?t.settings:key==='UNAVAILABLE'?t.unavailable:key==='IN_USE'?t.inUse:key==='MODEL'?t.modelFailure:t.cameraFailure);
       setState('STOPPED');
       permissionService.status('camera').then(setCameraPermission).catch(()=>{});
     }
@@ -295,7 +304,8 @@ export default function Vision() {
   const report=(detail:boolean)=>{
     const snapshot=currentPerception(perceptionRef.current,performance.now());
     const answer=answerLocalQuestion('ماذا يوجد أمام الكاميرا؟',snapshot,performance.now(),t);
-    const value=detail&&snapshot&&scene?scene.detailedText:answer.route==='LOCAL'?answer.text:t.noDetections;
+    const researchObjects=snapshot?.observations.filter(o=>o.validity==='CURRENT'&&o.detection.tracking?.state==='TRACKED').slice(0,5)??[];
+    const value=activeObjectProfile?(researchObjects.length?researchObjects.map(({detection:d})=>`${objectLabel(d,t)}، ${d.cocoClass==='person'?'ألوان الملابس غير محددة':colorDescription(d)} ${['LEFT','FRONT_LEFT'].includes(d.horizontalDirection)?'في يسار الصورة':['RIGHT','FRONT_RIGHT'].includes(d.horizontalDirection)?'في يمين الصورة':'في وسط الصورة'}`).join('؛ '):t.noDetections):detail&&snapshot&&scene?scene.detailedText:answer.route==='LOCAL'?answer.text:t.noDetections;
     setSpokenSummary(value);setLastOutput(value);
     if(!getSpeechPreferences().screenReaderMode)void speechEngine.enqueue(speechInput(value,lang,'ENVIRONMENT'),'INFORMATION',0,undefined,false,snapshot?snapshot.capturedAt+PERCEPTION_TTL_MS:performance.now()+PERCEPTION_TTL_MS);
   };
@@ -436,24 +446,26 @@ export default function Vision() {
     link.click();window.setTimeout(()=>URL.revokeObjectURL(url),1000);
   };
   const cameraState=state==='STOPPED'?t.stopped:state==='STARTING'?t.starting:state==='WORKING'?t.working:t.analyzing;
-  const hasNativeFrames=typeof window!=='undefined'&&Boolean(window.BasiraNativeFrames);
+  const hasNativeFrames=!activeObjectProfile&&typeof window!=='undefined'&&Boolean(window.BasiraNativeFrames);
   const currentMeterSnapshot=meterSnapshot&&Date.now()-meterSnapshot.capturedAt<6000?meterSnapshot:null;
   const currentPinnedFrame=pinnedFrame&&currentMeterSnapshot&&pinnedFrame.frame.frameId===currentMeterSnapshot.frameId&&
     pinnedFrame.frame.capturedAt===currentMeterSnapshot.capturedAt?pinnedFrame:null;
   const previewFrame=currentPinnedFrame?.frame??overlayFrame;
   const researchModel=researchModels.find(model=>model.id===selectedModel);
   const chooseModel=(id:string)=>{void stop();setSelectedModel(id);};
-  return <Layout><div className="container max-w-4xl space-y-4 py-6 text-stone-100">
+  return <Layout><div className="container max-w-4xl space-y-4 py-6 text-stone-100" data-testid="vision-page" data-vision-mode={selectedModel} data-state={state}>
     <Link href="/navigation" className="text-amber-300 underline">{nav.title}</Link>
-    <header><h1 className="text-3xl font-black">{t.title}</h1><p className="mt-3 text-lg text-stone-300">{researchModel?'تعرف تجريبي محلي على السلالم داخل بصيرة، دون توجيه أو تحذير سقوط.':t.description}</p></header>
+    <header><h1 className="text-3xl font-black">{t.title}</h1><p className="mt-3 text-lg text-stone-300">{researchModel?'تعرف تجريبي محلي على السلالم داخل بصيرة، دون توجيه أو تحذير سقوط.':activeObjectProfile?'تعرف محلي تجريبي على الأشياء وألوانها، دون توجيه أو قياس مسافة أو تحذيرات ملاحية.':t.description}</p></header>
     <section className="space-y-2 rounded-xl border border-amber-300/40 p-4" aria-label="اختيار نموذج بصيرة">
       <label htmlFor="basira-vision-model">نموذج الرؤية</label>
       <select id="basira-vision-model" className="mx-3 min-h-12 max-w-full rounded-xl bg-stone-900 px-3" value={selectedModel} onChange={event=>chooseModel(event.target.value)}>
-        <option value="original">النموذج الأصلي — افتراضي</option>{researchModels.map(model=><option key={model.id} value={model.id}>{model.name} — تجريبي</option>)}
+        <option value="original">النموذج الأصلي — افتراضي</option>{objectQualityProfile&&<option value={objectQualityProfile.id}>{objectQualityProfile.name}</option>}{researchModels.map(model=><option key={model.id} value={model.id}>{model.name} — تجريبي</option>)}
       </select><p className="text-sm text-stone-300">{registryNotice}</p>
     </section>
     {researchModel?<ExperimentalVision key={researchModel.id} model={researchModel} onOriginal={()=>chooseModel('original')}/>:<>
-    <p className="rounded-xl border border-amber-300/40 bg-amber-300/10 p-4 text-amber-100">{t.advisory}</p>
+    {activeObjectProfile&&<div role="status" className="rounded-xl border border-amber-300 p-4"><p>تعرف تجريبي على الأشياء فقط؛ دون قياس مسافة أو توجيه أو تحذير سقوط. الألوان غير مثبتة بشريًا. {activeObjectProfile.maskForStills?'التقسيم المحلي للصور الثابتة فقط وقد يستغرق عدة ثوانٍ.':'أوقف التقسيم الآلي بسبب إخفاق فحص الجودة النهائي؛ اللون تقدير محافظ من الصندوق أو غير واضح.'} لم يختبر هذا النموذج على iPhone.</p><button className={secondary} onClick={()=>chooseModel('original')}>الرجوع فورًا إلى Lite0</button></div>}
+    {!activeObjectProfile&&<p className="rounded-xl border border-amber-300/40 bg-amber-300/10 p-4 text-amber-100">{t.advisory}</p>}
+    {activeObjectProfile&&error&&<p role="alert" className="rounded-xl border border-red-400/50 p-4 text-red-200">{error}</p>}
     <div className="flex flex-wrap gap-3">{state==='STOPPED'?<button type="button" className={button} onClick={start}>{t.start}</button>:<button type="button" className={button} onClick={()=>void stop()}>{t.stop}</button>}</div>
     <section aria-label={t.preview} className="relative mx-auto w-full max-w-2xl overflow-hidden rounded-xl bg-stone-950"
       style={{aspectRatio:previewFrame?`${previewFrame.width}/${previewFrame.height}`:hasNativeFrames?'3/4':'4/3'}}>
@@ -470,13 +482,14 @@ export default function Vision() {
       <button type="button" className={secondary} aria-pressed={objectSpeechEnabled} onClick={toggleObjectSpeech}>{assistant.objectSpeech}: {objectSpeechEnabled?assistant.objectSpeechOn:assistant.objectSpeechOff}</button>
       <button type="button" className={`${secondary} mx-2`} aria-pressed={colorSpeechEnabled} onClick={()=>{const enabled=!colorSpeechEnabled;colorSpeechRef.current=enabled;setColorSpeechEnabled(saveColorSpeechEnabled(enabled));pipelineRef.current?.setColorSpeechEnabled(enabled);if(!enabled)speechEngine.replaceAtPriority('INFORMATION');}}>وصف الألوان صوتيًا: {colorSpeechEnabled?'تشغيل':'إيقاف'}</button>
       <p className="mt-2 text-stone-300">درجات الكاشف غير معايرة وليست نسب صحة مثبتة. الألوان تقديرية من بكسلات الإطار نفسه؛ عند غياب قناع جسم موثوق قد يمتنع النظام. يمين الصورة ويسارها مواضع بصرية وليسا تعليمات للمشي.</p>
-      <div className="mt-3 flex flex-wrap gap-3"><button type="button" className={secondary} aria-pressed={experimentalAlerts} onClick={()=>setAlerts(!experimentalAlerts)}>{experimentalAlerts?'إيقاف مؤشرات الاقتراب التجريبية':'تشغيل مؤشرات الاقتراب التجريبية'}</button><button type="button" className={secondary} onClick={repeatLast}>إعادة آخر وصف</button></div>
+      <div className="mt-3 flex flex-wrap gap-3">{!activeObjectProfile&&<button type="button" className={secondary} aria-pressed={experimentalAlerts} onClick={()=>setAlerts(!experimentalAlerts)}>{experimentalAlerts?'إيقاف مؤشرات الاقتراب التجريبية':'تشغيل مؤشرات الاقتراب التجريبية'}</button>}<button type="button" className={secondary} onClick={repeatLast}>إعادة آخر وصف</button></div>
       <p className="mt-2 text-stone-300">مؤشرات الاقتراب تتطلب تتبعًا مستقرًا وأدلة حركة متعددة. قد تتوقف عند بطء الجهاز أو دوران الكاميرا أو التكبير؛ لا تثبت احتمال اصطدام أو سلامة المشي.</p>
       <p className="mt-3 min-h-6" role={screenReaderMode?'status':undefined} aria-live={screenReaderMode?'polite':'off'}>{lastObjectText}</p>
       <p className="mt-2" role="status" aria-live="off">{assistant.speechStatus}: {screenReaderMode?assistant.speechMuted:speechError==='PLAYBACK_BLOCKED'?assistant.speechBlocked:speechError==='NO_VOICE'?assistant.speechNoVoice:speechMode==='PREMIUM'?assistant.speechPremium:assistant.speechLocal}</p>
       <div className="mt-3 flex flex-wrap gap-2"><button type="button" className={secondary} onClick={()=>void testSpeech(assistant.testPhrase,lang)}>{assistant.testVoice}</button><button type="button" className={secondary} onClick={stopSpeaking}>{assistant.stopVoice}</button></div>
     </section>
-    <ObjectPhotoInput copy={t} objectsSpeech={objectSpeechEnabled} colorsSpeech={colorSpeechEnabled} cameraRunning={state!=='STOPPED'} beforeAnalyze={stop} announce={text=>{setLastObjectText(text);if(!getSpeechPreferences().screenReaderMode)speak(text,.9,'ar','ENVIRONMENT');}}/>
+    <ObjectPhotoInput key={selectedModel} profile={activeObjectProfile} copy={t} objectsSpeech={objectSpeechEnabled} colorsSpeech={colorSpeechEnabled} cameraRunning={state!=='STOPPED'} beforeAnalyze={stop} announce={text=>{setLastObjectText(text);if(!getSpeechPreferences().screenReaderMode)speak(text,.9,'ar','ENVIRONMENT');}}/>
+    {!activeObjectProfile&&<>
     <section className="rounded-2xl border border-amber-300/50 bg-stone-900 p-5" aria-label={assistant.title}>
       <h2 className="text-xl font-bold">{assistant.title}</h2>
       <p className="mt-2 text-stone-300">{assistant.privacy}</p>
@@ -575,6 +588,7 @@ export default function Vision() {
     {locationEstimate?.state==='TRACKING'&&<section className="space-y-3 rounded-xl border border-amber-300/40 p-4"><p>موقعك الحالي: بالقرب من {recognized?.name??'مكان معروف'} · الثقة {Math.round(locationEstimate.confidence*100)}٪. التقدير مرتبط بلوحة معروفة وليس قياسًا ميدانيًا للدقة.</p><div className="flex flex-wrap gap-2"><input className="min-h-12 rounded-xl border border-amber-200/40 bg-stone-950 px-3" value={savedName} onChange={e=>setSavedName(e.target.value)} placeholder="اسم مكانك الخاص" aria-label="اسم مكانك الخاص"/><button className={secondary} disabled={!savedName.trim()} onClick={savePersonal}>احفظ هذا المكان</button></div><p role="status" aria-live="polite">{saveNotice}</p></section>}
     {locationEstimate?.state==='LOCALIZATION_LOST'&&<p role="alert" className="rounded-xl border border-amber-300/40 p-4">تعذر تحديد موقعك بدقة داخل المبنى. وجّه الكاميرا نحو لوحة مكان معروف لإعادة التثبيت.</p>}
     {candidates.length>0&&<section className="space-y-3 rounded-xl border border-amber-200/30 p-4"><h2 className="font-bold">معلومات جديدة محتملة للخريطة</h2><label className="flex gap-2"><input type="checkbox" checked={shareCandidate} onChange={e=>setShareCandidate(e.target.checked)}/>أوافق على مشاركة نص اللوحة وموقع تقريبي فقط، دون صورة، للمراجعة العامة</label>{candidates.slice(0,2).map(candidate=><p key={candidate.id}>{candidate.lookupStatus==='UNAVAILABLE'?t.candidateOffline(candidate.detectedText):t.candidate(candidate.detectedText)} <button className={secondary} disabled={!shareCandidate||locationEstimate?.state!=='TRACKING'} onClick={()=>void contributeCandidate(candidate)}>أرسل كمساهمة</button></p>)}<p role="status" aria-live="polite">{shareNotice}</p></section>}
+    </>}
     </>}
   </div></Layout>;
 }

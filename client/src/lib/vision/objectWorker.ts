@@ -1,13 +1,16 @@
 import {MediaPipeVisionProvider} from './providers';
 import type {VisionConfig} from './config';
-type Request={kind:'init';config:VisionConfig}|{kind:'detect';id:number;bitmap:ImageBitmap;timestamp:number};
+import type {VisionProvider} from '@shared/vision';
+import type {ObjectQualityProfile} from '@shared/objectQuality';
+import {ObjectQualityProvider} from './objectQuality';
+type Request={kind:'init';config:VisionConfig;profile?:ObjectQualityProfile;withMasks?:boolean}|{kind:'detect';id:number;bitmap:ImageBitmap;timestamp:number};
 const scope=self as unknown as {onmessage:((event:MessageEvent<Request>)=>void)|null;postMessage:(data:unknown)=>void};
-let provider:MediaPipeVisionProvider|null=null;
+let provider:VisionProvider|null=null;
 scope.onmessage=event=>{
  const request=event.data;
  if(request.kind==='init'){
-   void MediaPipeVisionProvider.open(request.config).then(value=>{provider=value;scope.postMessage({kind:'ready'});})
-     .catch(()=>scope.postMessage({kind:'error',id:0}));return;
+   void (request.profile?ObjectQualityProvider.open(request.profile,request.withMasks):MediaPipeVisionProvider.open(request.config)).then(value=>{provider=value;scope.postMessage({kind:'ready'});})
+     .catch(error=>scope.postMessage({kind:'error',id:0,message:error instanceof Error?error.message:'object_worker_init'}));return;
  }
  void (async()=>{try{
    if(!provider)throw new Error('not_ready');

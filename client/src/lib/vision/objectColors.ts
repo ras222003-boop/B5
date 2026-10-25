@@ -46,7 +46,7 @@ export function colorDescription(detection: VisionDetection) {
       : color.reason === "CHANGING"
         ? "اللون غير واضح؛ يجري التحقق من تغيره"
         : "اللون غير واضح";
-  return `${colorWord(color.name, COCO_LABELS[detection.cocoClass ?? ""]?.feminine)}${color.status === "ESTIMATED" ? " (تقدير من الصورة)" : ""}`;
+  return `${colorWord(color.name, COCO_LABELS[detection.cocoClass ?? ""]?.feminine)}${color.status === "ESTIMATED" ? " (تقدير من الصورة)" : color.status === "MASK_SUPPORTED" ? " (من قناع آلي تجريبي)" : ""}`;
 }
 export function sampleColorFrame(
   source: HTMLVideoElement | HTMLCanvasElement | OffscreenCanvas,
@@ -59,10 +59,16 @@ export function sampleColorFrame(
   const scale = Math.min(1, 320 / Math.max(w, h)),
     width = Math.max(1, Math.round(w * scale)),
     height = Math.max(1, Math.round(h * scale));
-  const canvas = document.createElement("canvas");
+  const canvas =
+    typeof document === "undefined"
+      ? new OffscreenCanvas(width, height)
+      : document.createElement("canvas");
   canvas.width = width;
   canvas.height = height;
-  const ctx = canvas.getContext("2d", { willReadFrequently: true });
+  const ctx = canvas.getContext("2d", { willReadFrequently: true }) as
+    | CanvasRenderingContext2D
+    | OffscreenCanvasRenderingContext2D
+    | null;
   if (!ctx) return null;
   ctx.drawImage(source, 0, 0, width, height);
   const data = ctx.getImageData(0, 0, width, height).data;

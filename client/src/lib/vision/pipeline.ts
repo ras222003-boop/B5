@@ -25,7 +25,7 @@ interface Callbacks {
   perception?:(snapshot:PerceptionSnapshot|null)=>void;
   analysisState?:(state:'WAITING'|'LIVE'|'STALE'|'PAUSED'|'SLOW')=>void;
   scene:(description:SceneDescription)=>void;
-  detectionFrame?:(frame:LiveDetectionFrame)=>void;
+  detectionFrame?:(frame:LiveDetectionFrame|null)=>void;
   alert:(text:string,risk:SceneDescription['riskLevel'])=>void;
   objectSpeech?:(text:string)=>boolean;
   approachSpeech?:(text:string)=>boolean;
@@ -159,7 +159,7 @@ export class VisionPipeline {
   private inferenceMs=0;
   private detections=0;
   constructor(private readonly options:VisionPipelineOptions) {
-    if(options.vision.usagePolicy==='EXPERIMENTAL_DISPLAY_ONLY')throw new Error('Research providers cannot enter guidance/safety pipeline');
+    if(options.vision.usagePolicy)throw new Error('Research providers cannot enter guidance/safety pipeline');
     this.approachEnabled=options.experimentalApproachEnabled===true;
     this.autoMeterEnabled=options.autoMeterEnabled===true;
     this.objectSpeechEnabled=options.objectSpeechEnabled!==false;

@@ -9,6 +9,7 @@ import {
 } from "@/lib/vision/objectColors";
 import { objectLabel } from "@/lib/vision/cocoLabels";
 import type { VisionCopy } from "@/lib/vision/scene";
+import type { ObjectQualityProfile } from "@shared/objectQuality";
 export function ObjectPhotoInput({
   copy,
   objectsSpeech,
@@ -16,6 +17,7 @@ export function ObjectPhotoInput({
   cameraRunning,
   beforeAnalyze,
   announce,
+  profile,
 }: {
   copy: VisionCopy;
   objectsSpeech: boolean;
@@ -23,6 +25,7 @@ export function ObjectPhotoInput({
   cameraRunning: boolean;
   beforeAnalyze: () => Promise<void>;
   announce: (text: string) => void;
+  profile?: ObjectQualityProfile;
 }) {
   const canvas = useRef<HTMLCanvasElement>(null),
     provider = useRef<VisionProvider | null>(null),
@@ -96,7 +99,9 @@ export function ObjectPhotoInput({
       opening.current = abort;
       const opened = await openObjectProvider(
         DEFAULT_VISION_CONFIG,
-        abort.signal
+        abort.signal,
+        profile,
+        Boolean(profile?.maskForStills)
       );
       opening.current = null;
       if (run !== generation.current || !alive.current) {
@@ -110,10 +115,15 @@ export function ObjectPhotoInput({
       const detections = await provider.current.detect(target, capturedAt);
       if (run !== generation.current || !alive.current) return;
       const result = detections
-        .filter(d => d.confidence >= 0.65)
+        .filter(d => d.confidence >= (profile?.threshold ?? 0.65))
         .map(d => ({
           ...d,
-          color: pixels ? analyzeObjectColor(pixels, d, detections) : undefined,
+          color:
+            d.color?.timestamp === capturedAt
+              ? d.color
+              : pixels
+                ? analyzeObjectColor(pixels, d, detections)
+                : undefined,
         }));
       setRows(result);
       setMilliseconds(performance.now() - started);
@@ -211,6 +221,20 @@ export function ObjectPhotoInput({
         }}
       />
       <p role="status">{notice}</p>
+      {busy && (
+        <button
+          type="button"
+          className="min-h-12 rounded-lg border border-amber-300 px-4"
+          onClick={() => {
+            release();
+            setBusy(false);
+            setRows([]);
+            setNotice("أوقف تحليل الصورة وأغلقت موارده.");
+          }}
+        >
+          إيقاف تحليل الصورة
+        </button>
+      )}
       <canvas
         ref={canvas}
         width={640}
@@ -230,6 +254,15 @@ export function ObjectPhotoInput({
             {d.cocoClass === "person"
               ? "ألوان الملابس غير محددة"
               : colorDescription(d)}{" "}
+            {d.objectMask && (
+              <span>
+                {" "}
+                —{" "}
+                {d.objectMask.accepted
+                  ? "قناع آلي اجتاز فلاتر مبدئية؛ صحة اللون غير مثبتة"
+                  : "قناع غير كافٍ لتحديد اللون"}
+              </span>
+            )}
             — مربع{" "}
             {Object.values(d.boundingBox)
               .map(n => n.toFixed(2))

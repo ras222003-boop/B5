@@ -31,11 +31,11 @@ export function currentPerception(snapshot:PerceptionSnapshot|null,now:number){
   return ground.length===snapshot.ground.observations.length&&approach.length===snapshot.approach.length?snapshot:
     {...snapshot,ground:{...snapshot.ground,observations:ground},approach};
 }
-export function observationFor(detection:VisionDetection):PerceptionObservation{
-  const uncertain=detection.confidence<.65||detection.tracking?.state==='AMBIGUOUS';
+export function observationFor(detection:VisionDetection,minimumScore=.65):PerceptionObservation{
+  const uncertain=detection.confidence<minimumScore||detection.tracking?.state==='AMBIGUOUS';
   return {detection,validity:uncertain?'UNCERTAIN':'CURRENT',
     evidence:[detection.source,'VISIBLE_BOUNDING_BOX',...(detection.trackId?['TEMPORAL_ASSOCIATION']:[])],
-    uncertainty:[...(detection.confidence<.65?['CLASSIFICATION_BELOW_NAMING_THRESHOLD']:[]),
+    uncertainty:[...(detection.confidence<minimumScore?['CLASSIFICATION_BELOW_NAMING_THRESHOLD']:[]),
       ...(detection.tracking?.state==='AMBIGUOUS'?['IDENTITY_AMBIGUOUS']:[]),
       'NO_VERIFIED_DISTANCE','CAMERA_DIRECTION_IS_NOT_WALKING_DIRECTION']};
 }

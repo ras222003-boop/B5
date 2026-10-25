@@ -53,12 +53,12 @@ function boxIoU(a: VisionDetection['boundingBox'], b: VisionDetection['boundingB
 /** EfficientDet-Lite0/COCO: only labels actually represented by the model are mapped. */
 export class MediaPipeVisionProvider implements VisionProvider {
   private constructor(private readonly detector: import('@mediapipe/tasks-vision').ObjectDetector) {}
-  static async open(config: VisionConfig,benchmarkModelBytes?:Uint8Array): Promise<MediaPipeVisionProvider> {
+  static async open(config: VisionConfig,benchmarkModelBytes?:Uint8Array,maxResults=12): Promise<MediaPipeVisionProvider> {
     const { FilesetResolver, ObjectDetector } = await import('@mediapipe/tasks-vision');
     const fileset = await FilesetResolver.forVisionTasks('/vision/mediapipe',typeof document==='undefined');
     const detector = await ObjectDetector.createFromOptions(fileset, {
       baseOptions: benchmarkModelBytes?{modelAssetBuffer:benchmarkModelBytes}:{ modelAssetPath: '/vision/efficientdet_lite0_int8.tflite' },
-      runningMode: 'VIDEO', scoreThreshold: config.detectionThreshold, maxResults: 12,
+      runningMode: 'VIDEO', scoreThreshold: config.detectionThreshold, maxResults,
     });
     return new MediaPipeVisionProvider(detector);
   }

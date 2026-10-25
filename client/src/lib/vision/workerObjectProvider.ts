@@ -1,6 +1,7 @@
 import type {VisionDetection,VisionProvider} from '@shared/vision';
 import type {VisionConfig} from './config';
 import {MediaPipeVisionProvider} from './providers';
+import type {ObjectQualityProfile} from '@shared/objectQuality';
 
 /** At most one transferable frame in flight; closed/late workers cannot publish results. */
 export class WorkerObjectProvider implements VisionProvider {
@@ -8,7 +9,9 @@ export class WorkerObjectProvider implements VisionProvider {
  private busy=false;
  private serial=0;
  private pending:{id:number;resolve:(value:VisionDetection[])=>void;reject:(error:Error)=>void;timer:ReturnType<typeof setTimeout>}|null=null;
- private constructor(private readonly worker:Worker){
+ readonly usagePolicy?:'EXPERIMENTAL_OBJECTS_ONLY';
+ private constructor(private readonly worker:Worker,profile?:ObjectQualityProfile,private readonly timeoutMs=5000){
+   this.usagePolicy=profile?'EXPERIMENTAL_OBJECTS_ONLY':undefined;
    worker.addEventListener('message',event=>{const value=event.data,pending=this.pending;if(!pending||value.id!==pending.id)return;
      clearTimeout(pending.timer);this.pending=null;
      if(value.kind==='result')pending.resolve(value.detections);else pending.reject(new Error('object_worker_failed'));
@@ -16,16 +19,16 @@ export class WorkerObjectProvider implements VisionProvider {
    worker.addEventListener('error',()=>this.fail());
  }
  private fail(){if(this.pending){clearTimeout(this.pending.timer);this.pending.reject(new Error('object_worker_failed'));this.pending=null;}}
- static async open(config:VisionConfig,signal?:AbortSignal):Promise<WorkerObjectProvider>{
+ static async open(config:VisionConfig,signal?:AbortSignal,profile?:ObjectQualityProfile,withMasks=false):Promise<WorkerObjectProvider>{
    if(typeof Worker==='undefined'||typeof OffscreenCanvas==='undefined'||typeof createImageBitmap==='undefined')throw new Error('object_worker_unavailable');
    const worker=new Worker(new URL('./objectWorker.ts',import.meta.url),{type:'module'});
-   const provider=new WorkerObjectProvider(worker);
+   const provider=new WorkerObjectProvider(worker,profile,withMasks?30_000:5000);
    await new Promise<void>((resolve,reject)=>{
      const cleanup=()=>{clearTimeout(timer);worker.removeEventListener('message',ready);worker.removeEventListener('error',failed);signal?.removeEventListener('abort',failed);};
      const failed=()=>{cleanup();worker.terminate();reject(new Error('object_worker_init'));};
-     const ready=(event:MessageEvent)=>{if(event.data.kind==='ready'){cleanup();resolve();}else if(event.data.kind==='error')failed();};
-     const timer=setTimeout(failed,15_000);
-     worker.addEventListener('message',ready);worker.addEventListener('error',failed);signal?.addEventListener('abort',failed,{once:true});if(signal?.aborted){failed();return;}worker.postMessage({kind:'init',config});
+     const ready=(event:MessageEvent)=>{if(event.data.kind==='ready'){cleanup();resolve();}else if(event.data.kind==='error'){cleanup();worker.terminate();reject(new Error(typeof event.data.message==='string'?event.data.message:'object_worker_init'));}};
+     const timer=setTimeout(failed,withMasks?45_000:15_000);
+     worker.addEventListener('message',ready);worker.addEventListener('error',failed);signal?.addEventListener('abort',failed,{once:true});if(signal?.aborted){failed();return;}worker.postMessage({kind:'init',config,profile,withMasks});
    });return provider;
  }
  async detect(frame:HTMLVideoElement|HTMLCanvasElement,timestamp:number):Promise<VisionDetection[]>{
@@ -36,7 +39,7 @@ export class WorkerObjectProvider implements VisionProvider {
      if(this.closed){bitmap.close();throw new Error('object_worker_closed');}
      const id=++this.serial;
      return await new Promise((resolve,reject)=>{
-       const timer=setTimeout(()=>{this.fail();this.worker.terminate();this.closed=true;},5000);
+       const timer=setTimeout(()=>{this.fail();this.worker.terminate();this.closed=true;},this.timeoutMs);
        this.pending={id,resolve,reject,timer};
        try{this.worker.postMessage({kind:'detect',id,bitmap,timestamp},[bitmap]);}catch{bitmap.close();this.fail();}
      });
@@ -44,7 +47,10 @@ export class WorkerObjectProvider implements VisionProvider {
  }
  async close(){this.closed=true;this.fail();this.worker.terminate();}
 }
-export async function openObjectProvider(config:VisionConfig,signal?:AbortSignal):Promise<{provider:VisionProvider;execution:'WORKER'|'MAIN_THREAD'}>{
- try{return {provider:await WorkerObjectProvider.open(config,signal),execution:'WORKER'};}
- catch{if(signal?.aborted)throw new Error('object_provider_cancelled');const provider=await MediaPipeVisionProvider.open(config);if(signal?.aborted){await provider.close();throw new Error('object_provider_cancelled');}return {provider,execution:'MAIN_THREAD'};}
+export async function openObjectProvider(config:VisionConfig,signal?:AbortSignal,profile?:ObjectQualityProfile,withMasks=false):Promise<{provider:VisionProvider;execution:'WORKER'|'MAIN_THREAD'}>{
+ try{return {provider:await WorkerObjectProvider.open(config,signal,profile,withMasks),execution:'WORKER'};}
+ catch(error){if(signal?.aborted)throw new Error('object_provider_cancelled');
+  // Long segmentation and experimental inference require a worker, so cancellation stays responsive.
+  if(profile)throw error;
+  const provider=await MediaPipeVisionProvider.open(config);if(signal?.aborted){await provider.close();throw new Error('object_provider_cancelled');}return {provider,execution:'MAIN_THREAD'};}
 }

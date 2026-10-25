@@ -18,7 +18,7 @@ export class ObjectSpeechTracker {
   private tracks = new Map<string, SpokenTrack>();
   private lastSpeech = -Infinity;
   constructor(private readonly copy: VisionCopy, private readonly minimumGapMs = 4500,
-    private readonly approachPhrase = copy.approachPossible) {}
+    private readonly approachPhrase = copy.approachPossible,private readonly minimumScore=.65) {}
   reset() { this.tracks.clear(); this.lastSpeech = -Infinity; }
   observe(detections: readonly VisionDetection[], now: number, announce: (text: string) => boolean,
     approaches: readonly VisualApproachObservation[] = [],ordinaryEnabled=true,
@@ -27,7 +27,7 @@ export class ObjectSpeechTracker {
     const current = new Map<string, SpokenTrack>();
     for (const detection of detections) {
       if (!detection.trackId || detection.tracking?.state !== 'TRACKED' || detection.tracking.observations < 2 ||
-        !Number.isFinite(detection.confidence) || detection.confidence < .65 || detection.confidence > 1 ||
+        !Number.isFinite(detection.confidence) || detection.confidence < this.minimumScore || detection.confidence > 1 ||
         (excluded.has(detection.type)&&!(detection.type==='UNKNOWN_OBSTACLE'&&detection.cocoClass)) || detection.experimental || detection.source === 'SEGMENTATION' || !validNormalizedBox(detection.boundingBox) ||
         !Number.isFinite(detection.timestamp) || now - detection.timestamp > 800 || detection.timestamp > now + 5) continue;
       const previous = this.tracks.get(detection.trackId);
@@ -71,7 +71,7 @@ export class ObjectSpeechTracker {
       if(!ordinaryEnabled&&d.cocoClass==='person')return 'ألوان الملابس غير محددة دون فصل موثوق للملابس عن بقية الشخص';
       if(colorEnabled&&d.color?.reason==='LOW_LIGHT')return 'اللون غير واضح بسبب ضعف الإضاءة';
       const direction=colorEnabled&&this.copy.object.PERSON==='شخص'?(['LEFT','FRONT_LEFT'].includes(d.horizontalDirection)?'في يسار الصورة':['RIGHT','FRONT_RIGHT'].includes(d.horizontalDirection)?'في يمين الصورة':'في وسط الصورة'):this.copy.direction[d.horizontalDirection];
-      return ordinaryEnabled?`${name}${color?`، ${d.color?.name?(COCO_LABELS[d.cocoClass??'']?.feminine?'يبدو لونها ':'يبدو لونه '):''}${color}`:''} ${direction}`:`لون ${name}: ${color||'غير واضح'}`;
+      return ordinaryEnabled?`${name}${color?`، ${d.color?.name?(COCO_LABELS[d.cocoClass??'']?.feminine?'تبدو ':'يبدو '):''}${color}`:''} ${direction}`:`لون ${name}: ${d.color?.name?colorDescription({...d,cocoClass:undefined}).replace(' (تقدير من الصورة)',''):color||'غير واضح'}`;
     }).join('، ')}.`;
     if (!announce(text)) return null;
     for (const track of candidates) { if(ordinaryEnabled)track.announcedDirection = track.detection.horizontalDirection;track.announcedColor=signature(track);track.announcedAt = now; }
