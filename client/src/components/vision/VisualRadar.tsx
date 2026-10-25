@@ -1,6 +1,8 @@
 import {useState} from 'react';
 import type {PerceptionSnapshot} from '@/lib/vision/perception';
 import type {VisionCopy} from '@/lib/vision/scene';
+import {objectLabel} from '@/lib/vision/cocoLabels';
+import {colorDescription} from '@/lib/vision/objectColors';
 
 export function VisualRadar({snapshot,copy,visible,onToggle,onDescribe}:{snapshot:PerceptionSnapshot|null;copy:VisionCopy;visible:boolean;onToggle:()=>void;onDescribe:()=>void}){
  const [details,setDetails]=useState(false);
@@ -30,7 +32,8 @@ export function VisualRadar({snapshot,copy,visible,onToggle,onDescribe}:{snapsho
      <p className="mt-3" data-testid="tracking-status">{snapshot.tracking==='TRACKING'?'التتبع يعمل ضمن الإطارات المرصودة.':snapshot.tracking==='LIMITED'?'موثوقية التتبع منخفضة؛ معدل التحليل أو الإضاءة غير كافيين.':'يجري تثبيت التتبع.'}</p>
      <ol className="mt-3 list-inside list-decimal space-y-2" aria-label="الأجسام المرصودة حاليًا" data-testid="perception-objects">
        {objects.map(({detection,validity})=><li key={detection.trackId??detection.id}>
-         {validity==='UNCERTAIN'?'جسم غير مؤكد':copy.object[detection.type]} {copy.direction[detection.horizontalDirection]}
+         {validity==='UNCERTAIN'?'جسم غير مؤكد':detection.tracking&&detection.tracking.state!=='TRACKED'?'جسم قيد تثبيت التسمية':objectLabel(detection,copy)} {copy.direction[detection.horizontalDirection]}
+         {detection.color&&<span> — {detection.cocoClass==='person'?'ألوان الملابس غير محددة':colorDescription(detection)}</span>}
          <span className="text-stone-300"> — {detection.tracking?.state==='TRACKED'?'هوية متتبعة':detection.tracking?.state==='AMBIGUOUS'?'هوية ملتبسة':'تثبيت الهوية'}، درجة النموذج {Math.round(detection.confidence*100)}٪</span>
          {snapshot.approach.some(item=>item.trackId===detection.trackId&&['POSSIBLE_APPROACH','STRONG_APPROACH'].includes(item.state))&&<strong>، مؤشرات اقتراب تجريبية</strong>}
        </li>)}

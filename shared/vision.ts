@@ -42,8 +42,17 @@ export interface VisionDetection {
   /** A model score is not calibrated probability; region heuristics are not class scores. */
   confidenceKind?: 'MODEL_SCORE' | 'REGION_HEURISTIC' | 'UNSPECIFIED';
   evidence?: readonly string[];
+  /** A supported detector label, separate from the navigation type mapping. */
+  cocoClass?:string;
+  color?:ObjectColorObservation;
   /** Display-only research detections must never enter guidance or fall alerts. */
   experimental?:{modelId:string;modelSha256:string;classId:number;navigationEligible:false;referenceLabel:false};
+}
+export type ObjectColorName='red'|'blue'|'green'|'yellow'|'orange'|'purple'|'pink'|'black'|'white'|'gray'|'brown'|'multicolor';
+export interface ObjectColorObservation {
+  name:ObjectColorName|null;status:'ESTIMATED'|'MASK_SUPPORTED'|'UNCLEAR';
+  reason:'BOX_ESTIMATE'|'ALIGNED_INSTANCE_MASK'|'LOW_LIGHT'|'CLIPPED_OR_REFLECTIVE'|'BACKGROUND_AMBIGUOUS'|'MIXED_OR_OCCLUDED'|'TOO_SMALL'|'WARMING_UP'|'CHANGING';
+  supportFraction:number;samples:number;timestamp:number;stableFrames:number;calibrated:false;
 }
 export interface ObstacleDetection extends VisionDetection {
   riskLevel: RiskLevel;

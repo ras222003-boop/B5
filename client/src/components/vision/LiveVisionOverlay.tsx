@@ -3,6 +3,8 @@ import type {AutoMeterSnapshot} from '@/lib/vision/autoMeter';
 import {overlayMeters} from '@/lib/vision/liveOverlay';
 import type {LiveDetectionFrame} from '@/lib/vision/pipeline';
 import type {HorizontalDirection,VisionObjectType} from '@shared/vision';
+import {objectLabel} from '@/lib/vision/cocoLabels';
+import {colorDescription} from '@/lib/vision/objectColors';
 
 interface Props {
   frame:LiveDetectionFrame|null;
@@ -30,12 +32,13 @@ export function LiveVisionOverlay({frame,snapshot,now,names,directions,metersLab
   if(!frame||!frame.width||!frame.height||visibleAt-frame.capturedAt>maxAgeMs)return null;
   return <svg className="pointer-events-none absolute inset-0 size-full" data-frame-id={frame.frameId} viewBox={`0 0 ${frame.width} ${frame.height}`}
     preserveAspectRatio="xMidYMid meet" aria-hidden="true">
-    {frame.detections.filter(item=>item.source==='OBJECT_DETECTOR').slice(0,8).map(item=>{
+    {frame.detections.filter(item=>item.source==='OBJECT_DETECTOR').slice(0,12).map(item=>{
       const box=item.boundingBox;
       if(![box.x,box.y,box.width,box.height].every(Number.isFinite)||box.width<=0||box.height<=0)return null;
       const x=box.x*frame.width,y=box.y*frame.height,w=box.width*frame.width,h=box.height*frame.height;
       const distance=overlayMeters(item,frame,snapshot,visibleAt,maxAgeMs);
-      const label=`${names[item.type]} ${directions[item.horizontalDirection]}${distance===null?'':` · ≈${distance.toFixed(2)} ${metersLabel} (${experimentalLabel})`}`;
+      const stableName=item.tracking&&item.tracking.state!=='TRACKED'?'جسم قيد تثبيت التسمية':objectLabel(item,{object:names});
+      const label=`${stableName} · ${Math.round(item.confidence*100)}%${item.color&&item.cocoClass!=='person'?` · ${colorDescription(item)}`:''} ${directions[item.horizontalDirection]}${distance===null?'':` · ≈${distance.toFixed(2)} ${metersLabel} (${experimentalLabel})`}`;
       const fontSize=Math.max(13,Math.min(20,frame.width/30));
       const labelWidth=Math.min(frame.width,Math.max(80,label.length*fontSize*.58));
       const labelX=Math.max(0,Math.min(x,frame.width-labelWidth));

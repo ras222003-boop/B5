@@ -40,6 +40,8 @@ import { loadSafetyFlags } from '@/lib/safetyFlags';
 import {ExperimentalVision} from '@/components/vision/ExperimentalVision';
 import {experimentalModels} from '@/lib/vision/experimentalStairs';
 import type {ExperimentalModel} from '@shared/experimentalModels';
+import {getColorSpeechEnabled,saveColorSpeechEnabled} from '@/lib/vision/objectColors';
+import {ObjectPhotoInput} from '@/components/vision/ObjectPhotoInput';
 
 const button='inline-flex min-h-14 items-center justify-center rounded-xl bg-amber-300 px-6 py-3 text-lg font-bold text-stone-950 hover:bg-amber-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-300';
 const secondary='inline-flex min-h-14 items-center justify-center rounded-xl border border-amber-300/50 px-6 py-3 text-lg font-bold text-amber-100 hover:bg-amber-300/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-300';
@@ -54,6 +56,7 @@ export default function Vision() {
   const cameraRef=useRef<CameraService>(new CameraService(DEFAULT_VISION_CONFIG));
   const pipelineRef=useRef<VisionPipeline|null>(null);
   const generation=useRef(0);
+  const objectOpenAbort=useRef<AbortController|null>(null);
   const descriptionAbort=useRef<AbortController|null>(null);
   const descriptionBusyRef=useRef(false);
   const localizationRef=useRef(new BasiraLocalizationEngine());
@@ -110,6 +113,8 @@ export default function Vision() {
   const [spokenSummary,setSpokenSummary]=useState('');
   const [objectSpeechEnabled,setObjectSpeechEnabled]=useState(()=>getObjectSpeechEnabled());
   const objectSpeechRef=useRef(objectSpeechEnabled);
+  const [colorSpeechEnabled,setColorSpeechEnabled]=useState(()=>getColorSpeechEnabled());
+  const colorSpeechRef=useRef(colorSpeechEnabled);
   const [lastObjectText,setLastObjectText]=useState('');
   const [videoPaused,setVideoPaused]=useState(false);
   const [screenReaderMode,setScreenReaderMode]=useState(()=>getSpeechPreferences().screenReaderMode);
@@ -164,6 +169,7 @@ export default function Vision() {
 
   const stop=useCallback(async()=>{
     generation.current++;
+    objectOpenAbort.current?.abort();objectOpenAbort.current=null;
     descriptionAbort.current?.abort();descriptionAbort.current=null;descriptionBusyRef.current=false;
     const pipeline=pipelineRef.current;pipelineRef.current=null;
     cameraRef.current.stop(videoRef.current??undefined);
@@ -176,6 +182,7 @@ export default function Vision() {
   },[stopSpeaking]);
   useEffect(()=>()=>{
     generation.current++;
+    objectOpenAbort.current?.abort();
     descriptionAbort.current?.abort();
     cameraRef.current.stop(videoRef.current??undefined);
     void pipelineRef.current?.stop();pipelineRef.current=null;
@@ -198,7 +205,8 @@ export default function Vision() {
       if(run!==generation.current){cameraRef.current.stop(videoRef.current);return;}
       if(!nativeFrames){setCameraPermission('allowed');setCameraSize(videoRef.current.videoWidth&&videoRef.current.videoHeight?{width:videoRef.current.videoWidth,height:videoRef.current.videoHeight}:cameraRef.current.frameSize);}
       else setCameraSize({width:nativeCanvasRef.current.width,height:nativeCanvasRef.current.height});
-      const {provider,execution}=await openObjectProvider(visionConfig);
+      const objectAbort=new AbortController();objectOpenAbort.current=objectAbort;
+      const {provider,execution}=await openObjectProvider(visionConfig,objectAbort.signal);objectOpenAbort.current=null;
       if(execution==='MAIN_THREAD')setAnalysisNotice('يستخدم هذا المتصفح التحليل على خيط الواجهة؛ قد تتأخر الاستجابة.');
       if(run!==generation.current){await provider.close();cameraRef.current.stop(videoRef.current);return;}
       const currentBuildingId=sessionStorage.getItem('basira-current-building');
@@ -206,7 +214,7 @@ export default function Vision() {
       if(run!==generation.current){await provider.close();cameraRef.current.stop(videoRef.current);return;}
       const announcement=new VisionAnnouncementService(t,(text,priority)=>{void speechEngine.enqueue(speechInput(text,lang,'ENVIRONMENT'),priority??'HIGH_SAFETY',0,undefined,false,(perceptionRef.current?.capturedAt??performance.now())+PERCEPTION_TTL_MS);},new BrowserHapticFeedbackProvider(),visionConfig.alertCooldownMs);
       const pipeline=new VisionPipeline({video:videoRef.current,nativeCanvas:nativeCanvasRef.current,nativeFrames,
-        autoMeterEnabled:autoMeterEnabledRef.current,objectSpeechEnabled:objectSpeechRef.current,approachPhrase:assistant.approach,vision:provider,ocr:new TesseractOCRProvider(),depth:new UnavailableDepthProvider(),
+        autoMeterEnabled:autoMeterEnabledRef.current,objectSpeechEnabled:objectSpeechRef.current,objectColorsEnabled:true,colorSpeechEnabled:colorSpeechRef.current,approachPhrase:assistant.approach,vision:provider,ocr:new TesseractOCRProvider(),depth:new UnavailableDepthProvider(),
         experimentalApproachEnabled:experimentalAlertsRef.current,
         estimatedMetricModel:nativeFrames?undefined:signal=>WorkerMetricDepthProvider.open(signal),
         segmentationIntervalMs:detected.segmentationIntervalMs,depthIntervalMs:detected.depthIntervalMs,
@@ -224,7 +232,7 @@ export default function Vision() {
           },
           alert:(text,level)=>{if(run===generation.current){setLastAlert(text);setRisk(level);}},
           objectSpeech:text=>{
-            if(run!==generation.current||!objectSpeechRef.current)return false;
+            if(run!==generation.current||(!objectSpeechRef.current&&!colorSpeechRef.current))return false;
             if(!getSpeechPreferences().screenReaderMode&&speechEngine.busy)return false;
             setLastObjectText(text);
             setLastOutput(text);
@@ -315,6 +323,7 @@ export default function Vision() {
     const enabled=!objectSpeechRef.current;
     objectSpeechRef.current=enabled;setObjectSpeechEnabled(saveObjectSpeechEnabled(enabled));
     pipelineRef.current?.setObjectSpeechEnabled(enabled);
+    if(!enabled)speechEngine.replaceAtPriority('INFORMATION');
   };
   const resumeCamera=async()=>{
     if(!cameraRef.current.active||!videoRef.current)return;
@@ -459,12 +468,15 @@ export default function Vision() {
     <VisualRadar snapshot={current} copy={t} visible={radarVisible} onToggle={()=>setRadarVisible(value=>!value)} onDescribe={()=>report(false)}/>
     <section className="rounded-2xl border border-amber-300/50 bg-stone-900 p-5" aria-label={assistant.objectSpeech}>
       <button type="button" className={secondary} aria-pressed={objectSpeechEnabled} onClick={toggleObjectSpeech}>{assistant.objectSpeech}: {objectSpeechEnabled?assistant.objectSpeechOn:assistant.objectSpeechOff}</button>
+      <button type="button" className={`${secondary} mx-2`} aria-pressed={colorSpeechEnabled} onClick={()=>{const enabled=!colorSpeechEnabled;colorSpeechRef.current=enabled;setColorSpeechEnabled(saveColorSpeechEnabled(enabled));pipelineRef.current?.setColorSpeechEnabled(enabled);if(!enabled)speechEngine.replaceAtPriority('INFORMATION');}}>وصف الألوان صوتيًا: {colorSpeechEnabled?'تشغيل':'إيقاف'}</button>
+      <p className="mt-2 text-stone-300">درجات الكاشف غير معايرة وليست نسب صحة مثبتة. الألوان تقديرية من بكسلات الإطار نفسه؛ عند غياب قناع جسم موثوق قد يمتنع النظام. يمين الصورة ويسارها مواضع بصرية وليسا تعليمات للمشي.</p>
       <div className="mt-3 flex flex-wrap gap-3"><button type="button" className={secondary} aria-pressed={experimentalAlerts} onClick={()=>setAlerts(!experimentalAlerts)}>{experimentalAlerts?'إيقاف مؤشرات الاقتراب التجريبية':'تشغيل مؤشرات الاقتراب التجريبية'}</button><button type="button" className={secondary} onClick={repeatLast}>إعادة آخر وصف</button></div>
       <p className="mt-2 text-stone-300">مؤشرات الاقتراب تتطلب تتبعًا مستقرًا وأدلة حركة متعددة. قد تتوقف عند بطء الجهاز أو دوران الكاميرا أو التكبير؛ لا تثبت احتمال اصطدام أو سلامة المشي.</p>
       <p className="mt-3 min-h-6" role={screenReaderMode?'status':undefined} aria-live={screenReaderMode?'polite':'off'}>{lastObjectText}</p>
       <p className="mt-2" role="status" aria-live="off">{assistant.speechStatus}: {screenReaderMode?assistant.speechMuted:speechError==='PLAYBACK_BLOCKED'?assistant.speechBlocked:speechError==='NO_VOICE'?assistant.speechNoVoice:speechMode==='PREMIUM'?assistant.speechPremium:assistant.speechLocal}</p>
       <div className="mt-3 flex flex-wrap gap-2"><button type="button" className={secondary} onClick={()=>void testSpeech(assistant.testPhrase,lang)}>{assistant.testVoice}</button><button type="button" className={secondary} onClick={stopSpeaking}>{assistant.stopVoice}</button></div>
     </section>
+    <ObjectPhotoInput copy={t} objectsSpeech={objectSpeechEnabled} colorsSpeech={colorSpeechEnabled} cameraRunning={state!=='STOPPED'} beforeAnalyze={stop} announce={text=>{setLastObjectText(text);if(!getSpeechPreferences().screenReaderMode)speak(text,.9,'ar','ENVIRONMENT');}}/>
     <section className="rounded-2xl border border-amber-300/50 bg-stone-900 p-5" aria-label={assistant.title}>
       <h2 className="text-xl font-bold">{assistant.title}</h2>
       <p className="mt-2 text-stone-300">{assistant.privacy}</p>

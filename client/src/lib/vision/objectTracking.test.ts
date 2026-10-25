@@ -42,4 +42,10 @@ describe('conservative object identity', () => {
     const t = new ObjectTracker(), first = t.update([item(.4, 1000)], frame(1000)).detections[0];
     t.reset(); expect(t.update([item(.4, 2000)], frame(2000)).detections[0].trackId).not.toBe(first.trackId);
   });
+  it('does not carry a colour identity from a cup to a different COCO class',()=>{
+    const t=new ObjectTracker();
+    const cup=t.update([{...item(.4,1000,'UNKNOWN_OBSTACLE'),cocoClass:'cup'}],frame(1000)).detections[0];
+    const fork=t.update([{...item(.4,1200,'UNKNOWN_OBSTACLE'),cocoClass:'fork'}],frame(1200)).detections[0];
+    expect(fork.trackId).not.toBe(cup.trackId);expect(fork.tracking.state).toBe('TENTATIVE');
+  });
 });

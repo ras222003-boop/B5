@@ -19,6 +19,7 @@ import {VisualApproachEstimator} from './visualApproach';
 import {SparseOpticalFlow} from './opticalFlow';
 import {GroundHazardEngine,grayscalePixels,type GroundHazardSnapshot} from './groundHazards';
 import {freshTimestamp,observationFor,PerceptionTelemetry,type PerceptionSnapshot} from './perception';
+import {sampleColorFrame,analyzeObjectColor,ObjectColorTracker} from './objectColors';
 
 interface Callbacks {
   perception?:(snapshot:PerceptionSnapshot|null)=>void;
@@ -67,6 +68,8 @@ export interface VisionPipelineOptions {
   nativeCanvas?:HTMLCanvasElement;
   autoMeterEnabled?:boolean;
   objectSpeechEnabled?:boolean;
+  objectColorsEnabled?:boolean;
+  colorSpeechEnabled?:boolean;
   experimentalApproachEnabled?:boolean;
   approachPhrase?:(name:string,direction:string)=>string;
   estimatedMetricModel?:(signal?:AbortSignal)=>Promise<EstimatedMetricDepthProvider>;
@@ -91,6 +94,8 @@ export function walkableAreaForLight(light: FrameLightStatus, area: WalkableArea
 
 /** Camera -> detector -> scene/safety; sparse OCR runs separately so it cannot block safety frames. */
 export class VisionPipeline {
+  private readonly colors=new ObjectColorTracker();
+  private colorSpeechEnabled=false;
   private readonly tracker=new ObjectTracker();
   private readonly flow=new SparseOpticalFlow();
   private readonly approach=new VisualApproachEstimator();
@@ -158,6 +163,7 @@ export class VisionPipeline {
     this.approachEnabled=options.experimentalApproachEnabled===true;
     this.autoMeterEnabled=options.autoMeterEnabled===true;
     this.objectSpeechEnabled=options.objectSpeechEnabled!==false;
+    this.colorSpeechEnabled=options.colorSpeechEnabled===true&&options.mode==='EXPLORATION';
     this.objectSpeech=new ObjectSpeechTracker(options.copy,4500,options.approachPhrase);
     this.safety=new BasiraSafetyEngine(options.config);
     this.fusion=new VisionFusionEngine(this.safety);
@@ -171,6 +177,7 @@ export class VisionPipeline {
     if(state!==this.analysisState){this.analysisState=state;this.options.callbacks.analysisState?.(state);}
   }
   private invalidate(state:'WAITING'|'STALE'|'PAUSED'){
+    this.colors.reset();
     this.observationGeneration++;
     this.latestObjects=[];this.latest=null;this.perception=null;
     this.segmentation=null;this.relativeDepth=null;this.metricDepth=null;this.signDetections=[];
@@ -192,6 +199,7 @@ export class VisionPipeline {
   setFindingDestination(active:boolean){this.findingDestination=active;}
   setAlertDistanceMeters(value:number){this.safety.setAlertDistanceMeters(value);}
   setObjectSpeechEnabled(enabled:boolean){this.objectSpeechEnabled=enabled;this.objectSpeech.reset();}
+  setColorSpeechEnabled(enabled:boolean){this.colorSpeechEnabled=enabled&&this.options.mode==='EXPLORATION';this.objectSpeech.reset();}
   setSegmentation(provider:SceneSegmentationProvider){
     if(!this.running){void provider.close();return;}
     this.options.segmentation=provider;this.geometryEnabled=true;this.lastGeometry=Number.NEGATIVE_INFINITY;
@@ -451,6 +459,7 @@ export class VisionPipeline {
         if(light!==this.cameraLight){this.cameraLight=light;this.options.callbacks.quality?.(light);}
       }
       grayCanvas.width=grayCanvas.height=0;
+      const colorPixels=this.options.objectColorsEnabled&&this.options.mode==='EXPLORATION'?sampleColorFrame(detectionFrame,detectorTimestamp,this.options.nativeFrames?nativeFrameId:`web-${detectorTimestamp}`):null;
       const rawDetections=await this.options.vision.detect(detectionFrame,detectorTimestamp);
       if(rawDetections.some(item=>item.experimental))throw new Error('Research detections cannot enter guidance/safety pipeline');
       if(!this.running||generation!==this.generation)return;
@@ -461,7 +470,7 @@ export class VisionPipeline {
       const frameId=this.options.nativeFrames?nativeFrameId:`web-${detectorTimestamp}`;
       const tracked=this.tracker.update(rawDetections,{frameId,capturedAt:detectorTimestamp,now:performance.now()});
       if(tracked.rejectedFrame){if(metricFrame)metricFrame.width=metricFrame.height=0;this.invalidate('STALE');this.schedule(100);return;}
-      const detections=tracked.detections;
+      const detections=tracked.detections.map(detection=>colorPixels&&detection.source==='OBJECT_DETECTOR'?{...detection,color:this.colors.update(detection,analyzeObjectColor(colorPixels,detection,tracked.detections))}:detection);
       this.lastCapturedAt=detectorTimestamp;this.lastCaptureWallTime=frameCapturedAt;
       const width=detectionFrame instanceof HTMLVideoElement?detectionFrame.videoWidth:detectionFrame.width;
       const height=detectionFrame instanceof HTMLVideoElement?detectionFrame.videoHeight:detectionFrame.height;
@@ -561,8 +570,8 @@ export class VisionPipeline {
       .filter(event=>event.riskLevel==='HIGH'||event.riskLevel==='CRITICAL');
     const alert=this.options.announcement.announce(safetyOnlyEvents,Date.now());
     if(alert)this.options.callbacks.alert(alert.text,alert.event.riskLevel);
-    if(fromDetection&&this.cameraLight!=='LOW_LIGHT'&&(this.objectSpeechEnabled||this.approachEnabled)&&!alert&&this.options.callbacks.objectSpeech)
-      this.objectSpeech.observe(objects,now,this.options.callbacks.objectSpeech,this.approachEnabled?this.perception?.approach:undefined,this.objectSpeechEnabled,this.options.callbacks.approachSpeech);
+    if(fromDetection&&(this.cameraLight!=='LOW_LIGHT'||this.colorSpeechEnabled)&&(this.objectSpeechEnabled||this.colorSpeechEnabled||this.approachEnabled)&&!alert&&this.options.callbacks.objectSpeech)
+      this.objectSpeech.observe(objects,now,this.options.callbacks.objectSpeech,this.approachEnabled?this.perception?.approach:undefined,this.objectSpeechEnabled&&this.cameraLight!=='LOW_LIGHT',this.options.callbacks.approachSpeech,this.colorSpeechEnabled);
   }
   private async processGeometry(generation:number,timestamp:number){
     this.geometryBusy=true;

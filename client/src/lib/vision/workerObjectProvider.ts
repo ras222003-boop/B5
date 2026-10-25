@@ -16,16 +16,16 @@ export class WorkerObjectProvider implements VisionProvider {
    worker.addEventListener('error',()=>this.fail());
  }
  private fail(){if(this.pending){clearTimeout(this.pending.timer);this.pending.reject(new Error('object_worker_failed'));this.pending=null;}}
- static async open(config:VisionConfig):Promise<WorkerObjectProvider>{
+ static async open(config:VisionConfig,signal?:AbortSignal):Promise<WorkerObjectProvider>{
    if(typeof Worker==='undefined'||typeof OffscreenCanvas==='undefined'||typeof createImageBitmap==='undefined')throw new Error('object_worker_unavailable');
    const worker=new Worker(new URL('./objectWorker.ts',import.meta.url),{type:'module'});
    const provider=new WorkerObjectProvider(worker);
    await new Promise<void>((resolve,reject)=>{
-     const cleanup=()=>{clearTimeout(timer);worker.removeEventListener('message',ready);worker.removeEventListener('error',failed);};
+     const cleanup=()=>{clearTimeout(timer);worker.removeEventListener('message',ready);worker.removeEventListener('error',failed);signal?.removeEventListener('abort',failed);};
      const failed=()=>{cleanup();worker.terminate();reject(new Error('object_worker_init'));};
      const ready=(event:MessageEvent)=>{if(event.data.kind==='ready'){cleanup();resolve();}else if(event.data.kind==='error')failed();};
      const timer=setTimeout(failed,15_000);
-     worker.addEventListener('message',ready);worker.addEventListener('error',failed);worker.postMessage({kind:'init',config});
+     worker.addEventListener('message',ready);worker.addEventListener('error',failed);signal?.addEventListener('abort',failed,{once:true});if(signal?.aborted){failed();return;}worker.postMessage({kind:'init',config});
    });return provider;
  }
  async detect(frame:HTMLVideoElement|HTMLCanvasElement,timestamp:number):Promise<VisionDetection[]>{
@@ -44,7 +44,7 @@ export class WorkerObjectProvider implements VisionProvider {
  }
  async close(){this.closed=true;this.fail();this.worker.terminate();}
 }
-export async function openObjectProvider(config:VisionConfig):Promise<{provider:VisionProvider;execution:'WORKER'|'MAIN_THREAD'}>{
- try{return {provider:await WorkerObjectProvider.open(config),execution:'WORKER'};}
- catch{return {provider:await MediaPipeVisionProvider.open(config),execution:'MAIN_THREAD'};}
+export async function openObjectProvider(config:VisionConfig,signal?:AbortSignal):Promise<{provider:VisionProvider;execution:'WORKER'|'MAIN_THREAD'}>{
+ try{return {provider:await WorkerObjectProvider.open(config,signal),execution:'WORKER'};}
+ catch{if(signal?.aborted)throw new Error('object_provider_cancelled');const provider=await MediaPipeVisionProvider.open(config);if(signal?.aborted){await provider.close();throw new Error('object_provider_cancelled');}return {provider,execution:'MAIN_THREAD'};}
 }

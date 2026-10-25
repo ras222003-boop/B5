@@ -51,7 +51,7 @@ export class ObjectTracker {
     const previous = Array.from(this.tracks.values());
     const costs = current.map(detection => previous.map(track => {
       const old = track.detection;
-      if (old.type !== detection.type || old.source !== detection.source) return Infinity;
+      if (old.type !== detection.type || old.source !== detection.source || old.cocoClass!==detection.cocoClass) return Infinity;
       const age = (capturedAt - old.timestamp) / 1000, c = center(detection.boundingBox), p = center(old.boundingBox);
       const distance = Math.hypot(c.x - (p.x + track.vx * age), c.y - (p.y + track.vy * age));
       const scale = Math.abs(Math.log((detection.boundingBox.width * detection.boundingBox.height) /

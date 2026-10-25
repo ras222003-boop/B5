@@ -1,6 +1,7 @@
 import type { DepthProvider, OCRDetection, OCRProvider, VisionDetection, VisionObjectType, VisionProvider } from '@shared/vision';
 import type { VisionConfig } from './config';
 import { classifyDirection, classifyVertical } from './safety';
+import {COCO_LABELS} from './cocoLabels';
 
 const clamp = (n: number) => Math.max(0, Math.min(1, n));
 export const cocoTypes: Readonly<Record<string, VisionObjectType>> = {
@@ -27,18 +28,19 @@ export function normalizeObjectDetections(entries: readonly RawDetection[], widt
     const right = clamp((box.originX + box.width) / width), bottom = clamp((box.originY + box.height) / height);
     if (right <= x || bottom <= y) continue;
     const boundingBox = { x, y, width: right - x, height: bottom - y };
-    const type = cocoTypes[category.categoryName.toLowerCase()] ?? 'UNKNOWN_OBSTACLE';
+    const name=category.categoryName.toLowerCase(),type = cocoTypes[name] ?? 'UNKNOWN_OBSTACLE';
     candidates.push({
       id: `${timestamp}-${index}`, type, confidence: category.score, boundingBox,
       horizontalDirection: classifyDirection(boundingBox), verticalPosition: classifyVertical(boundingBox),
       approximateDistance: null, timestamp, source: 'OBJECT_DETECTOR', confidenceKind: 'MODEL_SCORE',
       evidence: ['EFFICIENTDET_COCO_CLASSIFICATION'],
+      ...(COCO_LABELS[name]?{cocoClass:name}:{}),
     });
   }
   // Class-aware NMS prevents duplicate names while preserving overlapping different objects.
   const kept:VisionDetection[]=[];
   for(const candidate of candidates.sort((a,b)=>b.confidence-a.confidence))
-    if(!kept.some(other=>other.type===candidate.type&&boxIoU(other.boundingBox,candidate.boundingBox)>.6))kept.push(candidate);
+    if(!kept.some(other=>(other.cocoClass??other.type)===(candidate.cocoClass??candidate.type)&&boxIoU(other.boundingBox,candidate.boundingBox)>.6))kept.push(candidate);
   return kept;
 }
 
@@ -51,11 +53,11 @@ function boxIoU(a: VisionDetection['boundingBox'], b: VisionDetection['boundingB
 /** EfficientDet-Lite0/COCO: only labels actually represented by the model are mapped. */
 export class MediaPipeVisionProvider implements VisionProvider {
   private constructor(private readonly detector: import('@mediapipe/tasks-vision').ObjectDetector) {}
-  static async open(config: VisionConfig): Promise<MediaPipeVisionProvider> {
+  static async open(config: VisionConfig,benchmarkModelBytes?:Uint8Array): Promise<MediaPipeVisionProvider> {
     const { FilesetResolver, ObjectDetector } = await import('@mediapipe/tasks-vision');
     const fileset = await FilesetResolver.forVisionTasks('/vision/mediapipe',typeof document==='undefined');
     const detector = await ObjectDetector.createFromOptions(fileset, {
-      baseOptions: { modelAssetPath: '/vision/efficientdet_lite0_int8.tflite' },
+      baseOptions: benchmarkModelBytes?{modelAssetBuffer:benchmarkModelBytes}:{ modelAssetPath: '/vision/efficientdet_lite0_int8.tflite' },
       runningMode: 'VIDEO', scoreThreshold: config.detectionThreshold, maxResults: 12,
     });
     return new MediaPipeVisionProvider(detector);
