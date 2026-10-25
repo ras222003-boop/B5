@@ -1,6 +1,6 @@
 """Bounded mask-supervised CPU training; validation selection precedes sealed test."""
 from __future__ import annotations
-import argparse, hashlib, json, os, random, time
+import argparse, hashlib, json, os, random, time, subprocess, sys
 from collections import Counter,defaultdict
 from pathlib import Path
 import numpy as np
@@ -234,7 +234,17 @@ if __name__=='__main__':
     if not(1<=args.minutes<=30 and 1<=args.threads<=4 and 512<=args.memory_mb<=4096 and 128<=args.storage_mb<=2048):raise ValueError('CPU authorization bounds exceeded')
     try:
         result=train(args.root,args.output,args.v2_report,dict(minutes=args.minutes,threads=args.threads,memoryMB=args.memory_mb,storageMB=args.storage_mb))
-        print(json.dumps(dict(status=result['status'],mode=result['selectedMode'],onnx=result['onnx'],testEvaluated=False)),flush=True)
+        # Registration failure retains the completed training artifacts and is reported separately.
+        hook=Path(__file__).resolve().parents[1]/'experimental-models/complete-v3.mjs'
+        try:
+            published=subprocess.run(['node',str(hook),'--root',str(args.root.resolve()),'--run',str(args.output.resolve()),
+                '--v2-report',str(args.v2_report.resolve()),'--python',sys.executable],capture_output=True,text=True,encoding='utf-8',timeout=45,check=True)
+            registration=dict(status='registered_experimental_only',release=json.loads(published.stdout))
+        except Exception as registration_error:
+            registration=dict(status='not_registered',reason=(str(registration_error)+' '+str(getattr(registration_error,'stderr','')))[:2000],trainingArtifactsRetained=True,productionEnabled=False)
+        save_json(args.output/'experimental-registration.json',registration)
+        print(json.dumps(dict(status=result['status'],mode=result['selectedMode'],onnx=result['onnx'],testEvaluated=False,
+            experimentalRegistration=registration['status'],registrationReason=registration.get('reason'))),flush=True)
     except BaseException as error:
         if args.output.exists():save_json(args.output/'failure.json',dict(reason=str(error),partialResultsRetained=True))
         raise

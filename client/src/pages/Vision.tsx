@@ -37,6 +37,9 @@ import { BasiraLocalizationEngine } from '@/lib/localization/engine';
 import { navApi, navigationRequest, json } from '@/lib/navigationApi';
 import { emptyProposal, observedEvidence, sharedMapApi } from '@/lib/sharedMap';
 import { loadSafetyFlags } from '@/lib/safetyFlags';
+import {ExperimentalVision} from '@/components/vision/ExperimentalVision';
+import {experimentalModels} from '@/lib/vision/experimentalStairs';
+import type {ExperimentalModel} from '@shared/experimentalModels';
 
 const button='inline-flex min-h-14 items-center justify-center rounded-xl bg-amber-300 px-6 py-3 text-lg font-bold text-stone-950 hover:bg-amber-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-300';
 const secondary='inline-flex min-h-14 items-center justify-center rounded-xl border border-amber-300/50 px-6 py-3 text-lg font-bold text-amber-100 hover:bg-amber-300/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-300';
@@ -60,6 +63,15 @@ export default function Vision() {
   const [saveNotice,setSaveNotice]=useState('');
   const [state,setState]=useState<'STOPPED'|'STARTING'|'WORKING'|'ANALYZING'>('STOPPED');
   const [error,setError]=useState('');
+  const [researchModels,setResearchModels]=useState<ExperimentalModel[]>([]);
+  const [selectedModel,setSelectedModel]=useState('original');
+  const [registryNotice,setRegistryNotice]=useState('');
+  useEffect(()=>{
+    const abort=new AbortController();let active=true;
+    const refresh=()=>experimentalModels(abort.signal).then(models=>{if(active){setResearchModels(models);setSelectedModel(current=>current==='original'||models.some(model=>model.id===current)?current:'original');setRegistryNotice(models.length?'النماذج التجريبية متاحة للاختيار؛ لم تتغير النسخة الأصلية.':'لا توجد نماذج تجريبية محلية مسجلة.');}}).catch(()=>{if(active)setRegistryNotice('قائمة التجربة غير متاحة؛ يبقى النموذج الأصلي متاحًا.');});
+    void refresh();const timer=window.setInterval(()=>void refresh(),15000);
+    return()=>{active=false;abort.abort();window.clearInterval(timer);};
+  },[]);
   const [OCRWarning,setOCRWarning]=useState('');
   const [modelWarning,setModelWarning]=useState('');
   const [depthWarning,setDepthWarning]=useState('');
@@ -172,6 +184,7 @@ export default function Vision() {
   useEffect(()=>{const onHidden=()=>{if(document.hidden)void stop();};document.addEventListener('visibilitychange',onHidden);return()=>document.removeEventListener('visibilitychange',onHidden);},[stop]);
 
   const start=async()=>{
+    if(selectedModel!=='original')return;
     if(state!=='STOPPED'||!videoRef.current||!nativeCanvasRef.current)return;
     const run=++generation.current;
     setVideoPaused(false);
@@ -419,9 +432,18 @@ export default function Vision() {
   const currentPinnedFrame=pinnedFrame&&currentMeterSnapshot&&pinnedFrame.frame.frameId===currentMeterSnapshot.frameId&&
     pinnedFrame.frame.capturedAt===currentMeterSnapshot.capturedAt?pinnedFrame:null;
   const previewFrame=currentPinnedFrame?.frame??overlayFrame;
+  const researchModel=researchModels.find(model=>model.id===selectedModel);
+  const chooseModel=(id:string)=>{void stop();setSelectedModel(id);};
   return <Layout><div className="container max-w-4xl space-y-4 py-6 text-stone-100">
     <Link href="/navigation" className="text-amber-300 underline">{nav.title}</Link>
-    <header><h1 className="text-3xl font-black">{t.title}</h1><p className="mt-3 text-lg text-stone-300">{t.description}</p></header>
+    <header><h1 className="text-3xl font-black">{t.title}</h1><p className="mt-3 text-lg text-stone-300">{researchModel?'تعرف تجريبي محلي على السلالم داخل بصيرة، دون توجيه أو تحذير سقوط.':t.description}</p></header>
+    <section className="space-y-2 rounded-xl border border-amber-300/40 p-4" aria-label="اختيار نموذج بصيرة">
+      <label htmlFor="basira-vision-model">نموذج الرؤية</label>
+      <select id="basira-vision-model" className="mx-3 min-h-12 max-w-full rounded-xl bg-stone-900 px-3" value={selectedModel} onChange={event=>chooseModel(event.target.value)}>
+        <option value="original">النموذج الأصلي — افتراضي</option>{researchModels.map(model=><option key={model.id} value={model.id}>{model.name} — تجريبي</option>)}
+      </select><p className="text-sm text-stone-300">{registryNotice}</p>
+    </section>
+    {researchModel?<ExperimentalVision key={researchModel.id} model={researchModel} onOriginal={()=>chooseModel('original')}/>:<>
     <p className="rounded-xl border border-amber-300/40 bg-amber-300/10 p-4 text-amber-100">{t.advisory}</p>
     <div className="flex flex-wrap gap-3">{state==='STOPPED'?<button type="button" className={button} onClick={start}>{t.start}</button>:<button type="button" className={button} onClick={()=>void stop()}>{t.stop}</button>}</div>
     <section aria-label={t.preview} className="relative mx-auto w-full max-w-2xl overflow-hidden rounded-xl bg-stone-950"
@@ -489,7 +511,7 @@ export default function Vision() {
     <div className="flex flex-wrap gap-3"><button className={secondary} type="button" disabled={state==='STOPPED'||state==='STARTING'} onClick={()=>report(false)}>{t.whatAhead}</button><button className={secondary} type="button" disabled={state==='STOPPED'||state==='STARTING'} onClick={()=>report(true)}>{t.describe}</button></div>
     <p aria-live={screenReaderMode?'polite':'off'} role={screenReaderMode?'status':undefined} className="min-h-6">{spokenSummary}</p>
     <section aria-label={t.status} className="rounded-2xl border border-amber-200/20 bg-stone-900 p-5">
-      <p role="status" aria-live="polite">{t.status}: <strong>{cameraState}</strong></p>
+      <p role="status" aria-live="polite" data-testid="basira-original-engine" data-state={state}>{t.status}: <strong>{cameraState}</strong></p>
       <p className="mt-2">{nav.permissionCamera}: {({not_requested:nav.notRequested,allowed:nav.allowed,denied:nav.denied,device_settings:nav.deviceSettings,unavailable:nav.unavailable} as const)[cameraPermission]}</p>
       <p className="mt-2">{t.risk}: <strong>{risk?t.riskLabels[risk]:'—'}</strong></p>
        <p className="mt-2">{t.lastAlert}: <span role={screenReaderMode?'alert':undefined} aria-live={screenReaderMode?(risk==='CRITICAL'||risk==='HIGH'?'assertive':'polite'):'off'}>{lastAlert||'—'}</span></p>
@@ -541,5 +563,6 @@ export default function Vision() {
     {locationEstimate?.state==='TRACKING'&&<section className="space-y-3 rounded-xl border border-amber-300/40 p-4"><p>موقعك الحالي: بالقرب من {recognized?.name??'مكان معروف'} · الثقة {Math.round(locationEstimate.confidence*100)}٪. التقدير مرتبط بلوحة معروفة وليس قياسًا ميدانيًا للدقة.</p><div className="flex flex-wrap gap-2"><input className="min-h-12 rounded-xl border border-amber-200/40 bg-stone-950 px-3" value={savedName} onChange={e=>setSavedName(e.target.value)} placeholder="اسم مكانك الخاص" aria-label="اسم مكانك الخاص"/><button className={secondary} disabled={!savedName.trim()} onClick={savePersonal}>احفظ هذا المكان</button></div><p role="status" aria-live="polite">{saveNotice}</p></section>}
     {locationEstimate?.state==='LOCALIZATION_LOST'&&<p role="alert" className="rounded-xl border border-amber-300/40 p-4">تعذر تحديد موقعك بدقة داخل المبنى. وجّه الكاميرا نحو لوحة مكان معروف لإعادة التثبيت.</p>}
     {candidates.length>0&&<section className="space-y-3 rounded-xl border border-amber-200/30 p-4"><h2 className="font-bold">معلومات جديدة محتملة للخريطة</h2><label className="flex gap-2"><input type="checkbox" checked={shareCandidate} onChange={e=>setShareCandidate(e.target.checked)}/>أوافق على مشاركة نص اللوحة وموقع تقريبي فقط، دون صورة، للمراجعة العامة</label>{candidates.slice(0,2).map(candidate=><p key={candidate.id}>{candidate.lookupStatus==='UNAVAILABLE'?t.candidateOffline(candidate.detectedText):t.candidate(candidate.detectedText)} <button className={secondary} disabled={!shareCandidate||locationEstimate?.state!=='TRACKING'} onClick={()=>void contributeCandidate(candidate)}>أرسل كمساهمة</button></p>)}<p role="status" aria-live="polite">{shareNotice}</p></section>}
+    </>}
   </div></Layout>;
 }

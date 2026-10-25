@@ -39,6 +39,7 @@ export class BasiraSafetyEngine {
     this.alertDistanceMeters = Number.isFinite(value) ? Math.max(0.5, Math.min(12, value)) : this.config.alertDistanceMeters;
   }
   classify(detection: VisionDetection): ObstacleDetection {
+    if(detection.experimental)throw new Error('Experimental detections are display-only');
     const band = distanceBand(detection, this.config);
     const centered = central(detection);
     const metricDistance = metricDistanceMeters(detection, this.config.minDepthConfidence);

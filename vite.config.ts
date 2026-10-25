@@ -7,6 +7,7 @@ import { defineConfig, type Plugin, type ViteDevServer } from "vite";
 import { vitePluginManusRuntime } from "vite-plugin-manus-runtime";
 import { vitePluginApiProxy } from "./server/apiPlugin";
 import { vitePluginOnnxRuntimeRawAssets } from "./server/onnxRuntimeAssetPlugin";
+import { vitePluginExperimentalModels } from './server/experimentalModels';
 
 // =============================================================================
 // Manus Debug Collector - Vite Plugin
@@ -205,7 +206,7 @@ function vitePluginStorageProxy(): Plugin {
   };
 }
 
-const plugins = [react(), tailwindcss(), jsxLocPlugin(), vitePluginManusRuntime(), vitePluginManusDebugCollector(), vitePluginStorageProxy(), vitePluginApiProxy(), vitePluginOnnxRuntimeRawAssets()];
+const plugins = [react(), tailwindcss(), jsxLocPlugin(), vitePluginManusRuntime(), vitePluginManusDebugCollector(), vitePluginStorageProxy(), vitePluginExperimentalModels(), vitePluginApiProxy(), vitePluginOnnxRuntimeRawAssets()];
 
 export default defineConfig({
   plugins,

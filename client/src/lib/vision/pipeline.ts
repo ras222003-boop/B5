@@ -154,6 +154,7 @@ export class VisionPipeline {
   private inferenceMs=0;
   private detections=0;
   constructor(private readonly options:VisionPipelineOptions) {
+    if(options.vision.usagePolicy==='EXPERIMENTAL_DISPLAY_ONLY')throw new Error('Research providers cannot enter guidance/safety pipeline');
     this.approachEnabled=options.experimentalApproachEnabled===true;
     this.autoMeterEnabled=options.autoMeterEnabled===true;
     this.objectSpeechEnabled=options.objectSpeechEnabled!==false;
@@ -451,6 +452,7 @@ export class VisionPipeline {
       }
       grayCanvas.width=grayCanvas.height=0;
       const rawDetections=await this.options.vision.detect(detectionFrame,detectorTimestamp);
+      if(rawDetections.some(item=>item.experimental))throw new Error('Research detections cannot enter guidance/safety pipeline');
       if(!this.running||generation!==this.generation)return;
       if(this.cameraUnavailable()){
         if(metricFrame)metricFrame.width=metricFrame.height=0;

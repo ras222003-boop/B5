@@ -42,6 +42,8 @@ export interface VisionDetection {
   /** A model score is not calibrated probability; region heuristics are not class scores. */
   confidenceKind?: 'MODEL_SCORE' | 'REGION_HEURISTIC' | 'UNSPECIFIED';
   evidence?: readonly string[];
+  /** Display-only research detections must never enter guidance or fall alerts. */
+  experimental?:{modelId:string;modelSha256:string;classId:number;navigationEligible:false;referenceLabel:false};
 }
 export interface ObstacleDetection extends VisionDetection {
   riskLevel: RiskLevel;
@@ -105,7 +107,7 @@ export interface MetricDepthMap { width: number; height: number; values: Float32
 export interface EstimatedMetricDepthMap { width: number; height: number; values: Float32Array; source: 'MONOCULAR_METRIC'; timestamp: number }
 
 /** Frame input is ephemeral; providers must never retain or upload it implicitly. */
-export interface VisionProvider { detect(frame: HTMLVideoElement | HTMLCanvasElement | OffscreenCanvas, timestamp: number): Promise<VisionDetection[]>; close(): Promise<void> }
+export interface VisionProvider { readonly usagePolicy?:'EXPERIMENTAL_DISPLAY_ONLY'; detect(frame: HTMLVideoElement | HTMLCanvasElement | OffscreenCanvas, timestamp: number): Promise<VisionDetection[]>; close(): Promise<void> }
 export interface SceneSegmentationProvider { segment(frame: Blob, timestamp: number): Promise<SegmentationGrid>; close(): Promise<void> }
 export interface RelativeDepthProvider { estimate(frame: Blob, timestamp: number): Promise<RelativeDepthMap>; close(): Promise<void> }
 export interface MetricDepthProvider { capture(timestamp: number): Promise<MetricDepthMap | null>; close(): Promise<void> }
