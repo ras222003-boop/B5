@@ -25,7 +25,7 @@ export async function createCameraLab({entryPath,host='127.0.0.1',port=0,lan=fal
   check(createHash('sha256').update(model).digest('hex')===contract.sha256,'Model does not match entry SHA-256');
   const secure=Boolean(certPath),requireAuth=!loopback||Boolean(accessToken),session=randomBytes(32).toString('hex'),attempts=new Map();
   if(requireAuth)check(typeof accessToken==='string'&&accessToken.length>=32,'Access token must have at least 32 characters');
-  const assets=new Map([['/','index.html'],['/app.mjs','app.mjs'],['/adapter.mjs','adapter.mjs'],['/styles.css','styles.css']]);
+  const assets=new Map([['/','index.html'],['/app.mjs','app.mjs'],['/adapter.mjs','adapter.mjs'],['/recording.mjs','recording.mjs'],['/styles.css','styles.css']]);
   const runtime=new Set(['ort.wasm.min.mjs','ort-wasm-simd-threaded.mjs','ort-wasm-simd-threaded.wasm']);
   let server;
   const handler=async(req,res)=>{

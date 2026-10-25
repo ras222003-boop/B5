@@ -66,6 +66,8 @@ def read_contract(manifest_path):
     root = manifest_path.resolve().parent
     manifest_sha = sha256(manifest_path)
     data = json.loads(manifest_path.read_text(encoding='utf-8'))
+    if data.get('excludedFromTraining') or data.get('contentKind') == 'real_independent_test':
+        raise ValueError('Independent real evaluation data is excluded from training')
     freeze = json.loads((root / 'test-freeze.json').read_text(encoding='utf-8'))
     if (data.get('schemaVersion') != 2 or data.get('contentKind') != 'synthetic_ground_truth'
             or freeze.get('manifestSha256') != manifest_sha

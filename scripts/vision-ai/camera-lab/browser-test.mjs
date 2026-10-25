@@ -30,6 +30,7 @@ try{
   await page.goto(lab.url);await page.waitForFunction(()=>document.body.dataset.modelReady==='true',{},{timeout:60000});
   assert.match(await page.locator('#confidenceNote').textContent(),/غير معايرة/);
   assert.equal(await page.locator('#cameraButton').isDisabled(),true);
+  await page.locator('#siteId').fill('synthetic-unit-site');await page.locator('#captureSessionId').fill('synthetic-smoke-session');await page.locator('#sceneId').fill('synthetic-image-scene');
   await page.locator('#rightsConsent').check();await page.locator('#fileInput').setInputFiles(imagePath);
   await page.waitForFunction(()=>Number(document.body.dataset.processed)>=1);
   const imageResult=await page.locator('#lastResult').textContent();
@@ -57,6 +58,14 @@ try{
   await page.evaluate(()=>{HTMLMediaElement.prototype.play=window.__originalPlay;navigator.mediaDevices.getUserMedia=window.__originalGetUserMedia;});
   const cameraDownloadPromise=page.waitForEvent('download');await page.locator('#exportButton').click();const cameraDownload=await cameraDownloadPromise;const cameraMetricsPath=resolve(output,'camera-results.json');await cameraDownload.saveAs(cameraMetricsPath);
   const cameraMetrics=JSON.parse(await readFile(cameraMetricsPath,'utf8'));assert.equal(cameraMetrics.metrics.sourceKind,'camera');assert.ok(cameraMetrics.metrics.processedFrames>=3);
+  await page.reload();await page.waitForFunction(()=>document.body.dataset.modelReady==='true',{},{timeout:60000});
+  const archiveReady=page.waitForEvent('download');await page.locator('#recoverButton').click();const archiveDownload=await archiveReady;
+  const archivePath=resolve(output,'local-recording-archive.json');await archiveDownload.saveAs(archivePath);const archive=JSON.parse(await readFile(archivePath,'utf8'));
+  assert.equal(archive.mediaIncluded,false);assert.ok(archive.sessions.length>=3);
+  const restoredImage=archive.sessions.find(record=>record.id===imageMetrics.id);assert.ok(restoredImage);assert.equal(restoredImage.predictions.length,1);
+  assert.equal(restoredImage.identity.sceneId,'synthetic-image-scene');assert.equal(restoredImage.source.sha256,imageMetrics.source.sha256);
+  assert.equal(restoredImage.predictionsAreGroundTruth,false);assert.equal(restoredImage.source.filenameStored,false);
+  await page.locator('#clearRecordsButton').click();await page.waitForFunction(()=>document.getElementById('storageStatus').textContent.includes('مُسحت'));
   const mobileContext=await browser.newContext({viewport:{width:390,height:844},isMobile:true,deviceScaleFactor:1,serviceWorkers:'block'});
   await mobileContext.route('**/*',route=>route.request().url().startsWith(`${lab.url}/`)?route.continue():route.abort());
   const mobile=await mobileContext.newPage();mobile.on('pageerror',error=>errors.push(error.message));await mobile.goto(lab.url);await mobile.waitForFunction(()=>document.body.dataset.modelReady==='true',{},{timeout:60000});await mobile.locator('#rightsConsent').check();await mobile.locator('#fileInput').setInputFiles(imagePath);await mobile.waitForFunction(()=>Number(document.body.dataset.processed)>=1);assert.equal(await mobile.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);await mobile.screenshot({path:resolve(output,'mobile-viewport-image.png'),fullPage:true});
@@ -67,7 +76,8 @@ try{
     audioTracksRequested:false,cameraTracksStopped:stopped,cameraPlaybackFailureReleased:playbackFailureReleased,pageErrors:errors,externalRequests:blocked,
     requestMethods:[...new Set(requests.map(request=>request.method))],requestedPaths:[...new Set(requests.map(request=>request.path))],
     desktopBrowser:await page.evaluate(()=>navigator.userAgent),mobileViewportChecked:true,
-    realIphoneTestPerformed:false,realCameraAccuracyMeasured:false,privateMediaUploaded:false};
+    realIphoneTestPerformed:false,realCameraAccuracyMeasured:false,privateMediaUploaded:false,
+    localPredictionsSurvivedReload:true,restoredSessionCount:archive.sessions.length,sceneAndSourceHashBound:true,localRecordsCleared:true};
   await writeFile(resolve(output,'browser-validation.json'),JSON.stringify(report,null,2));
   console.log(JSON.stringify({output,modelSha256:lab.contract.sha256,imageFrames:report.image.processedFrames,videoFrames:report.video.processedFrames,fakeCameraFrames:report.camera.processedFrames,externalRequests:blocked.length,realIphoneTestPerformed:false}));
 }finally{if(browser)await browser.close();await lab.close();}

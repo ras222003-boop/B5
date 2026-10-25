@@ -16,6 +16,8 @@ DEFAULT_THRESHOLDS=dict(presenceMin=.45,directionMin=.55,directionMargin=.10)
 
 def verify_contract(root):
     manifest=root/'manifest.json';data=json.loads(manifest.read_text(encoding='utf-8'))
+    if data.get('excludedFromTraining') or data.get('contentKind')=='real_independent_test':
+        raise ValueError('Independent real evaluation data is excluded from training')
     freeze=json.loads((root/'test-freeze.json').read_text(encoding='utf-8'))
     test=dict(scenes=[s for s in data['scenes'] if s['split']=='test'],samples=[s for s in data['samples'] if s['split']=='test'])
     fingerprint=hashlib.sha256(json.dumps(test,sort_keys=True).encode()).hexdigest()

@@ -129,6 +129,8 @@ def validate_manifest(manifest_path: Path, max_images: int) -> tuple[Path, dict,
     root = manifest_path.resolve().parent
     manifest_hash = sha256(manifest_path)
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    if manifest.get("excludedFromTraining") or manifest.get("contentKind") == "real_independent_test":
+        raise ValueError("Independent real evaluation data is excluded from training")
     samples = manifest.get("samples")
     if not isinstance(samples, list) or not 3 <= len(samples) <= max_images:
         raise ValueError("Expected a bounded generated sample list")
