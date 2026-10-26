@@ -2,12 +2,13 @@ import type { HorizontalDirection, VisionDetection, VisionObjectType } from '@sh
 import type { VisionCopy } from './scene';
 import { validNormalizedBox } from './objectTracking';
 import type { VisualApproachObservation } from './visualApproach';
-import {objectLabel,COCO_LABELS} from './cocoLabels';
-import {colorDescription} from './objectColors';
+import {objectLabel} from './cocoLabels';
+import {colourForSpeech} from './colourAnnouncement';
 
 const speechKey = 'basira-vision-object-speech-v1';
 export function getObjectSpeechEnabled() { try { return localStorage.getItem(speechKey) !== 'false'; } catch { return true; } }
 export function saveObjectSpeechEnabled(value: boolean) { try { localStorage.setItem(speechKey, String(value)); } catch { /* Storage is optional. */ } return value; }
+export type ObjectSpeechAcceptance = boolean | Promise<boolean>;
 
 interface SpokenTrack { detection: VisionDetection; announcedDirection: HorizontalDirection | null; announcedAt: number; approachAt: number;announcedColor?:string }
 const excluded = new Set<VisionObjectType>(['STAIRS_UP', 'STAIRS_DOWN', 'STAIRS_UNCERTAIN', 'DROP_OFF', 'DROP_OFF_UNCERTAIN', 'UNKNOWN_OBSTACLE']);
@@ -18,12 +19,14 @@ export class ObjectSpeechTracker {
   private tracks = new Map<string, SpokenTrack>();
   private lastSpeech = -Infinity;
   private recentDescriptions = new Map<string,number>();
+  private pending=false;
+  private epoch=0;
   constructor(private readonly copy: VisionCopy, private readonly minimumGapMs = 4500,
     private readonly approachPhrase = copy.approachPossible,private readonly minimumScore=.65,private readonly maximumAgeMs=800) {}
-  reset() { this.tracks.clear(); this.recentDescriptions.clear(); this.lastSpeech = -Infinity; }
-  observe(detections: readonly VisionDetection[], now: number, announce: (text: string) => boolean,
+  reset() { this.epoch++;this.pending=false;this.tracks.clear(); this.recentDescriptions.clear(); this.lastSpeech = -Infinity; }
+  observe(detections: readonly VisionDetection[], now: number, announce: (text: string) => ObjectSpeechAcceptance,
     approaches: readonly VisualApproachObservation[] = [],ordinaryEnabled=true,
-    announceApproach:(text:string)=>boolean=announce,colorEnabled=false): string | null {
+    announceApproach:(text:string)=>boolean=text=>announce(text)===true,colorEnabled=false): string | null {
     if (!Number.isFinite(now)) return null;
     const current = new Map<string, SpokenTrack>();
     for (const detection of detections) {
@@ -42,7 +45,7 @@ export class ObjectSpeechTracker {
     for (const [id, track] of Array.from(this.tracks)) if (now - track.detection.timestamp > 1200 ||
       !detections.some(d => d.trackId === id)) this.tracks.delete(id);
     for (const [id, track] of Array.from(current)) this.tracks.set(id, track);
-    if (now - this.lastSpeech < this.minimumGapMs) return null;
+    if (this.pending || now - this.lastSpeech < this.minimumGapMs) return null;
 
     const approaching = Array.from(current.values()).map(track => ({ track, approach: approaches.find(a =>
       a.trackId === track.detection.trackId && a.type === track.detection.type && a.capturedAt === track.detection.timestamp &&
@@ -59,30 +62,43 @@ export class ObjectSpeechTracker {
       return text;
     }
     if(!ordinaryEnabled&&!colorEnabled)return null;
-    const signature=(track:SpokenTrack)=>colorEnabled&&track.detection.color?(track.detection.cocoClass==='person'?'person-clothing-unspecified':track.detection.color.name?[track.detection.color.name,track.detection.color.shade??'',...(track.detection.color.components??[])].join(':'):(track.detection.color.reason==='LOW_LIGHT'?'low-light':'unclear')):'';
+    const signature=(track:SpokenTrack)=>colorEnabled?colourForSpeech(track.detection,{now,live:true}):'';
     const candidates = Array.from(current.values()).filter(track => {
-      const firstStableColour=colorEnabled&&Boolean(track.detection.color?.name)&&['',undefined,'unclear'].includes(track.announcedColor);
+      const firstStableColour=Boolean(signature(track))&&['',undefined].includes(track.announcedColor);
       return ((ordinaryEnabled&&track.announcedDirection !== track.detection.horizontalDirection)||(colorEnabled&&signature(track)&&track.announcedColor!==signature(track)&&!['WARMING_UP','CHANGING'].includes(track.detection.color?.reason??''))) && now-track.announcedAt >= (firstStableColour?this.minimumGapMs:9000);
     })
       .sort((a, b) => central(b.detection.horizontalDirection) - central(a.detection.horizontalDirection) ||
         b.detection.boundingBox.width * b.detection.boundingBox.height - a.detection.boundingBox.width * a.detection.boundingBox.height).slice(0, 2);
     if (!candidates.length) return null;
     const text = `${candidates.map(track => {
-      const d=track.detection,name=objectLabel(d,this.copy),color=colorEnabled&&d.cocoClass!=='person'&&!['WARMING_UP','CHANGING'].includes(d.color?.reason??'')?colorDescription(d).replace(' (تقدير من الصورة)',''):'';
-      if(!ordinaryEnabled&&d.cocoClass==='person')return 'ألوان الملابس غير محددة دون فصل موثوق للملابس عن بقية الشخص';
-      if(colorEnabled&&d.color?.reason==='LOW_LIGHT')return 'اللون غير واضح بسبب ضعف الإضاءة';
+      const d=track.detection,name=objectLabel(d,this.copy),color=colorEnabled?colourForSpeech(d,{now,live:true}):'';
       const direction=colorEnabled&&this.copy.object.PERSON==='شخص'?(['LEFT','FRONT_LEFT'].includes(d.horizontalDirection)?'في يسار الصورة':['RIGHT','FRONT_RIGHT'].includes(d.horizontalDirection)?'في يمين الصورة':'في وسط الصورة'):this.copy.direction[d.horizontalDirection];
-      return ordinaryEnabled?`${name}${color?`، ${d.color?.name?(COCO_LABELS[d.cocoClass??'']?.feminine?'تبدو ':'يبدو '):''}${color}`:''} ${direction}`:`لون ${name}: ${d.color?.name?colorDescription({...d,cocoClass:undefined}).replace(' (تقدير من الصورة)',''):color||'غير واضح'}`;
+      return ordinaryEnabled?`${name}${color?` ${color}`:''} ${direction}`:`لون ${name}: ${color}`;
     }).join('، ')}.`;
     for(const [key,at] of Array.from(this.recentDescriptions))if(now-at>=12000)this.recentDescriptions.delete(key);
     if(this.recentDescriptions.has(text)) {
       for(const track of candidates){if(ordinaryEnabled)track.announcedDirection=track.detection.horizontalDirection;track.announcedColor=signature(track);track.announcedAt=now;}
       return null;
     }
-    if (!announce(text)) return null;
-    this.recentDescriptions.set(text,now);
-    for (const track of candidates) { if(ordinaryEnabled)track.announcedDirection = track.detection.horizontalDirection;track.announcedColor=signature(track);track.announcedAt = now; }
-    this.lastSpeech = now;
+    const accepted=announce(text);
+    if(accepted===false)return null;
+    const epoch=this.epoch;
+    const confirm=()=>{
+      if(epoch!==this.epoch)return;
+      this.recentDescriptions.set(text,now);
+      for(const candidate of candidates){
+        const track=this.tracks.get(candidate.detection.trackId!);
+        if(!track||track.detection.type!==candidate.detection.type||track.detection.cocoClass!==candidate.detection.cocoClass)continue;
+        if(ordinaryEnabled)track.announcedDirection=candidate.detection.horizontalDirection;
+        track.announcedColor=signature(candidate);track.announcedAt=now;
+      }
+      this.lastSpeech=now;
+    };
+    if(typeof accepted==='boolean')confirm();
+    else {
+      this.pending=true;
+      void accepted.then(started=>{if(epoch===this.epoch){this.pending=false;if(started)confirm();}},()=>{if(epoch===this.epoch)this.pending=false;});
+    }
     return text;
   }
 }

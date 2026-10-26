@@ -3,9 +3,42 @@ import { AudioPlaybackManager, type TtsProvider } from './speechEngine';
 import type { SpeechRequest } from '@shared/speech';
 
 const input: SpeechRequest = { text: 'Turn right', language: 'en', arabicStyle: 'MSA', context: 'NAVIGATION', rate: 1 };
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => {vi.useRealTimers();vi.unstubAllGlobals();});
 
 describe('audio playback manager', () => {
+  it('calls local speak synchronously inside a tap, then observes later object playback start',async()=>{
+    let gesture=true,unlocked=false;
+    const utterances:any[]=[];
+    const speak=vi.fn(u=>{if(gesture)unlocked=true;if(unlocked){utterances.push(u);queueMicrotask(()=>{u.onstart?.();u.onend?.();});}});
+    vi.stubGlobal('window',{speechSynthesis:{getVoices:()=>[{lang:'ar-SA',localService:true}],speak,cancel:vi.fn()}});
+    vi.stubGlobal('SpeechSynthesisUtterance',class{lang='';rate=1;voice=null;constructor(public text:string){}});
+    const m=new AudioPlaybackManager({isAvailable:()=>true,synthesize:vi.fn(),stop:vi.fn()});
+    const tap=m.enqueueLocal({...input,language:'ar',context:'ENVIRONMENT',text:'بدأ وصف الأشياء.'});
+    expect(speak).toHaveBeenCalledOnce();gesture=false;await tap;
+    await expect(m.enqueueLocalObserved({...input,language:'ar',context:'ENVIRONMENT',text:'كرسي في الصورة.'},performance.now()+1250)).resolves.toBe(true);
+    expect(utterances).toHaveLength(2);
+  });
+  it('does not confirm blocked/expired speech, or revive it after cancellation',async()=>{
+    vi.useFakeTimers();const utterances:any[]=[],cancel=vi.fn();
+    vi.stubGlobal('window',{speechSynthesis:{getVoices:()=>[{lang:'ar-SA',localService:true}],speak:(u:any)=>utterances.push(u),cancel}});
+    vi.stubGlobal('SpeechSynthesisUtterance',class{lang='';rate=1;voice=null;constructor(public text:string){}});
+    const m=new AudioPlaybackManager({isAvailable:()=>true,synthesize:vi.fn(),stop:vi.fn()});
+    const pending=m.enqueueLocalObserved({...input,language:'ar'},performance.now()+1250);
+    await vi.advanceTimersByTimeAsync(1251);expect(await pending).toBe(false);expect(m.busy).toBe(false);
+    const next=m.enqueueLocalObserved({...input,language:'ar'},performance.now()+1250);
+    m.stop();expect(await next).toBe(false);utterances.at(-1)?.onstart?.();
+    await vi.advanceTimersByTimeAsync(9000);expect(m.status.isSpeaking).toBe(false);expect(m.busy).toBe(false);expect(cancel).toHaveBeenCalled();
+  });
+  it('can retry after local voices become available without selecting a remote voice',async()=>{
+    let ready=false;
+    vi.stubGlobal('window',{speechSynthesis:{getVoices:()=>ready?[{lang:'ar-SA',localService:true}]:[],speak:(u:any)=>queueMicrotask(()=>{u.onstart?.();u.onend?.();}),cancel:vi.fn()}});
+    vi.stubGlobal('SpeechSynthesisUtterance',class{lang='';rate=1;voice=null;constructor(public text:string){}});
+    const m=new AudioPlaybackManager({isAvailable:()=>true,synthesize:vi.fn(),stop:vi.fn()});
+    await expect(m.enqueueLocalObserved({...input,language:'ar'},performance.now()+1250)).resolves.toBe(false);
+    expect(m.status.error).toBe('NO_VOICE');ready=true;
+    await expect(m.enqueueLocalObserved({...input,language:'ar'},performance.now()+1250)).resolves.toBe(true);
+    expect(m.status.error).toBeUndefined();
+  });
   it('uses an explicit local-only information path without calling paid synthesis',async()=>{
     const synthesize=vi.fn(),speak=vi.fn((u:{onend?:()=>void})=>queueMicrotask(()=>u.onend?.()));
     vi.stubGlobal('window',{speechSynthesis:{getVoices:()=>[{lang:'ar-SA',localService:true}],speak,cancel:vi.fn()}});

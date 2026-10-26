@@ -3,6 +3,12 @@ import type {PerceptionSnapshot} from './perception';
 import {ObjectTrialRecorder,sourcePixelSignature} from './objectTrial';
 const snapshot=(id:string)=>({frameId:id,performance:{inferenceMs:100},tracking:'TRACKING',observations:[],privateImage:'must-not-escape',ground:{secret:'private-location'}} as unknown as PerceptionSnapshot);
 describe('local trial metadata is evidence, never automatic device qualification',()=>{
+ it('keeps pixel colour quality separate from detector confidence and exports finite allowlisted indicators only',()=>{
+  const t=new ObjectTrialRecorder('v3','b'.repeat(64),0),frame=snapshot('quality-frame');frame.completedAt=100;
+  frame.performance.colourAnalysisMs=3.2;frame.performance.colourPixelSamplingMs=.4;
+  frame.observations=[{detection:{id:'a',confidence:.91,timestamp:100,cocoClass:'car',boundingBox:{x:.1,y:.1,width:.2,height:.2},color:{name:'black',status:'ESTIMATED',reason:'BOX_ESTIMATE',quality:{score:.62,labelSupport:.8,spatialAgreement:.7,backgroundSeparation:NaN,privatePixels:'must-not-escape'},temporal:{agreement:1,privateMask:'must-not-escape'}}}}] as unknown as PerceptionSnapshot['observations'];
+  t.record(frame);const out=t.export(100),o=out.frames[0].objects[0];expect(o.score).toBe(.91);expect(o.colourQualityScore).toBe(.62);expect(o.colourBackgroundSeparation).toBeNull();expect(o.colourAnnouncementEligible).toBe(false);expect(out.frames[0].colourAnalysisMs).toBe(3.2);expect(JSON.stringify(out)).not.toContain('must-not-escape');
+ });
  it('exports allowlisted colour abstention reasons without raw pixels/masks or arbitrary diagnostic text',()=>{
   const t=new ObjectTrialRecorder('v3','b'.repeat(64),0),frame=snapshot('colour-frame');
   const make=(reason:string,name:string|null=null)=>({detection:{id:'object',cocoClass:'car',confidence:.7,boundingBox:{x:.1,y:.1,width:.2,height:.2},color:{name,status:name?'ESTIMATED':'UNCLEAR',reason,data:'private-pixels',mask:'private-mask'}}});

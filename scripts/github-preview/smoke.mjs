@@ -75,6 +75,11 @@ try {
   });
   const select = page.locator("#basira-vision-model");
   await select.waitFor();
+  assert.ok(
+    (
+      await page.getByTestId("colour-speech-qualification").innerText()
+    ).includes("غير معايرة")
+  );
   assert.equal(await select.inputValue(), "original");
   await page.waitForFunction(() =>
     document.querySelector(
@@ -153,6 +158,12 @@ try {
   assert.equal(metadata.mediaUploaded, false);
   assert.equal(metadata.modelId, "objects-basira-v3");
   assert.equal(typeof metadata.colourUnclearReasonCounts, "object");
+  assert.equal(metadata.colourSpeechQualification.status, "UNQUALIFIED");
+  assert.ok(
+    metadata.frames.every(frame =>
+      frame.objects.every(o => o.colourAnnouncementEligible === false)
+    )
+  );
   assert.equal(metadata.cameraTracksEnded, true);
   await page
     .getByRole("button", {
@@ -188,6 +199,7 @@ try {
     softwareMicrophonePermissionAndTeardown: true,
     allTracksEnded: true,
     localColourDiagnosticExportVerified: true,
+    unqualifiedColourSpeechBlocked: true,
     blockedPostBeforeNetwork: blocked.status === 405,
     beaconDisabled: true,
     nativeTranscriptionDisabled: true,

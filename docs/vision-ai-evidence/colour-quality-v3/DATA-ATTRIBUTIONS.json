@@ -1,0 +1,134 @@
+{
+  "attributeLicense": "CC-BY-4.0",
+  "attributeSource": "https://homes.cs.washington.edu/~ranjay/visualgenome/",
+  "attribution": "Visual Genome: Krishna et al., IJCV 2017. COCO: Lin et al. Photo authors and original CC BY links are recorded per image.",
+  "photos": [
+    {
+      "imageId": "coco-325838",
+      "author": "Seth Woodworth",
+      "source": "https://www.flickr.com/photos/sethwoodworth/3539996132/",
+      "licence": "CC-BY-2.0",
+      "licenceEvidenceSha256": "3d2d87d91383abe106a7f95fedf9ba179213c5b107fb214f6fa80d41357608fc",
+      "imageSha256": "a0fe8e15d8928d1cb9bff23ff15bbf6973185d50c5c95df7e1cc3ce6d5e5b34d",
+      "split": "development"
+    },
+    {
+      "imageId": "coco-84170",
+      "author": "SgTransport",
+      "source": "https://www.flickr.com/photos/sgtransport/8134254727/",
+      "licence": "CC-BY-2.0",
+      "licenceEvidenceSha256": "d58ca8bff6e1f0c052f7e0b464547286d9951b7209851811fbd68bcbd10f976d",
+      "imageSha256": "2853a7acdb3d3bfbfff61353e11d463b78660667291c42fa5905a9a001e3118c",
+      "split": "test"
+    },
+    {
+      "imageId": "coco-184324",
+      "author": "Serge Melki",
+      "source": "https://www.flickr.com/photos/sergemelki/3364389746/",
+      "licence": "CC-BY-2.0",
+      "licenceEvidenceSha256": "dd27d6cd98a2222047948c0c473738e29c442e91c92bdd2c872e8a30932001d1",
+      "imageSha256": "5ecf4fe36782463de6cd954f355562068984abfebdeb8910e50edb6b57aa92e5",
+      "split": "test"
+    },
+    {
+      "imageId": "coco-151480",
+      "author": "Richard Eriksson",
+      "source": "https://www.flickr.com/photos/sillygwailo/6054578485/",
+      "licence": "CC-BY-2.0",
+      "licenceEvidenceSha256": "e055bd2f09bd17630ddea2e114ea282183374aa194cf792d60ee62b7b56efa1a",
+      "imageSha256": "54f560475c3715874c594651a1ecd46f49e19aba6fd0a83a2ba968109566f71d",
+      "split": "development"
+    },
+    {
+      "imageId": "coco-181816",
+      "author": "DaraKero_F",
+      "source": "https://www.flickr.com/photos/darakero/7978704233/",
+      "licence": "CC-BY-2.0",
+      "licenceEvidenceSha256": "49a515d005aae493e0d27114d908e12180af0a65cbea414ed5348638383b8564",
+      "imageSha256": "7cfc5df012307ac191c0b7470ffdf10b8b51df86adbf9e4b714d0e4183a1077e",
+      "split": "test"
+    },
+    {
+      "imageId": "coco-422836",
+      "author": "jojo-bean",
+      "source": "https://www.flickr.com/photos/jojo-bean/2689742241/",
+      "licence": "CC-BY-2.0",
+      "licenceEvidenceSha256": "44c661fff894ead0f1d8f673d08042c5dc0ebf500b17db1490a2e9a2b51e83c6",
+      "imageSha256": "74a1a9868077d6a23e54f552e0bd61db64a1c7c3d0f531917a19abcb43f146fd",
+      "split": "test"
+    },
+    {
+      "imageId": "coco-97679",
+      "author": "Ted &amp; Dani Percival",
+      "source": "https://www.flickr.com/photos/tedpercival/2727641554/",
+      "licence": "CC-BY-2.0",
+      "licenceEvidenceSha256": "100d75919396dfd438aec098fded66ad59fcc4016ce7f917029fa6b97870da07",
+      "imageSha256": "18249178b9801f669a31b0965138081d78e8d523d029defdf5d8e63ebcccde14",
+      "split": "calibration"
+    },
+    {
+      "imageId": "coco-132329",
+      "author": "Eric Chan",
+      "source": "https://www.flickr.com/photos/maveric2003/4142321546/",
+      "licence": "CC-BY-2.0",
+      "licenceEvidenceSha256": "733f27b31f879e892bb07082cfaeee00aea279ff0c509b1cfa057fcf99e97bf2",
+      "imageSha256": "295d80ee99e73d10b1c7057b8e5602ec25ff49497d3f06f44ca4936f608de338",
+      "split": "calibration"
+    },
+    {
+      "imageId": "coco-14439",
+      "author": "Jose",
+      "source": "https://www.flickr.com/photos/joeguitar/3506151605/",
+      "licence": "CC-BY-2.0",
+      "licenceEvidenceSha256": "3be7f252a5a73a067b379301c3591aed0ca7bada89780d399ba2e59f3f26102f",
+      "imageSha256": "49e37a4c998c11449865f214fc78ad70045b54310dab3c90bf308f0645fe3221",
+      "split": "development"
+    },
+    {
+      "imageId": "coco-301135",
+      "author": "zoetnet",
+      "source": "https://www.flickr.com/photos/zoetnet/4856973633/",
+      "licence": "CC-BY-2.0",
+      "licenceEvidenceSha256": "0e18e0d1261331ca7afab73ec81e3ec451c89fec38621151dd98239c4579e5d5",
+      "imageSha256": "9368a6823b581eaffa5db57fff4d7e8f2350dee1a6de0a6653d7bb9e0954c72c",
+      "split": "test"
+    },
+    {
+      "imageId": "coco-1993",
+      "author": "Joe Shlabotnik",
+      "source": "https://www.flickr.com/photos/joeshlabotnik/3223600591/",
+      "licence": "CC-BY-2.0",
+      "licenceEvidenceSha256": "3cacc17f03482d59e3c35f8c8c4292d6e81fde0d91bae29b208325f051c5e3aa",
+      "imageSha256": "aaf7144612cd083342003dc8ac2e9264b2b6bc808bb064ccf6c53775841510ed",
+      "split": "calibration"
+    },
+    {
+      "imageId": "coco-293071",
+      "author": "Eric",
+      "source": "https://www.flickr.com/photos/deadling/466347034/",
+      "licence": "CC-BY-2.0",
+      "licenceEvidenceSha256": "c63581bfee6b9d13d0baa964a80ba7595ed813f41784bf7170471f681c264a0e",
+      "imageSha256": "074cf3f389159263e34d1c9979fa99925a7a4559b1b27dfa4a4c6fcbf9c535f2",
+      "split": "development"
+    },
+    {
+      "imageId": "coco-313588",
+      "author": "RikkisRefuge Other",
+      "source": "https://www.flickr.com/photos/rikkisrefugeother/8253725562/",
+      "licence": "CC-BY-2.0",
+      "licenceEvidenceSha256": "547f369ca1356b3b629342f01c0c483a0ba6b621f00e34b7c9b5f3a7894c5c5c",
+      "imageSha256": "97a35ba4690c85226f898b7a66be4c04cd957c3836db442c433288926510059e",
+      "split": "development"
+    },
+    {
+      "imageId": "coco-202339",
+      "author": "Karl Baron",
+      "source": "https://www.flickr.com/photos/kalleboo/8204757796/",
+      "licence": "CC-BY-2.0",
+      "licenceEvidenceSha256": "be0bdb35c8febac613f7df7e2a5f3316ce73d61523cf8067335ecd56ade018c7",
+      "imageSha256": "8bdc19ca215c5715328e1a5415e56f85f2cac91a58795a0366320088bad110af",
+      "split": "development"
+    }
+  ],
+  "photosIncluded": false
+}

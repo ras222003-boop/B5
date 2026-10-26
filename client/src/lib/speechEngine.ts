@@ -39,7 +39,7 @@ export class PremiumTtsProvider implements TtsProvider {
   stop() { /* Fetch cancellation is owned by the playback manager. */ }
 }
 
-type Item = { input: SpeechRequest; priority: SpeechPriority; pauseAfterMs: number; key?: string; expiresAt?:number; manualTest:boolean; localOnly:boolean; resolve: () => void };
+type Item = { input: SpeechRequest; priority: SpeechPriority; pauseAfterMs: number; key?: string; expiresAt?:number; manualTest:boolean; localOnly:boolean; onStarted?:()=>void; resolve: () => void };
 export class AudioPlaybackManager {
   private queue: Item[] = [];
   private current: Item | null = null;
@@ -63,10 +63,17 @@ export class AudioPlaybackManager {
   enqueueLocal(input:SpeechRequest,expiresAt?:number,manualTest=false) {
     return this.enqueue(input,'INFORMATION',0,undefined,manualTest,expiresAt,true);
   }
-  enqueue(input: SpeechRequest, priority: SpeechPriority = 'INFORMATION', pauseAfterMs = 0, key?: string, manualTest = false, expiresAt?:number,localOnly=false) {
+  /** Resolve true at actual playback start, false if cancelled, expired or unavailable. */
+  enqueueLocalObserved(input:SpeechRequest,expiresAt:number) {
+    return new Promise<boolean>(resolve=>{
+      let started=false;
+      void this.enqueue(input,'INFORMATION',0,undefined,false,expiresAt,true,()=>{started=true;resolve(true);}).then(()=>resolve(started));
+    });
+  }
+  enqueue(input: SpeechRequest, priority: SpeechPriority = 'INFORMATION', pauseAfterMs = 0, key?: string, manualTest = false, expiresAt?:number,localOnly=false,onStarted?:()=>void) {
     if (!input.text.trim() || (this.muted() && !manualTest)) { this.update({ mode: 'MUTED', isSpeaking: false }); return Promise.resolve(); }
     return new Promise<void>(resolve => {
-      const item = { input, priority, pauseAfterMs, key, expiresAt, manualTest,localOnly, resolve };
+      const item = { input, priority, pauseAfterMs, key, expiresAt, manualTest,localOnly,onStarted, resolve };
       if (this.current && priorityRank[priority] > priorityRank[this.current.priority]) {
         this.cancelCurrent();
         this.queue = this.queue.filter(old => { if (priorityRank[old.priority] < priorityRank[priority]) { old.resolve(); return false; } return true; });
@@ -153,7 +160,7 @@ export class AudioPlaybackManager {
       if(!expired()&&!abort.signal.aborted&&!muted()){
         if(expiryTimer!==undefined)clearTimeout(expiryTimer);
         if(!item.localOnly)this.metrics.fallbacks++;
-        await this.browserFallback(item.input, generation, abort.signal, item.expiresAt,item.localOnly);
+        await this.browserFallback(item.input, generation, abort.signal, item.expiresAt,item.localOnly,item.onStarted);
       }
     } finally {
       if(expiryTimer!==undefined)clearTimeout(expiryTimer);
@@ -164,7 +171,7 @@ export class AudioPlaybackManager {
     if (item.pauseAfterMs) await new Promise<void>(resolve => { this.timerResolve = resolve; this.timer = setTimeout(() => { this.timer = null; this.timerResolve = null; resolve(); }, item.pauseAfterMs); });
     if (generation === this.generation) void this.next();
   }
-  private browserFallback(input: SpeechRequest, generation: number, signal: AbortSignal, expiresAt?:number,localOnly=false) {
+  private browserFallback(input: SpeechRequest, generation: number, signal: AbortSignal, expiresAt?:number,localOnly=false,onStarted?:()=>void) {
     return new Promise<void>(resolve => {
       if (typeof window === 'undefined' || !window.speechSynthesis || typeof SpeechSynthesisUtterance === 'undefined') { this.update({mode:'LOCAL',isSpeaking:false,error:'NO_VOICE'});resolve(); return; }
       const utterance = new SpeechSynthesisUtterance(input.text);
@@ -173,20 +180,22 @@ export class AudioPlaybackManager {
       const voices = window.speechSynthesis.getVoices().filter(v=>!localOnly||v.localService===true);
       utterance.voice = voices.find(v => v.lang.toLowerCase() === utterance.lang.toLowerCase()) ?? voices.find(v => v.lang.toLowerCase().startsWith(input.language.slice(0, 2))) ?? null;
       if(localOnly&&!utterance.voice){this.update({mode:'LOCAL',isSpeaking:false,error:'NO_VOICE'});resolve();return;}
-      let started=false;
+      let started=false,finished=false;
       const expired=()=>expiresAt!==undefined&&performance.now()>=expiresAt;
       const expiry=expiresAt===undefined?undefined:setTimeout(()=>{
-        if(!started&&generation===this.generation){window.speechSynthesis.cancel();finish();}
+        if(!started&&generation===this.generation){this.update({mode:'LOCAL',isSpeaking:false,error:'PLAYBACK_BLOCKED'});window.speechSynthesis.cancel();finish();}
       },Math.max(0,expiresAt-performance.now()));
-      const timer=setTimeout(()=>{if(!started&&generation===this.generation){this.update({mode:'LOCAL',isSpeaking:false,error:'PLAYBACK_BLOCKED'});window.speechSynthesis.cancel();}resolve();},8000);
-      const finish=()=>{clearTimeout(timer);if(expiry!==undefined)clearTimeout(expiry);resolve();};
+      const timer=setTimeout(()=>{if(!started&&generation===this.generation){this.update({mode:'LOCAL',isSpeaking:false,error:'PLAYBACK_BLOCKED'});window.speechSynthesis.cancel();}finish();},8000);
+      const finish=()=>{finished=true;clearTimeout(timer);if(expiry!==undefined)clearTimeout(expiry);signal.removeEventListener('abort',finish);resolve();};
       utterance.onstart = () => {
+        if(finished)return;
         if(expired()||signal.aborted||generation!==this.generation){window.speechSynthesis.cancel();finish();return;}
         started=true;clearTimeout(timer);if(expiry!==undefined)clearTimeout(expiry);
         this.update({ mode: 'LOCAL', isSpeaking: true,error:undefined });
+        onStarted?.();
       };
       utterance.onend = finish;
-      utterance.onerror = () => {if(generation===this.generation)this.update({mode:'LOCAL',isSpeaking:false,error:'PLAYBACK_BLOCKED'});finish();};
+      utterance.onerror = () => {if(!finished&&generation===this.generation)this.update({mode:'LOCAL',isSpeaking:false,error:'PLAYBACK_BLOCKED'});finish();};
       signal.addEventListener('abort',finish,{ once: true });
       try { window.speechSynthesis.resume?.();window.speechSynthesis.speak(utterance); } catch {this.update({mode:'LOCAL',isSpeaking:false,error:'PLAYBACK_BLOCKED'});finish();}
     });

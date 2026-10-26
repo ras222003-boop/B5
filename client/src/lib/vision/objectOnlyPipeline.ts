@@ -133,6 +133,7 @@ export class ObjectOnlyPipeline {
         wallTime = Date.now(),
         pixels = sampleColorFrame(canvas, at, frameId),
         light = pixels ? assessFrameLight(pixels.data) : "UNKNOWN";
+      const colourPixelSamplingMs=performance.now()-at;
       if(pixels&&this.options.callbacks.objectSourceSignature)this.options.callbacks.objectSourceSignature(sourcePixelSignature(pixels));
       const raw = await this.options.vision.detect(canvas, at);
       if (!this.running || run !== this.generation) return;
@@ -168,6 +169,7 @@ export class ObjectOnlyPipeline {
         this.schedule(100);
         return;
       }
+      const colourStarted=performance.now();
       const detections = tracked.detections.map(d => ({
         ...d,
         color: pixels
@@ -177,7 +179,8 @@ export class ObjectOnlyPipeline {
             )
           : undefined,
       }));
-      const timings = this.telemetry.record(at, performance.now());
+      const colourAnalysisMs=performance.now()-colourStarted;
+      const timings = {...this.telemetry.record(at, performance.now()),colourAnalysisMs,colourPixelSamplingMs};
       this._snapshot = {
         frameId,
         capturedAt: at,

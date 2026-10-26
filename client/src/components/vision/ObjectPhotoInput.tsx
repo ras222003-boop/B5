@@ -11,6 +11,7 @@ import { objectLabel } from "@/lib/vision/cocoLabels";
 import type { VisionCopy } from "@/lib/vision/scene";
 import type { ObjectQualityProfile } from "@shared/objectQuality";
 import {describeObjectScene,imagePosition} from "@/lib/vision/objectSceneDescription";
+import {colourForSpeech} from '@/lib/vision/colourAnnouncement';
 export function ObjectPhotoInput({
   copy,
   objectsSpeech,
@@ -161,19 +162,16 @@ export function ObjectPhotoInput({
       });
       const phrases = result
         .slice(0, 5)
-        .map(
-          (d, index) =>
-            `${objectsSpeech ? objectLabel(d, copy) : `لون الجسم رقم ${index + 1}`}${colorsSpeech ? `، ${d.cocoClass === "person" ? "ألوان الملابس غير محددة" : colorDescription(d)}` : ""} ${["LEFT", "FRONT_LEFT"].includes(d.horizontalDirection) ? "في يسار الصورة" : ["RIGHT", "FRONT_RIGHT"].includes(d.horizontalDirection) ? "في يمين الصورة" : "في وسط الصورة"}`
-        );
+        .map((d,index)=>{const colour=colorsSpeech?colourForSpeech(d,{now:capturedAt,live:false}):'';if(!objectsSpeech&&!colour)return '';return `${objectsSpeech?objectLabel(d,copy):`لون الجسم رقم ${index+1}`}${colour?` ${colour}`:''} ${imagePosition(d)}`;}).filter(Boolean);
       setNotice(
         "صورة ثابتة؛ درجات النموذج والألوان غير معايرة، ولا تمثل بثًا حيًا أو توجيهًا للمشي."
       );
-      if (objectsSpeech || colorsSpeech)
-        announce(
-          copy.object.PERSON === "شخص" ? 'وصف صورة ثابتة؛ '+describeObjectScene(result,{now:capturedAt,objects:objectsSpeech,colors:colorsSpeech,relations:true,minimumScore:profile?.threshold??.65}) : phrases.length
+      if (objectsSpeech || colorsSpeech){
+        const description=copy.object.PERSON === "شخص" ? describeObjectScene(result,{now:capturedAt,objects:objectsSpeech,colors:colorsSpeech,relations:true,minimumScore:profile?.threshold??.65}) : phrases.length
             ? phrases.join("؛ ")
-            : "لم يُكتشف جسم بدرجة كافية؛ لا يثبت ذلك خلو الصورة."
-        );
+            : objectsSpeech?"لم يُكتشف جسم بدرجة كافية؛ لا يثبت ذلك خلو الصورة.":'';
+        if(description)announce('وصف صورة ثابتة؛ '+description);
+      }
     } catch (error) {
       if (run === generation.current && alive.current)
         setNotice(

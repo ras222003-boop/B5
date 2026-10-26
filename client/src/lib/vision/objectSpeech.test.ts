@@ -9,6 +9,29 @@ const detection = (at: number, changes: Partial<VisionDetection> = {}): VisionDe
 const approach = (at: number): VisualApproachObservation => ({ trackId: 'chair-1', type: 'CHAIR', state: 'POSSIBLE_APPROACH', capturedAt: at, frameId: `f-${at}`,
   reasons: [], evidence: ['TRACKING', 'BOX_EXPANSION', 'COMPENSATED_OPTICAL_FLOW'], experimental: true });
 describe('automatic object speech without metres', () => {
+  it('retries an unplayed asynchronous local description, and marks only a real playback start',async()=>{
+    const tracker=new ObjectSpeechTracker(visionMessages.ar);
+    let finish!:(started:boolean)=>void;
+    const announce=vi.fn(()=>new Promise<boolean>(resolve=>{finish=resolve;}));
+    tracker.observe([detection(1000)],1000,announce);
+    tracker.observe([detection(1200)],1200,announce);
+    expect(announce).toHaveBeenCalledOnce();
+    finish(false);await Promise.resolve();
+    tracker.observe([detection(1500)],1500,announce);
+    expect(announce).toHaveBeenCalledTimes(2);
+    finish(true);await Promise.resolve();
+    tracker.observe([detection(6500)],6500,announce);
+    expect(announce).toHaveBeenCalledTimes(2);
+  });
+  it('ignores a pending playback acknowledgement after stop/reset',async()=>{
+    const tracker=new ObjectSpeechTracker(visionMessages.ar);
+    let finish!:(started:boolean)=>void;
+    tracker.observe([detection(1000)],1000,()=>new Promise<boolean>(resolve=>{finish=resolve;}));
+    tracker.reset();finish(true);await Promise.resolve();
+    const announce=vi.fn(()=>true);
+    expect(tracker.observe([detection(1200)],1200,announce)).toContain('كرسي');
+    expect(announce).toHaveBeenCalledOnce();
+  });
   it('keeps the default800ms policy and allows object-only callers to match the existing1250ms perception TTL',()=>{
     const announce=vi.fn(()=>true),at=1000;
     expect(new ObjectSpeechTracker(visionMessages.ar).observe([detection(at)],2100,announce)).toBeNull();
@@ -72,24 +95,24 @@ describe('automatic object speech without metres', () => {
     expect(tracker.observe([detection(1200)],1200,ordinary,[approach(1200)],false,alert)).toContain('تجريبي');
     expect(ordinary).not.toHaveBeenCalled();expect(alert).toHaveBeenCalledOnce();
   });
-  it('announces a first stable colour once after the initial object description, and paces real changes',()=>{
+  it('does not turn stable estimates or repeated uncertainty into colour facts or repeated speech',()=>{
     const tracker=new ObjectSpeechTracker(visionMessages.ar),announce=vi.fn(()=>true);
     const color=(at:number,name:'black'|'red'|null,reason:'BOX_ESTIMATE'|'WARMING_UP'|'CHANGING'='BOX_ESTIMATE')=>detection(at,{cocoClass:'chair',color:{name,reason,status:name?'ESTIMATED':'UNCLEAR',samples:100,supportFraction:.9,timestamp:at,stableFrames:name?3:1,calibrated:false}});
     expect(tracker.observe([color(1000,null,'WARMING_UP')],1000,announce,[],true,announce,true)).toBe('كرسي في وسط الصورة.');
     expect(tracker.observe([color(5000,'black')],5000,announce,[],true,announce,true)).toBeNull();
-    expect(tracker.observe([color(5500,'black')],5500,announce,[],true,announce,true)).toContain('أسود');
+    expect(tracker.observe([color(5500,'black')],5500,announce,[],true,announce,true)).toBeNull();
     expect(tracker.observe([color(10000,'black')],10000,announce,[],true,announce,true)).toBeNull();
     expect(tracker.observe([color(11000,null,'CHANGING')],11000,announce,[],true,announce,true)).toBeNull();
-    expect(tracker.observe([color(15000,'red')],15000,announce,[],true,announce,true)).toContain('أحمر');
-    expect(announce).toHaveBeenCalledTimes(3);
+    expect(tracker.observe([color(15000,'red')],15000,announce,[],true,announce,true)).toBeNull();
+    expect(announce).toHaveBeenCalledTimes(1);
   });
   it('keeps object and colour speech independent and does not label a person by pixel colour',()=>{
     const announce=vi.fn(()=>true),d=detection(1000,{cocoClass:'chair',color:{name:'black',reason:'BOX_ESTIMATE',status:'ESTIMATED',samples:100,supportFraction:.9,timestamp:1000,stableFrames:3,calibrated:false}});
     expect(new ObjectSpeechTracker(visionMessages.ar).observe([d],1000,announce,[],true,announce,false)).not.toContain('أسود');
-    expect(new ObjectSpeechTracker(visionMessages.ar).observe([d],1000,announce,[],false,announce,true)).toBe('لون كرسي: أسود.');
+    expect(new ObjectSpeechTracker(visionMessages.ar).observe([d],1000,announce,[],false,announce,true)).toBeNull();
     expect(new ObjectSpeechTracker(visionMessages.ar).observe([d],1000,announce,[],false,announce,false)).toBeNull();
     const person={...d,type:'PERSON' as const,cocoClass:'person'};
     const text=new ObjectSpeechTracker(visionMessages.ar).observe([person],1000,announce,[],false,announce,true);
-    expect(text).toContain('ألوان الملابس غير محددة');expect(text).not.toContain('أسود');
+    expect(text).toBeNull();
   });
 });

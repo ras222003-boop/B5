@@ -20,7 +20,7 @@ export interface PerceptionSnapshot {
   observations:PerceptionObservation[];
   ground:GroundHazardSnapshot;
   approach:VisualApproachObservation[];
-  performance:{inferenceMs:number;p95InferenceMs:number;effectiveFps:number;processedFrames:number};
+  performance:{inferenceMs:number;p95InferenceMs:number;effectiveFps:number;processedFrames:number;colourAnalysisMs?:number;colourPixelSamplingMs?:number};
   tracking:'WARMING_UP'|'TRACKING'|'LIMITED';
 }
 export function currentPerception(snapshot:PerceptionSnapshot|null,now:number){

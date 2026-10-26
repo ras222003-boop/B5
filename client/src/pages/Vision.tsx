@@ -48,6 +48,7 @@ import {ObjectOnlyPipeline} from '@/lib/vision/objectOnlyPipeline';
 import {objectLabel} from '@/lib/vision/cocoLabels';
 import {colorDescription} from '@/lib/vision/objectColors';
 import {describeObjectScene} from '@/lib/vision/objectSceneDescription';
+import {colourForSpeech,COLOUR_SPEECH_QUALIFICATION} from '@/lib/vision/colourAnnouncement';
 import {ObjectTrialRecorder,reportedBattery} from '@/lib/vision/objectTrial';
 
 const button='inline-flex min-h-14 items-center justify-center rounded-xl bg-amber-300 px-6 py-3 text-lg font-bold text-stone-950 hover:bg-amber-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-300';
@@ -206,6 +207,12 @@ export default function Vision() {
   const start=async()=>{
     if(selectedModel!=='original'&&!activeObjectProfile)return;
     if(state!=='STOPPED'||!videoRef.current||!nativeCanvasRef.current)return;
+    // Safari requires speak() inside the tap, before camera/model awaits.
+    // Use a declared local voice only; never send research object descriptions to TTS servers.
+    if(activeObjectProfile&&objectSpeechRef.current&&!getSpeechPreferences().screenReaderMode){
+      speechEngine.replaceAtPriority('INFORMATION');
+      void speechEngine.enqueueLocal(speechInput(lang==='ar'?'بدأ وصف الأشياء.':lang==='en'?'Object description started.':'物体描述已启动。',lang,'ENVIRONMENT'));
+    }
     const run=++generation.current;
     objectTrialRef.current=activeObjectProfile?new ObjectTrialRecorder(activeObjectProfile.id,activeObjectProfile.modelSha256,performance.now()):null;
     const trial=objectTrialRef.current;if(trial)void reportedBattery().then(b=>{if(b&&trial===objectTrialRef.current)trial.battery(b);});
@@ -213,6 +220,7 @@ export default function Vision() {
     setError('');setOCRWarning('');setModelWarning('');setDepthWarning('');setMetricInfo({status:'UNAVAILABLE',source:null});setMeterDiagnostic(autoMeterEnabledRef.current?'MODEL_LOADING':'OFF');setMeterSnapshot(null);setOverlayFrame(null);setPinnedFrame(null);setMeterSpokenStatus('');setMetricTiming({load:null,inference:null});setLastAlert('');setRisk(null);setSpokenSummary('');setState('STARTING');
     try {
       const safetyFlags=await loadSafetyFlags();
+      if(run!==generation.current)return;
       const detected=detectVisionCapabilities();setCapabilities(detected);
       const visionConfig=activeObjectProfile?{...DEFAULT_VISION_CONFIG,detectionThreshold:activeObjectProfile.threshold}:DEFAULT_VISION_CONFIG;
       const nativeFrames=activeObjectProfile?undefined:window.BasiraNativeFrames;
@@ -252,9 +260,17 @@ export default function Vision() {
           objectSpeech:text=>{
             if(run!==generation.current||(!objectSpeechRef.current&&!colorSpeechRef.current))return false;
             if(!getSpeechPreferences().screenReaderMode&&speechEngine.busy)return false;
-            objectTrialRef.current?.speech();
             setLastObjectText(text);
             setLastOutput(text);
+            if(activeObjectProfile&&!getSpeechPreferences().screenReaderMode){
+              const trial=objectTrialRef.current;
+              return speechEngine.enqueueLocalObserved(speechInput(text,lang,'ENVIRONMENT'),(perceptionRef.current?.capturedAt??performance.now())+PERCEPTION_TTL_MS).then(started=>{
+                if(run!==generation.current)return false;
+                if(started)trial?.speech();
+                return started;
+              });
+            }
+            objectTrialRef.current?.speech();
             if(!getSpeechPreferences().screenReaderMode)void (activeObjectProfile?speechEngine.enqueueLocal(speechInput(text,lang,'ENVIRONMENT'),(perceptionRef.current?.capturedAt??performance.now())+PERCEPTION_TTL_MS):speechEngine.enqueue(speechInput(text,lang,'ENVIRONMENT'),'INFORMATION',0,undefined,false,(perceptionRef.current?.capturedAt??performance.now())+PERCEPTION_TTL_MS));
             return true;
           },
@@ -315,7 +331,7 @@ export default function Vision() {
     const snapshot=currentPerception(perceptionRef.current,performance.now());
     const answer=answerLocalQuestion('ماذا يوجد أمام الكاميرا؟',snapshot,performance.now(),t);
     const researchObjects=snapshot?.observations.filter(o=>o.validity==='CURRENT'&&o.detection.tracking?.state==='TRACKED').slice(0,5)??[];
-    const value=activeObjectProfile?(lang==='ar'?describeObjectScene(researchObjects.map(o=>o.detection),{now:performance.now(),objects:objectSpeechRef.current,colors:colorSpeechRef.current,relations:detail,minimumScore:activeObjectProfile.threshold})||'وصف الأشياء والألوان متوقف.':researchObjects.length?researchObjects.map(({detection:d})=>`${objectLabel(d,t)}، ${d.cocoClass==='person'?'ألوان الملابس غير محددة':colorDescription(d)} ${['LEFT','FRONT_LEFT'].includes(d.horizontalDirection)?'في يسار الصورة':['RIGHT','FRONT_RIGHT'].includes(d.horizontalDirection)?'في يمين الصورة':'في وسط الصورة'}`).join('؛ '):t.noDetections):detail&&snapshot&&scene?scene.detailedText:answer.route==='LOCAL'?answer.text:t.noDetections;
+    const value=activeObjectProfile?(lang==='ar'?describeObjectScene(researchObjects.map(o=>o.detection),{now:performance.now(),objects:objectSpeechRef.current,colors:colorSpeechRef.current,relations:detail,minimumScore:activeObjectProfile.threshold})||'لا توجد ألوان مؤهلة للإعلان في هذا المشهد.':researchObjects.length?researchObjects.map(({detection:d})=>`${objectLabel(d,t)} ${colorSpeechRef.current?colourForSpeech(d,{now:performance.now(),live:true}):''} ${['LEFT','FRONT_LEFT'].includes(d.horizontalDirection)?'في يسار الصورة':['RIGHT','FRONT_RIGHT'].includes(d.horizontalDirection)?'في يمين الصورة':'في وسط الصورة'}`).join('؛ '):t.noDetections):detail&&snapshot&&scene?scene.detailedText:answer.route==='LOCAL'?answer.text:t.noDetections;
     setSpokenSummary(value);setLastOutput(value);
     if(!getSpeechPreferences().screenReaderMode)void (activeObjectProfile?speechEngine.enqueueLocal(speechInput(value,lang,'ENVIRONMENT'),snapshot?snapshot.capturedAt+PERCEPTION_TTL_MS:performance.now()+PERCEPTION_TTL_MS):speechEngine.enqueue(speechInput(value,lang,'ENVIRONMENT'),'INFORMATION',0,undefined,false,snapshot?snapshot.capturedAt+PERCEPTION_TTL_MS:performance.now()+PERCEPTION_TTL_MS));
   };
@@ -344,6 +360,14 @@ export default function Vision() {
     objectSpeechRef.current=enabled;setObjectSpeechEnabled(saveObjectSpeechEnabled(enabled));
     pipelineRef.current?.setObjectSpeechEnabled(enabled);
     if(!enabled)speechEngine.replaceAtPriority('INFORMATION');
+    else if(activeObjectProfile&&!getSpeechPreferences().screenReaderMode)void speechEngine.enqueueLocal(speechInput(lang==='ar'?'وصف الأشياء مفعّل.':lang==='en'?'Object description enabled.':'物体描述已开启。',lang,'ENVIRONMENT'));
+  };
+  const testVisionVoice=()=>{
+    if(!activeObjectProfile){void testSpeech(assistant.testPhrase,lang);return;}
+    speechEngine.replaceAtPriority('INFORMATION');
+    // Retry current objects after the deliberate tap; a prior blocked attempt is not an announcement.
+    pipelineRef.current?.setObjectSpeechEnabled(objectSpeechRef.current);
+    void speechEngine.enqueueLocal(speechInput(assistant.testPhrase,lang,'ENVIRONMENT'),undefined,true);
   };
   const resumeCamera=async()=>{
     if(!cameraRef.current.active||!videoRef.current)return;
@@ -508,13 +532,15 @@ export default function Vision() {
       <button type="button" className={secondary} aria-pressed={screenReaderMode} onClick={()=>{speechEngine.stop();saveSpeechPreferences({...getSpeechPreferences(),screenReaderMode:!screenReaderMode});}}>وضع قارئ الشاشة: {screenReaderMode?'تشغيل؛ الوصف عبر قارئ الشاشة':'إيقاف؛ الوصف عبر صوت بصيرة'}</button>
       {activeObjectProfile&&<button type="button" className={`${secondary} mx-2`} disabled={!objectTrialRef.current} onClick={()=>void exportObjectTrial()}>حفظ سجل اختبار الكاميرا محليًا دون صور</button>}
       <button type="button" className={secondary} aria-pressed={objectSpeechEnabled} onClick={toggleObjectSpeech}>{assistant.objectSpeech}: {objectSpeechEnabled?assistant.objectSpeechOn:assistant.objectSpeechOff}</button>
-      <button type="button" className={`${secondary} mx-2`} aria-pressed={colorSpeechEnabled} onClick={()=>{const enabled=!colorSpeechEnabled;colorSpeechRef.current=enabled;setColorSpeechEnabled(saveColorSpeechEnabled(enabled));pipelineRef.current?.setColorSpeechEnabled(enabled);if(!enabled)speechEngine.replaceAtPriority('INFORMATION');}}>وصف الألوان صوتيًا: {colorSpeechEnabled?'تشغيل':'إيقاف'}</button>
+      <button type="button" className={`${secondary} mx-2`} aria-describedby="colour-speech-qualification" aria-pressed={colorSpeechEnabled} onClick={()=>{const enabled=!colorSpeechEnabled;colorSpeechRef.current=enabled;setColorSpeechEnabled(saveColorSpeechEnabled(enabled));pipelineRef.current?.setColorSpeechEnabled(enabled);if(!enabled)speechEngine.replaceAtPriority('INFORMATION');}}>وصف الألوان صوتيًا: {colorSpeechEnabled?'مطلوب عند التأهل':'إيقاف'}</button>
+      <p id="colour-speech-qualification" data-testid="colour-speech-qualification" className="mt-2 text-sm text-stone-300">{COLOUR_SPEECH_QUALIFICATION.status==='UNQUALIFIED'?'تقديرات اللون تشخيصية وغير معايرة. يستمر نطق اسم الجسم دون لونه حتى اجتياز اختبار ألوان مستقل؛ تكرار التقدير لا يثبت صحته.':'إعلان الألوان يخضع لسياسة التحقق المستقلة.'}</p>
       <p className="mt-2 text-stone-300">درجات الكاشف غير معايرة وليست نسب صحة مثبتة. الألوان تقديرية من بكسلات الإطار نفسه؛ عند غياب قناع جسم موثوق قد يمتنع النظام. يمين الصورة ويسارها مواضع بصرية وليسا تعليمات للمشي.</p>
       <div className="mt-3 flex flex-wrap gap-3">{!activeObjectProfile&&<button type="button" className={secondary} aria-pressed={experimentalAlerts} onClick={()=>setAlerts(!experimentalAlerts)}>{experimentalAlerts?'إيقاف مؤشرات الاقتراب التجريبية':'تشغيل مؤشرات الاقتراب التجريبية'}</button>}<button type="button" className={secondary} onClick={repeatLast}>إعادة آخر وصف</button></div>
       <p className="mt-2 text-stone-300">مؤشرات الاقتراب تتطلب تتبعًا مستقرًا وأدلة حركة متعددة. قد تتوقف عند بطء الجهاز أو دوران الكاميرا أو التكبير؛ لا تثبت احتمال اصطدام أو سلامة المشي.</p>
       <p className="mt-3 min-h-6" role={screenReaderMode?'status':undefined} aria-live={screenReaderMode?'polite':'off'}>{lastObjectText}</p>
       <p className="mt-2" role="status" aria-live="off">{assistant.speechStatus}: {screenReaderMode?assistant.speechMuted:speechError==='PLAYBACK_BLOCKED'?assistant.speechBlocked:speechError==='NO_VOICE'?assistant.speechNoVoice:speechMode==='PREMIUM'?assistant.speechPremium:assistant.speechLocal}</p>
-      <div className="mt-3 flex flex-wrap gap-2"><button type="button" className={secondary} onClick={()=>void (activeObjectProfile?speechEngine.enqueueLocal(speechInput(assistant.testPhrase,lang,'ENVIRONMENT'),undefined,true):testSpeech(assistant.testPhrase,lang))}>{assistant.testVoice}</button><button type="button" className={secondary} onClick={stopSpeaking}>{assistant.stopVoice}</button></div>
+      {activeObjectProfile&&speechError==='NO_VOICE'&&<p role="status">لم يظهر صوت محلي للغة المختارة؛ لن يُرسل الوصف لخادم صوت. تأكد من توفر صوت عربي في إعدادات iPhone، ثم اضغط «اختبر الصوت» مجددًا.</p>}
+      <div className="mt-3 flex flex-wrap gap-2"><button type="button" className={secondary} onClick={testVisionVoice}>{assistant.testVoice}</button><button type="button" className={secondary} onClick={stopSpeaking}>{assistant.stopVoice}</button></div>
     </section>
     <ObjectPhotoInput key={selectedModel} profile={activeObjectProfile} capture={activeObjectProfile?captureObjectPhoto:undefined} copy={t} objectsSpeech={objectSpeechEnabled} colorsSpeech={colorSpeechEnabled} cameraRunning={state!=='STOPPED'} beforeAnalyze={stop} announce={text=>{setLastObjectText(text);if(!getSpeechPreferences().screenReaderMode){if(activeObjectProfile)void speechEngine.enqueueLocal(speechInput(text,'ar','ENVIRONMENT'));else speak(text,.9,'ar','ENVIRONMENT');}}}/>
     {!activeObjectProfile&&<>

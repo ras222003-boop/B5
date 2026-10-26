@@ -1,6 +1,6 @@
 import type {VisionDetection} from '@shared/vision';
 import {COCO_LABELS} from './cocoLabels';
-import {colorDescription} from './objectColors';
+import {colourForSpeech} from './colourAnnouncement';
 import {validNormalizedBox} from './objectTracking';
 export function imagePosition(d: Pick<VisionDetection,'boundingBox'>) {
   const x=d.boundingBox.x+d.boundingBox.width/2;
@@ -24,12 +24,11 @@ export function describeObjectScene(detections: readonly VisionDetection[], opti
   if(!rows.length)return 'لم يُكتشف جسم بدرجة كافية؛ لا يثبت ذلك خلو المشهد.';
   const noun=(d:VisionDetection)=>COCO_LABELS[d.cocoClass!].ar;
   const phrases=rows.map(d=>{
-    const name=noun(d),feminine=COCO_LABELS[d.cocoClass!].feminine;
-    const color=!colors?'':d.cocoClass==='person'?'ألوان الملابس غير محددة':
-      d.color?.timestamp===d.timestamp?colorDescription(d).replace(' (تقدير من الصورة)','').replace(' (من قناع آلي تجريبي)',''):'اللون غير واضح';
-    return objects?`${name}${color?`، ${d.color?.name&&d.cocoClass!=='person'?(feminine?'تبدو ':'يبدو '):''}${color}`:''} ${imagePosition(d)}`:
-      `لون ${name}: ${color||'غير واضح'}`;
-  });
+    const name=noun(d);
+    const color=colors?colourForSpeech(d,{now:options.now,live:false}):'';
+    return objects?`${name}${color?` ${color}`:''} ${imagePosition(d)}`:color?`لون ${name}: ${color}`:'';
+  }).filter(Boolean);
+  if(!phrases.length)return '';
   let relation='';
   if(objects&&options.relations){
     const [a,b]=rows;

@@ -1,5 +1,7 @@
 import type {PerceptionSnapshot} from './perception';
 import type {ColorPixels} from './objectColors';
+import {COLOUR_SPEECH_QUALIFICATION,colourForSpeech} from './colourAnnouncement';
+const boundedNumber=(value:unknown,max=1)=>typeof value==='number'&&Number.isFinite(value)&&value>=0&&value<=max?value:null;
 /** Compare sampled pixels locally. The digest itself is never exported; changes prove pixel variation, not correct recognition. */
 export function sourcePixelSignature(frame:ColorPixels){
   let hash=(2166136261^frame.width^frame.height)>>>0;
@@ -14,7 +16,7 @@ const diagnosticColourReason=(value:unknown)=>typeof value==='string'&&colourRea
 export class ObjectTrialRecorder {
   readonly sceneId=crypto.randomUUID();
   readonly startedAtUtc=new Date().toISOString();
-  private frames:{frameId:string;inferenceMs:number;tracking:string;objects:{class:string;score:number;trackId:string|null;box:{x:number;y:number;width:number;height:number};colour:string|null;colourStatus:string;colourReason:string}[]}[]=[];
+  private frames:{frameId:string;inferenceMs:number;colourAnalysisMs:number|null;colourPixelSamplingMs:number|null;tracking:string;objects:{class:string;score:number;trackId:string|null;box:{x:number;y:number;width:number;height:number};colour:string|null;colourStatus:string;colourReason:string;colourQualityScore:number|null;colourLabelSupport:number|null;colourSpatialAgreement:number|null;colourBackgroundSeparation:number|null;colourTemporalAgreement:number|null;colourAnnouncementEligible:boolean}[]}[]=[];
   private colourUnclearReasonCounts:Record<string,number>={};
   private processed=0;private lastFrame='';private timings:number[]=[];private ended:number|null=null;
   private speechRequests=0;private initialBattery:BatterySample|null=null;
@@ -32,9 +34,9 @@ export class ObjectTrialRecorder {
     this.lastFrame=snapshot.frameId;this.processed++;
     const ms=snapshot.performance.inferenceMs;if(Number.isFinite(ms)&&ms>=0){this.timings.push(ms);if(this.timings.length>600)this.timings.shift();}
     for(const {detection:d} of snapshot.observations.slice(0,30))if(!d.color?.name){const reason=diagnosticColourReason(d.color?.reason);this.colourUnclearReasonCounts[reason]=(this.colourUnclearReasonCounts[reason]??0)+1;}
-    this.frames.push({frameId:snapshot.frameId,inferenceMs:ms,tracking:snapshot.tracking,
+    this.frames.push({frameId:snapshot.frameId,inferenceMs:ms,colourAnalysisMs:boundedNumber(snapshot.performance.colourAnalysisMs,60000),colourPixelSamplingMs:boundedNumber(snapshot.performance.colourPixelSamplingMs,60000),tracking:snapshot.tracking,
       objects:snapshot.observations.slice(0,30).map(({detection:d})=>({class:d.cocoClass??'unknown',score:d.confidence,trackId:d.trackId??null,
-        box:{x:d.boundingBox.x,y:d.boundingBox.y,width:d.boundingBox.width,height:d.boundingBox.height},colour:d.color?.name??null,colourStatus:d.color?.status??'UNCLEAR',colourReason:diagnosticColourReason(d.color?.reason)}))});
+        box:{x:d.boundingBox.x,y:d.boundingBox.y,width:d.boundingBox.width,height:d.boundingBox.height},colour:d.color?.name??null,colourStatus:d.color?.status??'UNCLEAR',colourReason:diagnosticColourReason(d.color?.reason),colourQualityScore:boundedNumber(d.color?.quality?.score),colourLabelSupport:boundedNumber(d.color?.quality?.labelSupport),colourSpatialAgreement:boundedNumber(d.color?.quality?.spatialAgreement),colourBackgroundSeparation:boundedNumber(d.color?.quality?.backgroundSeparation,500),colourTemporalAgreement:boundedNumber(d.color?.temporal?.agreement),colourAnnouncementEligible:Boolean(colourForSpeech(d,{now:snapshot.completedAt,live:true}))}))});
     if(this.frames.length>300)this.frames.shift();
   }
   finish(at:number,tracksEnded?:boolean){if(this.ended===null){this.ended=at;this.tracksEnded=tracksEnded??null;}}
@@ -46,7 +48,7 @@ export class ObjectTrialRecorder {
       inferenceMedianMs:sorted.length?sorted[Math.floor((sorted.length-1)/2)]:null,p95InferenceMs:sorted.length?sorted[Math.ceil(.95*sorted.length)-1]:null,
       timingWindowSamples:sorted.length,savedFrameSummaries:this.frames.length,truncatedFrameSummaries:Math.max(0,this.processed-this.frames.length),
       timingWindowMeaning:'Accepted perception snapshots only; discarded inference durations are not measured here',discardedInferenceCount:null,
-      colourUnclearReasonCounts:{...this.colourUnclearReasonCounts},colourDiagnosticMeaning:'Allowlisted reasons in accepted observation snapshots only; repeated observations are counted, not unique objects or independent accuracy. No pixels or masks are exported.',
+      colourUnclearReasonCounts:{...this.colourUnclearReasonCounts},colourSpeechQualification:COLOUR_SPEECH_QUALIFICATION,colourQualityMeaning:'Pixel quality score is uncalibrated and separate from detector score; temporal agreement is not colour correctness.',colourDiagnosticMeaning:'Allowlisted reasons in accepted observation snapshots only; repeated observations are counted, not unique objects or independent accuracy. No pixels or masks are exported.',
       analysisStateEvents:this.states,cameraTracksEnded:this.tracksEnded,
       sourcePixelVariation:this.sourceSamples<2?'INSUFFICIENT_SAMPLES':this.sourceChanges?'OBSERVED':'NOT_OBSERVED',sourceSignatureSamples:this.sourceSamples,sourcePixelChanges:this.sourceChanges,
       sourceVariationMeaning:'Local sampled-pixel changes only; does not attest hardware, multiple objects or accurate detections',playback:measurements.playback??null,camera:measurements.camera??this.cameraSize,
