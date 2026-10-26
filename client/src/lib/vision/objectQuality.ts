@@ -57,7 +57,7 @@ export class ObjectQualityProvider implements VisionProvider {
       ).join("");
     if (hash !== profile.modelSha256)
       throw new Error("object_quality_hash_mismatch");
-    const detector = await YoloXProvider.open(bytes, profile.threshold);
+    const detector = await YoloXProvider.open(bytes, profile.threshold, profile.inputSize ?? 416);
     try {
       return new ObjectQualityProvider(
         detector,

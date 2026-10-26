@@ -74,9 +74,12 @@ export class YoloXProvider implements VisionProvider {
   private closed = false;
   private constructor(
     private session: ort.InferenceSession,
-    private minimum = 0.01
+    private minimum = 0.01,
+    private inputSize = 416
   ) {}
-  static async open(bytes: Uint8Array, minimum = 0.01) {
+  static async open(bytes: Uint8Array, minimum = 0.01, inputSize = 416) {
+    if (![416, 512, 640].includes(inputSize))
+      throw new Error("yolox_contract_input_size");
     ort.env.wasm.numThreads = 1;
     ort.env.wasm.proxy = false;
     ort.env.wasm.wasmPaths = "/vision/onnx/";
@@ -91,7 +94,7 @@ export class YoloXProvider implements VisionProvider {
       await session.release();
       throw new Error("yolox_contract_names");
     }
-    return new YoloXProvider(session, minimum);
+    return new YoloXProvider(session, minimum, inputSize);
   }
   async detect(
     frame: HTMLVideoElement | HTMLCanvasElement | OffscreenCanvas,
@@ -100,11 +103,14 @@ export class YoloXProvider implements VisionProvider {
     if (this.closed) throw new Error("yolox_closed");
     const width = "videoWidth" in frame ? frame.videoWidth : frame.width,
       height = "videoHeight" in frame ? frame.videoHeight : frame.height;
-    const canvas = new OffscreenCanvas(416, 416),
+    const size = this.inputSize,
+      plane = size * size,
+      anchors = [8, 16, 32].reduce((n, stride) => n + (size / stride) ** 2, 0),
+      canvas = new OffscreenCanvas(size, size),
       ctx = canvas.getContext("2d", { willReadFrequently: true })!;
     ctx.fillStyle = "rgb(114,114,114)";
-    ctx.fillRect(0, 0, 416, 416);
-    const ratio = Math.min(416 / width, 416 / height);
+    ctx.fillRect(0, 0, size, size);
+    const ratio = Math.min(size / width, size / height);
     ctx.drawImage(
       frame,
       0,
@@ -112,20 +118,20 @@ export class YoloXProvider implements VisionProvider {
       Math.floor(width * ratio),
       Math.floor(height * ratio)
     );
-    const pixels = ctx.getImageData(0, 0, 416, 416).data,
-      input = new Float32Array(3 * 416 * 416);
-    for (let i = 0; i < 416 * 416; i++) {
+    const pixels = ctx.getImageData(0, 0, size, size).data,
+      input = new Float32Array(3 * plane);
+    for (let i = 0; i < plane; i++) {
       input[i] = pixels[i * 4 + 2];
-      input[416 * 416 + i] = pixels[i * 4 + 1];
-      input[2 * 416 * 416 + i] = pixels[i * 4];
+      input[plane + i] = pixels[i * 4 + 1];
+      input[2 * plane + i] = pixels[i * 4];
     }
     const result = await this.session.run({
-        images: new ort.Tensor("float32", input, [1, 3, 416, 416]),
+        images: new ort.Tensor("float32", input, [1, 3, size, size]),
       }),
       output = result.output;
     if (
       output.type !== "float32" ||
-      JSON.stringify(output.dims) !== "[1,3549,85]"
+      JSON.stringify(output.dims) !== JSON.stringify([1, anchors, 85])
     )
       throw new Error("yolox_contract_shape");
     return mergeDetections(
@@ -134,7 +140,8 @@ export class YoloXProvider implements VisionProvider {
         width,
         height,
         timestamp,
-        this.minimum
+        this.minimum,
+        size
       )
     );
   }

@@ -1,6 +1,6 @@
 /** Local experimental object recognition. This contract never grants navigation eligibility. */
 export interface ObjectQualityProfile {
-  id: "objects-yolox-tiny" | "objects-basira-v1" | "objects-basira-v2";
+  id: "objects-yolox-tiny" | "objects-basira-v1" | "objects-basira-v2" | "objects-basira-v3";
   name: string;
   model: "yolox-tiny";
   modelSha256: string;
@@ -15,6 +15,9 @@ export interface ObjectQualityProfile {
   colorStatus: "UNPROVEN";
   researchOnlyData?: true;
   knowledgeSha256?: string;
+  inputSize?: 416 | 512 | 640;
+  commercialTrainingAllowed?: true;
+  lineageEvidenceSha256?: string;
   assets: Record<string, { sha256: string; bytes: number }>;
   trainingEvidence?: {
     checkpointSha256: string;
@@ -33,7 +36,8 @@ export function validObjectQualityProfile(
     p &&
       (p.id === "objects-yolox-tiny" ||
         p.id === "objects-basira-v1" ||
-        p.id === "objects-basira-v2") &&
+        p.id === "objects-basira-v2" ||
+        p.id === "objects-basira-v3") &&
       p.model === "yolox-tiny" &&
       p.navigationEligible === false &&
       p.productionEligible === false &&
@@ -48,7 +52,9 @@ export function validObjectQualityProfile(
       (p.maskForStills
         ? p.maskQualification === "QUALIFIED_STILLS_ONLY"
         : p.maskQualification === "REJECTED_FINAL") &&
-      p.threshold === 0.5 &&
+      (p.id === "objects-basira-v3"
+        ? [0.35,0.5,0.65].includes(p.threshold)
+        : p.threshold === 0.5) &&
       /^[a-f0-9]{64}$/.test(p.modelSha256) &&
       p.assets?.["yolox/yolox_tiny.onnx"]?.sha256 === p.modelSha256 &&
       (p.id === "objects-yolox-tiny" ||
@@ -64,6 +70,12 @@ export function validObjectQualityProfile(
       (p.id !== "objects-basira-v2" ||
         (p.researchOnlyData === true &&
           typeof p.knowledgeSha256 === "string" &&
-          /^[a-f0-9]{64}$/.test(p.knowledgeSha256)))
+          /^[a-f0-9]{64}$/.test(p.knowledgeSha256))) &&
+      (p.id !== "objects-basira-v3" ||
+        (p.commercialTrainingAllowed === true &&
+          p.researchOnlyData !== true &&
+          [416,512,640].includes(p.inputSize ?? 0) &&
+          /^[a-f0-9]{64}$/.test(p.lineageEvidenceSha256 ?? "") &&
+          /^[a-f0-9]{64}$/.test(p.knowledgeSha256 ?? "")))
   );
 }
