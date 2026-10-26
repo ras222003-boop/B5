@@ -247,5 +247,166 @@
   "hardwareMicrophoneQualityTestedThisRound": false,
   "remainingAccessibilityNotes": [
     "Voice settings retains a nested main landmark from the existing application. It is outside this WCAG-tag subset; physical VoiceOver review remains required."
-  ]
+  ],
+  "ownerReportedIphoneTrial": {
+    "status": "INITIAL_USER_REPORTED_TRIAL_INCOMPLETE_QUALITY_CONCERNS",
+    "device": "iPhone 14 Pro",
+    "receivedAtUtc": "2026-10-26T20:12:34.061Z",
+    "modelId": "original",
+    "iosVersion": null,
+    "browserExplicitlyConfirmed": false,
+    "reportedDetectedClasses": ["car", "person"],
+    "reportedOtherObjectsMissed": true,
+    "missedObjectClasses": ["tree", "chair", "car"],
+    "reportedColoursUnavailable": true,
+    "speechSucceeded": null,
+    "cameraStopConfirmed": null,
+    "frameVariationMeasured": false,
+    "inferenceTimingMeasured": false,
+    "memoryMeasured": false,
+    "batteryMeasured": false,
+    "mediaReceived": false,
+    "independentReferenceLabels": false,
+    "accuracy": null,
+    "fullValidationPassed": false,
+    "modelName": "EfficientDet-Lite0",
+    "reportedMissedExamples": [
+      {
+        "name": "tree",
+        "modelVocabularySupported": false
+      },
+      {
+        "name": "chair",
+        "modelVocabularySupported": true
+      },
+      {
+        "name": "car",
+        "colour": "black",
+        "modelVocabularySupported": true,
+        "failureOfDetectionVersusColourNotYetDisambiguated": true
+      }
+    ],
+    "referenceMeaning": "Unannotated owner text report; not independently verified reference boxes or an accuracy calculation",
+    "priorIndependentEvaluationContext": [
+      {
+        "model": "lite0",
+        "class": "car",
+        "additionalTrainingImages": 0,
+        "referenceCount": 0,
+        "tp": 0,
+        "fp": 0,
+        "recall": null,
+        "precision": null,
+        "evaluationStatus": "KNOWN_NEGATIVE_SCOPE_ONLY",
+        "scope": "PREVIOUS_INDEPENDENT_SAMPLE_NOT_THIS_PHONE_TRIAL"
+      },
+      {
+        "model": "lite0",
+        "class": "chair",
+        "additionalTrainingImages": 0,
+        "referenceCount": 6,
+        "tp": 0,
+        "fp": 0,
+        "recall": 0,
+        "precision": null,
+        "evaluationStatus": "MEASURED_ON_THIS_SPLIT",
+        "scope": "PREVIOUS_INDEPENDENT_SAMPLE_NOT_THIS_PHONE_TRIAL"
+      },
+      {
+        "model": "lite0",
+        "class": "potted plant",
+        "additionalTrainingImages": 0,
+        "referenceCount": 1,
+        "tp": 0,
+        "fp": 0,
+        "recall": 0,
+        "precision": null,
+        "evaluationStatus": "MEASURED_ON_THIS_SPLIT",
+        "scope": "PREVIOUS_INDEPENDENT_SAMPLE_NOT_THIS_PHONE_TRIAL"
+      },
+      {
+        "model": "yolox-tiny",
+        "class": "car",
+        "additionalTrainingImages": 0,
+        "referenceCount": 0,
+        "tp": 0,
+        "fp": 0,
+        "recall": null,
+        "precision": null,
+        "evaluationStatus": "KNOWN_NEGATIVE_SCOPE_ONLY",
+        "scope": "PREVIOUS_INDEPENDENT_SAMPLE_NOT_THIS_PHONE_TRIAL"
+      },
+      {
+        "model": "yolox-tiny",
+        "class": "chair",
+        "additionalTrainingImages": 0,
+        "referenceCount": 6,
+        "tp": 0,
+        "fp": 0,
+        "recall": 0,
+        "precision": null,
+        "evaluationStatus": "MEASURED_ON_THIS_SPLIT",
+        "scope": "PREVIOUS_INDEPENDENT_SAMPLE_NOT_THIS_PHONE_TRIAL"
+      },
+      {
+        "model": "yolox-tiny",
+        "class": "potted plant",
+        "additionalTrainingImages": 0,
+        "referenceCount": 1,
+        "tp": 0,
+        "fp": 0,
+        "recall": 0,
+        "precision": null,
+        "evaluationStatus": "MEASURED_ON_THIS_SPLIT",
+        "scope": "PREVIOUS_INDEPENDENT_SAMPLE_NOT_THIS_PHONE_TRIAL"
+      },
+      {
+        "model": "objects-basira-v3",
+        "class": "car",
+        "additionalTrainingImages": 4,
+        "referenceCount": 0,
+        "tp": 0,
+        "fp": 0,
+        "recall": null,
+        "precision": null,
+        "evaluationStatus": "KNOWN_NEGATIVE_SCOPE_ONLY",
+        "scope": "PREVIOUS_INDEPENDENT_SAMPLE_NOT_THIS_PHONE_TRIAL"
+      },
+      {
+        "model": "objects-basira-v3",
+        "class": "chair",
+        "additionalTrainingImages": 6,
+        "referenceCount": 6,
+        "tp": 0,
+        "fp": 1,
+        "recall": 0,
+        "precision": 0,
+        "evaluationStatus": "MEASURED_ON_THIS_SPLIT",
+        "scope": "PREVIOUS_INDEPENDENT_SAMPLE_NOT_THIS_PHONE_TRIAL"
+      },
+      {
+        "model": "objects-basira-v3",
+        "class": "potted plant",
+        "additionalTrainingImages": 2,
+        "referenceCount": 1,
+        "tp": 0,
+        "fp": 0,
+        "recall": 0,
+        "precision": null,
+        "evaluationStatus": "MEASURED_ON_THIS_SPLIT",
+        "scope": "PREVIOUS_INDEPENDENT_SAMPLE_NOT_THIS_PHONE_TRIAL"
+      }
+    ],
+    "colourFollowup": {
+      "requestedModel": "objects-basira-v3",
+      "reply": "Colour is unclear",
+      "modelSelectionSeparatelyConfirmed": false,
+      "detectedObjectClassesConfirmed": null,
+      "abstentionReasonMeasured": null,
+      "colourAccuracy": null
+    }
+  },
+  "iphoneTrialPerformed": true,
+  "iphoneFullValidationPassed": false,
+  "iphoneTestedMeaning": "Complete structured device validation is not completed. Initial owner-reported trial is recorded separately; automated nested reports are desktop-only."
 }

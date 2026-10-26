@@ -139,6 +139,21 @@ try {
   );
   await page.waitForTimeout(4000);
   await page.getByRole("button", { name: "إيقاف الرؤية", exact: true }).click();
+  const metadataDownload = page.waitForEvent("download");
+  await page
+    .getByRole("button", {
+      name: "حفظ سجل اختبار الكاميرا محليًا دون صور",
+      exact: true,
+    })
+    .click();
+  const metadataFile = output + ".camera-metadata.json";
+  await (await metadataDownload).saveAs(metadataFile);
+  const metadata = JSON.parse(await readFile(metadataFile, "utf8"));
+  assert.equal(metadata.mediaSaved, false);
+  assert.equal(metadata.mediaUploaded, false);
+  assert.equal(metadata.modelId, "objects-basira-v3");
+  assert.equal(typeof metadata.colourUnclearReasonCounts, "object");
+  assert.equal(metadata.cameraTracksEnded, true);
   await page
     .getByRole("button", {
       name: "اختبار إذن الميكروفون دون تسجيل",
@@ -172,6 +187,7 @@ try {
     softwareCameraPipelineStarted: true,
     softwareMicrophonePermissionAndTeardown: true,
     allTracksEnded: true,
+    localColourDiagnosticExportVerified: true,
     blockedPostBeforeNetwork: blocked.status === 405,
     beaconDisabled: true,
     nativeTranscriptionDisabled: true,

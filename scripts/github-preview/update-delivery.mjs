@@ -83,6 +83,20 @@ for (const row of receipt.files) {
 }
 await writeFile(resolve(cwd, "SOURCE.json"), JSON.stringify(receipt, null, 2));
 await add("SOURCE.json");
+const readmePath = resolve(cwd, "README.md"),
+  readme = await readFile(readmePath, "utf8"),
+  sourceLine =
+    /^Source: https:\/\/github\.com\/ras222003-boop\/B5\/tree\/[a-f0-9]{40}$/m;
+if (!sourceLine.test(readme))
+  throw Error("Review changed preview README source identity");
+await writeFile(
+  readmePath,
+  readme.replace(
+    sourceLine,
+    "Source: https://github.com/ras222003-boop/B5/tree/" + receipt.sourceCommit
+  )
+);
+await add("README.md");
 const tree = await git(["write-tree"], { env }),
   commit = await git([
     "-c",
