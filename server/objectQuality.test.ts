@@ -72,6 +72,83 @@ async function request(
   return result;
 }
 describe("local research model boundary", () => {
+  it("serves hash-bound Basira knowledge and rejects V2 without its research/knowledge evidence", async () => {
+    const root = await fixture(),
+      handler = objectQualityHandler({ enabled: true, root });
+    const original = JSON.parse(
+      await readFile(resolve(root, "manifest.json"), "utf8")
+    );
+    const knowledge = Buffer.from(
+      JSON.stringify({ name: "معرفة بصيرة", unitFixture: true, models: [] })
+    );
+    const knowledgeSha256 = createHash("sha256")
+      .update(knowledge)
+      .digest("hex");
+    const profile = {
+      ...original,
+      id: "objects-basira-v2",
+      name: "unit V2",
+      researchOnlyData: true,
+      knowledgeSha256,
+      trainingEvidence: {
+        checkpointSha256: "b".repeat(64),
+        optimizerSteps: 79,
+        epochs: 1,
+        onnxValidationSha256: "c".repeat(64),
+        testEvaluationSha256: "d".repeat(64),
+        finalUsedForSelection: false,
+      },
+    };
+    expect(validObjectQualityProfile(profile)).toBe(true);
+    expect(
+      validObjectQualityProfile({ ...profile, researchOnlyData: false })
+    ).toBe(false);
+    expect(
+      validObjectQualityProfile({ ...profile, knowledgeSha256: undefined })
+    ).toBe(false);
+    expect(
+      validObjectQualityProfile({
+        ...profile,
+        maskForStills: true,
+        maskQualification: "QUALIFIED_STILLS_ONLY",
+      })
+    ).toBe(false);
+    await mkdir(resolve(root, "finetuned-v2/yolox"), { recursive: true });
+    await writeFile(
+      resolve(root, "finetuned-v2/manifest.json"),
+      JSON.stringify(profile)
+    );
+    await writeFile(
+      resolve(root, "finetuned-v2/basira-knowledge.json"),
+      knowledge
+    );
+    const listed = JSON.parse(
+      (await request(handler, "/api/vision/object-quality/manifest")).body
+    );
+    expect(listed.profiles.map((p: { id: string }) => p.id)).toEqual([
+      "objects-yolox-tiny",
+      "objects-basira-v2",
+    ]);
+    const path = "/api/vision/object-quality/knowledge";
+    expect((await request(handler, path)).body).toBe(knowledge.toString());
+    expect(
+      (await request(handler, path, { headers: { host: "evil.example" } }))
+        .status
+    ).toBe(403);
+    await writeFile(
+      resolve(root, "finetuned-v2/basira-knowledge.json"),
+      "tampered"
+    );
+    expect((await request(handler, path)).status).toBe(503);
+    expect(
+      (
+        await request(
+          handler,
+          "/api/vision/object-quality/assets/yolox/yolox_tiny.onnx"
+        )
+      ).status
+    ).toBe(200);
+  });
   it("requires actual-training evidence for the extra model, isolates its bytes, and preserves the previous profile", async () => {
     const root = await fixture(),
       handler = objectQualityHandler({ enabled: true, root });

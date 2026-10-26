@@ -154,7 +154,7 @@ try {
   assert.ok(speech.every(s => s.priority === "INFORMATION"));
   assert.deepEqual(haptics, []);
   await page.screenshot({ path: resolve(out, "camera.png"), fullPage: true });
-  if (modelId === "objects-basira-v1") {
+  if (modelId.startsWith("objects-basira-v")) {
     await page
       .getByRole("button", {
         name: "الرجوع فورًا إلى Tiny السابق",
@@ -215,7 +215,7 @@ try {
   await page.route(
     origin +
       "/api/vision/object-quality" +
-      (modelId === "objects-basira-v1" ? "/models/objects-basira-v1" : "") +
+      (modelId.startsWith("objects-basira-v") ? "/models/" + modelId : "") +
       "/assets/yolox/yolox_tiny.onnx",
     r => r.fulfill({ status: 200, body: "invalid model bytes" })
   );
@@ -262,7 +262,7 @@ try {
         maskDeploymentRejected: true,
         cancelledPhoto: true,
         originalProviderRestarted: true,
-        previousTinyRollbackVerified: modelId === "objects-basira-v1",
+        previousTinyRollbackVerified: modelId.startsWith("objects-basira-v"),
         corruptedModelRejected: true,
         tracksStopped: true,
         phoneTested: false,
@@ -270,7 +270,7 @@ try {
         voicesAudiblyTested: false,
         modelId,
         modelSha256: profile.modelSha256,
-        trainedCheckpointTested: modelId === "objects-basira-v1",
+        trainedCheckpointTested: modelId.startsWith("objects-basira-v"),
         uploads,
         external,
         pageErrors: errors,
@@ -294,7 +294,13 @@ try {
     await writeFile(
       resolve(out, "failure.json"),
       JSON.stringify(
-        { error: error.message, body: await page.locator("main").innerText() },
+        {
+          error: error.message,
+          stack: error.stack,
+          pageErrors: errors,
+          url: page.url(),
+          body: await page.locator("body").innerText({ timeout: 2000 }).catch(() => "unavailable"),
+        },
         null,
         2
       )

@@ -44,8 +44,8 @@ export class ObjectQualityProvider implements VisionProvider {
     if (!validObjectQualityProfile(profile))
       throw new Error("object_quality_contract");
     const response = await fetch(
-      (profile.id === "objects-basira-v1"
-        ? "/api/vision/object-quality/models/objects-basira-v1"
+      (profile.id !== "objects-yolox-tiny"
+        ? "/api/vision/object-quality/models/" + profile.id
         : "/api/vision/object-quality") + "/assets/yolox/yolox_tiny.onnx",
       { cache: "no-store" }
     );

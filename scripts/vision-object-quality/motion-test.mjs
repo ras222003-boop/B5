@@ -26,9 +26,11 @@ try {
   );
   const page = await context.newPage();
   await page.goto(origin + "/navigation/vision");
-  for (const model of process.argv[4] === "finetune"
-    ? ["yolox-tiny", "objects-basira-v1"]
-    : ["lite0", "yolox-tiny"])
+  for (const model of process.argv[4] === "finetune-v2"
+    ? ["yolox-tiny", "objects-basira-v1", "objects-basira-v2"]
+    : process.argv[4] === "finetune"
+      ? ["yolox-tiny", "objects-basira-v1"]
+      : ["lite0", "yolox-tiny"])
     for (const clip of manifest.clips) {
       await page.evaluate(async model => {
         const { ObjectTracker } = await import(

@@ -62,34 +62,65 @@ export function objectQualityHandler({
         send(400, { error: "query_rejected" });
         return;
       }
-      const modelPrefix = prefix + "/models/objects-basira-v1";
-      const trainedRequest = url.pathname.startsWith(modelPrefix + "/");
+      const trainingRoots = {
+        "objects-basira-v1": "finetuned",
+        "objects-basira-v2": "finetuned-v2",
+      } as const;
+      const modelId = (
+        Object.keys(trainingRoots) as (keyof typeof trainingRoots)[]
+      ).find(id => url.pathname.startsWith(prefix + "/models/" + id + "/"));
+      const modelPrefix = prefix + "/models/" + modelId;
+      const trainedRequest = Boolean(modelId);
       const activePrefix = trainedRequest ? modelPrefix : prefix;
-      const activeRoot = trainedRequest ? resolve(root, "finetuned") : root;
+      const activeRoot = modelId ? resolve(root, trainingRoots[modelId]) : root;
       const profile = JSON.parse(
         await readFile(resolve(activeRoot, "manifest.json"), "utf8")
       );
       if (
         !validObjectQualityProfile(profile) ||
-        profile.id !==
-          (trainedRequest ? "objects-basira-v1" : "objects-yolox-tiny")
+        profile.id !== (modelId ?? "objects-yolox-tiny")
       )
         throw new Error("Unqualified object profile");
       if (url.pathname === prefix + "/manifest") {
         const profiles = [profile];
-        try {
-          const trained = JSON.parse(
-            await readFile(resolve(root, "finetuned/manifest.json"), "utf8")
-          );
-          if (
-            validObjectQualityProfile(trained) &&
-            trained.id === "objects-basira-v1"
-          )
-            profiles.push(trained);
-        } catch {
-          /* An absent/unqualified training run cannot hide the previous model. */
-        }
+        for (const id of Object.keys(
+          trainingRoots
+        ) as (keyof typeof trainingRoots)[])
+          try {
+            const trained = JSON.parse(
+              await readFile(
+                resolve(root, trainingRoots[id], "manifest.json"),
+                "utf8"
+              )
+            );
+            if (validObjectQualityProfile(trained) && trained.id === id)
+              profiles.push(trained);
+          } catch {
+            /* An absent/unqualified training run cannot hide the previous model. */
+          }
         send(200, { enabled: true, profile, profiles });
+        return;
+      }
+      if (url.pathname === prefix + "/knowledge") {
+        const trained = JSON.parse(
+          await readFile(resolve(root, "finetuned-v2/manifest.json"), "utf8")
+        );
+        if (
+          !validObjectQualityProfile(trained) ||
+          trained.id !== "objects-basira-v2"
+        )
+          throw new Error("Knowledge model unavailable");
+        const file = await realpath(
+          resolve(root, "finetuned-v2/basira-knowledge.json")
+        );
+        const rel = relative(await realpath(root), file);
+        if (rel.startsWith("..") || isAbsolute(rel))
+          throw new Error("Knowledge outside registry");
+        const bytes = await readFile(file);
+        if (bytes.length > 3_000_000 || hash(bytes) !== trained.knowledgeSha256)
+          throw new Error("Knowledge evidence changed");
+        res.setHeader("Content-Type", "application/json");
+        res.end(req.method === "HEAD" ? undefined : bytes);
         return;
       }
       const name = url.pathname.slice((activePrefix + "/assets/").length),
