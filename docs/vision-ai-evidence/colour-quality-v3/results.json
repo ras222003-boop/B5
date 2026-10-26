@@ -820,7 +820,7 @@
       "mediaSaved": false
     },
     "functionalSpeechFix": {
-      "status": "VERIFIED_DESKTOP_AWAITING_PHYSICAL_IPHONE_RETEST",
+      "status": "FAILED_OWNER_IPHONE_REPORT_WORK_DEFERRED_AT_USER_REQUEST",
       "sourceCommit": "40048f22832d6cb7a7dda0569234b41116caef76",
       "previewCommit": "b6ca294431e7573ad6473fce6400c6dcb033a284",
       "previewUrl": "https://ras222003-boop.github.io/basira-iphone-research-preview/?build=40048f2-speech-fix#/navigation/vision",
@@ -960,12 +960,20 @@
         "audibleQualityVerified": false,
         "iphoneTested": false
       },
-      "physicalIphoneFixRetestPerformed": false,
+      "physicalIphoneFixRetestPerformed": true,
       "colourPolicyChanged": false,
       "colourEstimatorChanged": false,
       "detectorWeightsChanged": false,
       "finalColourTestRepeated": false,
-      "scope": "Gesture-start local speech and playback-start acknowledgement. Earlier frozen colour metrics remain bound to their original sources, not this functional fix."
+      "scope": "Gesture-start local speech and playback-start acknowledgement. Earlier frozen colour metrics remain bound to their original sources, not this functional fix.",
+      "ownerReportedRetest": {
+        "date": "2026-10-27",
+        "audibleSpeech": "NONE_REPORTED",
+        "browserEventsAvailable": false,
+        "iosVersion": null,
+        "deferredAtUserRequest": true
+      },
+      "unpublishedDiagnosticsBranch": "codex/basira-local-speech-diagnostics-wip"
     }
   },
   "metricsAudit": {
