@@ -5,7 +5,7 @@ const d=(id:string,cocoClass:string,x=.1):VisionDetection=>({id,cocoClass,type:'
 describe('local grounded Arabic object descriptions',()=>{
  it('describes actual supported objects and image positions without inventing contents',()=>{
   const text=describeObjectScene([d('a','bottle'),d('b','dining table',.7)],{now:100,colors:true,relations:true});
-  expect(text).toContain('زجاجة');expect(text).toContain('طاولة');expect(text).toContain('إلى يسار');expect(text).toContain('اللون غير واضح');
+   expect(text).toContain('زجاجة');expect(text).toContain('طاولة');expect(text).toContain('إلى يسار');expect(text).not.toContain('اللون غير واضح');
   expect(text).not.toMatch(/ماء|عليها|امش|آمن|اصطدام/);
  });
  it('rejects stale, unknown, low-score, invalid and research stairs outputs',()=>{
@@ -19,7 +19,7 @@ describe('local grounded Arabic object descriptions',()=>{
  it('honours separate object/colour settings and refuses stale colour',()=>{
   const a=d('a','chair');a.color={name:'red',status:'ESTIMATED',reason:'BOX_ESTIMATE',samples:100,supportFraction:.9,timestamp:90,stableFrames:3,calibrated:false};
   expect(describeObjectScene([a],{now:100,colors:true})).not.toContain('أحمر');
-  a.color.timestamp=100;expect(describeObjectScene([a],{now:100,objects:false,colors:true})).toContain('أحمر');
+  a.color.timestamp=100;expect(describeObjectScene([a],{now:100,objects:false,colors:true})).toBe('');
   expect(describeObjectScene([a],{now:100,colors:false})).not.toContain('أحمر');
   expect(describeObjectScene([a],{now:100,objects:false,colors:false})).toBe('');
  });

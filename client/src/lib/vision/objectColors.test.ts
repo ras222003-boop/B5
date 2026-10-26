@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import type { VisionDetection } from "@shared/vision";
 import {
   analyzeObjectColor,
@@ -6,6 +6,7 @@ import {
   ObjectColorTracker,
   colorDescription,
   type ColorPixels,
+  sampleColorFrame,
 } from "./objectColors";
 import { COCO_LABELS } from "./cocoLabels";
 const detection = {
@@ -31,6 +32,39 @@ function pixels(fg: number[], background = [30, 180, 70]): ColorPixels {
   return { width, height, data, timestamp: 1, frameId: "frame-1" };
 }
 describe("conservative per-object pixel colour", () => {
+  it('uses measured Lab contrast rather than rejecting every same-name background',()=>{
+    const out=analyzeObjectColor(pixels([30,30,30],[65,65,65]),detection);
+    expect(out.name).toBe('black');expect(out.quality?.backgroundSeparation).toBeGreaterThan(12);expect(out.calibrated).toBe(false);
+  });
+  it('does not reject a well-exposed small object just because most of the scene is dark',()=>{
+    const p=pixels([0,0,0],[0,0,0]);for(let y=45;y<55;y++)for(let x=45;x<55;x++)p.data.set([205,25,25,255],(y*100+x)*4);
+    expect(analyzeObjectColor(p,{...detection,boundingBox:{x:.45,y:.45,width:.1,height:.1}}).name).toBe('red');
+  });
+  it('does not describe neutral shading/window modes as a proven multicoloured material',()=>{
+    const p=pixels([25,25,25]);for(let y=20;y<80;y++)for(let x=50;x<80;x++)p.data.set([140,140,140,255],(y*100+x)*4);
+    expect(analyzeObjectColor(p,detection).name).toBeNull();
+  });
+  it('separates dark saturated blue from neutral black, and keeps colour quality independent of detector score',()=>{
+    const frame=pixels([6,12,45]);const a=analyzeObjectColor(frame,detection),b=analyzeObjectColor(frame,{...detection,confidence:.1});
+    expect(a.name).toBe('blue');expect(a.quality).toEqual(b.quality);expect(a.quality?.score).toBeLessThanOrEqual(1);
+  });
+  it('reports missing boundary context as a limited estimate, never an instance mask',()=>{
+    const out=analyzeObjectColor(pixels([200,20,20],[200,20,20]),{...detection,boundingBox:{x:0,y:0,width:1,height:1}});
+    expect(out.name).toBe('red');expect(out.reason).toBe('BOX_ESTIMATE');expect(out.quality?.score).toBeLessThanOrEqual(.5);expect(out.quality?.contextSamples).toBe(0);
+  });
+  it('recovers after one ambiguous frame without carrying a colour through that frame or identity swaps',()=>{
+    const tracker=new ObjectColorTracker(),c=analyzeObjectColor(pixels([200,20,20]),detection);
+    for(const at of [1,200,400])tracker.update(detection,{...c,timestamp:at});
+    expect(tracker.update(detection,{...c,name:null,status:'UNCLEAR',reason:'BACKGROUND_AMBIGUOUS',timestamp:600}).name).toBeNull();
+    expect(tracker.update(detection,{...c,timestamp:800}).name).toBe('red');
+    expect(tracker.update({...detection,cocoClass:'car'},{...c,timestamp:1000}).name).toBeNull();
+    expect(tracker.update(detection,{...c,timestamp:1000}).name).toBeNull();
+  });
+  it('does not let a canvas pixel-read failure stop the detector/camera caller',()=>{
+    const canvas={width:1,height:1,getContext:()=>({drawImage:()=>{},getImageData:()=>{throw Error('tainted-or-unavailable-pixels');}})};
+    vi.stubGlobal('document',{createElement:()=>canvas});
+    try{expect(sampleColorFrame({width:100,height:100} as HTMLCanvasElement,1,'f')).toBeNull();expect(canvas.width).toBe(0);}finally{vi.unstubAllGlobals();}
+  });
   it('describes a conservative shade and both major colours, rather than averaging them into a new colour',()=>{
     const p=pixels([20,40,160]);
     const result=analyzeObjectColor(p,detection);
@@ -38,15 +72,15 @@ describe("conservative per-object pixel colour", () => {
     for(let y=20;y<80;y++)for(let x=20;x<50;x++)p.data.set([200,20,20,255],(y*100+x)*4);
     const mixed=analyzeObjectColor(p,detection);
     expect(mixed.name).toBe('multicolor');expect(new Set(mixed.components)).toEqual(new Set(['red','blue']));
-    expect(colorDescription({...detection,cocoClass:'chair',color:mixed})).toContain('أحمر وأزرق');
+    const description=colorDescription({...detection,cocoClass:'chair',color:mixed});expect(description).toContain('أحمر');expect(description).toContain('أزرق');
   });
-  it('requires new stable observations when only the shade changes',()=>{
+  it('keeps a stable colour while requiring evidence for a changed shade',()=>{
     const tracker=new ObjectColorTracker(),d={...detection,trackId:'t',tracking:{state:'TRACKED' as const,observations:5,firstSeenAt:0,lastSeenAt:10,gapMs:1}};
     const c=analyzeObjectColor(pixels([20,40,160]),d);c.timestamp=1;
-    tracker.update(d,c);tracker.update(d,{...c,timestamp:2});expect(tracker.update(d,{...c,timestamp:3}).name).toBe('blue');
-    expect(tracker.update(d,{...c,timestamp:4,shade:'LIGHT'}).reason).toBe('CHANGING');
-    expect(tracker.update(d,{...c,timestamp:5,shade:'LIGHT'}).name).toBeNull();
-    expect(tracker.update(d,{...c,timestamp:6,shade:'LIGHT'}).name).toBe('blue');
+    tracker.update(d,c);tracker.update(d,{...c,timestamp:200});expect(tracker.update(d,{...c,timestamp:400}).name).toBe('blue');
+    const changed=tracker.update(d,{...c,timestamp:600,shade:'LIGHT'});expect(changed.name).toBe('blue');expect(changed.shade).toBeUndefined();
+    expect(tracker.update(d,{...c,timestamp:800,shade:'LIGHT'}).name).toBe('blue');
+    expect(tracker.update(d,{...c,timestamp:1000,shade:'LIGHT'}).shade).toBe('LIGHT');
   });
   it("covers all 80 actual COCO labels without manufacturing unsupported categories", () => {
     expect(Object.keys(COCO_LABELS)).toHaveLength(80);

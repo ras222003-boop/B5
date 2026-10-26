@@ -1,0 +1,666 @@
+{
+  "schemaVersion": 1,
+  "status": "RESEARCH_REVIEW_ACCEPTANCE_NOT_MET",
+  "baseCommit": "e8393c3a78f5856e6130a9b8ece973748706580d",
+  "branch": "codex/basira-colour-quality-v3",
+  "generatedAtUtc": "2026-10-26T22:55:34.162Z",
+  "userReportedBaseline": {
+    "rawLogProvided": false,
+    "rawCameraPixelsProvided": false,
+    "durationMs": 7650,
+    "processedFrames": 12,
+    "effectiveFps": 1.57,
+    "medianInferenceMs": 206,
+    "colourObservations": 39,
+    "unclear": 32,
+    "estimates": 7,
+    "backgroundAmbiguity": 19,
+    "object2BlackConsecutiveEstimates": 7,
+    "referenceColourCorrectness": null,
+    "meaning": "User-supplied metadata; repetition is not independent accuracy."
+  },
+  "data": {
+    "passed": true,
+    "images": 14,
+    "references": 16,
+    "sourceGroups": 14,
+    "counts": {
+      "development": 6,
+      "test": 5,
+      "calibration": 3
+    },
+    "exactDuplicateFiles": 0,
+    "crossSplitDHashWithinFourBits": [],
+    "perPhotoLicencesVerified": true,
+    "privateMedia": false,
+    "referenceOrigin": "Published human Visual Genome attributes, not model predictions",
+    "independentBasiraColourReview": false,
+    "criterion95Proven": false
+  },
+  "sourceHashes": {
+    "client/src/lib/vision/objectColors.ts": "011880d7df854aff31224ef9dbed1933dcfabf2fe19f5b86a7ffbc9959edd964",
+    "client/src/lib/vision/objectColorEstimator.ts": "100670281f219bc160a050b8f83eca43a6f80f6c901950b1ef2ded706a9f38af",
+    "client/src/lib/vision/objectColorSpaces.ts": "e66be1aaa56387332453597d6513aa02f6d58b1be7c8f353a2cc3ab0b0a36fd3",
+    "client/src/lib/vision/colourAnnouncement.ts": "b7af632e90ec8bfd63fb055a7ff6dd20711c85d75a7b34a287b658b8e3ccee54",
+    "client/src/lib/vision/objectSpeech.ts": "def075f5729d7cff6a62d9814bb4a42302cf8796a7e527361e7dd38a2c2deb3d",
+    "client/src/lib/vision/objectSceneDescription.ts": "cb1dda02bd176b1dbf93f3d82b1dda369c80a22d8cb65765e158a23610d846c2"
+  },
+  "sourceHashesCanonicalLf": {
+    "client/src/lib/vision/objectColors.ts": "011880d7df854aff31224ef9dbed1933dcfabf2fe19f5b86a7ffbc9959edd964",
+    "client/src/lib/vision/objectColorEstimator.ts": "100670281f219bc160a050b8f83eca43a6f80f6c901950b1ef2ded706a9f38af",
+    "client/src/lib/vision/objectColorSpaces.ts": "e66be1aaa56387332453597d6513aa02f6d58b1be7c8f353a2cc3ab0b0a36fd3",
+    "client/src/lib/vision/colourAnnouncement.ts": "b7af632e90ec8bfd63fb055a7ff6dd20711c85d75a7b34a287b658b8e3ccee54",
+    "client/src/lib/vision/objectSpeech.ts": "8745454d0401ddf1ee1801c9661a5635c51341289936364f8340a8b8aea80145",
+    "client/src/lib/vision/objectSceneDescription.ts": "cb1dda02bd176b1dbf93f3d82b1dda369c80a22d8cb65765e158a23610d846c2"
+  },
+  "sourceHashMeaning": "Frozen local source byte hashes plus LF-canonical hashes for Git checkout portability; no algorithm change after final evaluation.",
+  "cohortSha256": "ae6f154e13e5445b7c04f2bafc94b991245098f052432bd1a484ed6f325b8fec",
+  "selectionProtocol": {
+    "sourceHashes": {
+      "client/src/lib/vision/objectColors.ts": "011880d7df854aff31224ef9dbed1933dcfabf2fe19f5b86a7ffbc9959edd964",
+      "client/src/lib/vision/objectColorEstimator.ts": "100670281f219bc160a050b8f83eca43a6f80f6c901950b1ef2ded706a9f38af",
+      "client/src/lib/vision/objectColorSpaces.ts": "e66be1aaa56387332453597d6513aa02f6d58b1be7c8f353a2cc3ab0b0a36fd3",
+      "client/src/lib/vision/colourAnnouncement.ts": "b7af632e90ec8bfd63fb055a7ff6dd20711c85d75a7b34a287b658b8e3ccee54",
+      "client/src/lib/vision/objectSpeech.ts": "def075f5729d7cff6a62d9814bb4a42302cf8796a7e527361e7dd38a2c2deb3d",
+      "client/src/lib/vision/objectSceneDescription.ts": "cb1dda02bd176b1dbf93f3d82b1dda369c80a22d8cb65765e158a23610d846c2"
+    },
+    "manifestSha256": "ae6f154e13e5445b7c04f2bafc94b991245098f052432bd1a484ed6f325b8fec",
+    "baselineSha256": "e7d6f9f4b1590911012861ee4ff9ed08a20c354061b2a4037fea75ce286c17f5",
+    "frozenAtUtc": "2026-10-26T22:45:38.882Z",
+    "targetSelectiveAccuracy": 0.95,
+    "qualification": {
+      "minimumIndependentAcceptedRealReferences": 100,
+      "minimumSourceGroups": 20,
+      "reviewedLabelsRequired": true,
+      "indoorOutdoorAndReflectionCoverageRequired": true,
+      "syntheticOnlyQualificationForbidden": true,
+      "automaticSpeechEnabled": false
+    },
+    "meaning": "Final results are for reporting only; no model/threshold selection from this test. Published labels remain provisional until separately adjudicated. No training or human approval."
+  },
+  "development": {
+    "before": {
+      "references": 7,
+      "estimated": 2,
+      "abstained": 5,
+      "coverage": 0.2857142857142857,
+      "agreementWhenEstimated": 0.5,
+      "wrongEstimates": 1,
+      "abstentionReasons": {
+        "MIXED_OR_OCCLUDED": 3,
+        "BACKGROUND_AMBIGUOUS": 2
+      }
+    },
+    "after": {
+      "references": 7,
+      "estimated": 1,
+      "abstained": 6,
+      "coverage": 0.14285714285714285,
+      "agreementWhenEstimated": 1,
+      "wrongEstimates": 0,
+      "abstentionReasons": {
+        "MIXED_OR_OCCLUDED": 4,
+        "BACKGROUND_AMBIGUOUS": 2
+      }
+    }
+  },
+  "calibration": {
+    "before": {
+      "references": 3,
+      "estimated": 2,
+      "abstained": 1,
+      "coverage": 0.6666666666666666,
+      "agreementWhenEstimated": 0.5,
+      "wrongEstimates": 1,
+      "abstentionReasons": {
+        "BACKGROUND_AMBIGUOUS": 1
+      }
+    },
+    "after": {
+      "references": 3,
+      "estimated": 2,
+      "abstained": 1,
+      "coverage": 0.6666666666666666,
+      "agreementWhenEstimated": 1,
+      "wrongEstimates": 0,
+      "abstentionReasons": {
+        "BACKGROUND_AMBIGUOUS": 1
+      }
+    }
+  },
+  "final": {
+    "scope": "PUBLISHED_HUMAN_ATTRIBUTE_AGREEMENT_WITH_ORACLE_REFERENCE_BOXES_NOT_END_TO_END_OR_PRODUCT_QUALIFICATION",
+    "images": 5,
+    "before": {
+      "references": 6,
+      "estimated": 1,
+      "abstained": 5,
+      "coverage": 0.16666666666666666,
+      "agreementWhenEstimated": 1,
+      "wrongEstimates": 0,
+      "abstentionReasons": {
+        "MIXED_OR_OCCLUDED": 4,
+        "BACKGROUND_AMBIGUOUS": 1
+      }
+    },
+    "after": {
+      "references": 6,
+      "estimated": 0,
+      "abstained": 6,
+      "coverage": 0,
+      "agreementWhenEstimated": null,
+      "wrongEstimates": 0,
+      "abstentionReasons": {
+        "BACKGROUND_AMBIGUOUS": 1,
+        "MIXED_OR_OCCLUDED": 5
+      }
+    },
+    "audio": {
+      "announced": 0,
+      "selectiveAccuracy": null,
+      "wrongColoursAnnounced": 0,
+      "abstentionRate": 1,
+      "qualificationPassed": false,
+      "reason": "Independent diverse reviewed real references insufficient; numeric quality scores are not calibrated."
+    },
+    "colourCpuMs": {
+      "beforeMedian": 0.7000000029802322,
+      "beforeP95": 1.6000000089406967,
+      "afterMedian": 0.7999999970197678,
+      "afterP95": 1.7999999970197678,
+      "scope": "Warm per-object browser colour CPU only, excludes detector/camera. Desktop Chrome, not iPhone."
+    },
+    "rows": [
+      {
+        "imageId": "coco-84170",
+        "sourceGroup": "flickr-sgtransport",
+        "objectId": "348329",
+        "class": "car",
+        "reference": "gray",
+        "referenceOrigin": "PUBLISHED_HUMAN_VISUAL_GENOME_NOT_MODEL_PREDICTION",
+        "referenceReviewedByBasira": false,
+        "old": {
+          "name": null,
+          "status": "UNCLEAR",
+          "reason": "MIXED_OR_OCCLUDED",
+          "samples": 713,
+          "supportFraction": 0,
+          "timestamp": 1000,
+          "stableFrames": 0,
+          "calibrated": false
+        },
+        "candidate": {
+          "name": null,
+          "status": "UNCLEAR",
+          "reason": "BACKGROUND_AMBIGUOUS",
+          "samples": 252,
+          "supportFraction": 0,
+          "timestamp": 1000,
+          "stableFrames": 0,
+          "calibrated": false,
+          "quality": {
+            "version": "inset-grid-v2",
+            "method": "INSET_GRID",
+            "score": 0.13607750584408396,
+            "labelSupport": 0.6111111111111112,
+            "spatialAgreement": 0.4444444444444444,
+            "usableFraction": 1,
+            "clippedFraction": 0,
+            "darkFraction": 0,
+            "backgroundSeparation": 3.265860140258015,
+            "contextSamples": 136,
+            "sampledPixels": 252,
+            "calibrated": false
+          }
+        },
+        "oldWouldDescribeColour": false,
+        "newAudibleColour": ""
+      },
+      {
+        "imageId": "coco-184324",
+        "sourceGroup": "flickr-sergemelki",
+        "objectId": "1364448",
+        "class": "bus",
+        "reference": "white",
+        "referenceOrigin": "PUBLISHED_HUMAN_VISUAL_GENOME_NOT_MODEL_PREDICTION",
+        "referenceReviewedByBasira": false,
+        "old": {
+          "name": null,
+          "status": "UNCLEAR",
+          "reason": "BACKGROUND_AMBIGUOUS",
+          "samples": 208,
+          "supportFraction": 0,
+          "timestamp": 1000,
+          "stableFrames": 0,
+          "calibrated": false
+        },
+        "candidate": {
+          "name": null,
+          "status": "UNCLEAR",
+          "reason": "MIXED_OR_OCCLUDED",
+          "samples": 261,
+          "supportFraction": 0,
+          "timestamp": 1000,
+          "stableFrames": 0,
+          "calibrated": false,
+          "quality": {
+            "version": "inset-grid-v2",
+            "method": "INSET_GRID",
+            "score": 0.5555555555555556,
+            "labelSupport": 0.6896551724137931,
+            "spatialAgreement": 0.5555555555555556,
+            "usableFraction": 0.9666666666666667,
+            "clippedFraction": 0,
+            "darkFraction": 0.03333333333333333,
+            "backgroundSeparation": 15.242867591706851,
+            "contextSamples": 88,
+            "sampledPixels": 270,
+            "calibrated": false
+          }
+        },
+        "oldWouldDescribeColour": false,
+        "newAudibleColour": ""
+      },
+      {
+        "imageId": "coco-184324",
+        "sourceGroup": "flickr-sergemelki",
+        "objectId": "136541",
+        "class": "car",
+        "reference": "blue",
+        "referenceOrigin": "PUBLISHED_HUMAN_VISUAL_GENOME_NOT_MODEL_PREDICTION",
+        "referenceReviewedByBasira": false,
+        "old": {
+          "name": null,
+          "status": "UNCLEAR",
+          "reason": "MIXED_OR_OCCLUDED",
+          "samples": 231,
+          "supportFraction": 0,
+          "timestamp": 1000,
+          "stableFrames": 0,
+          "calibrated": false
+        },
+        "candidate": {
+          "name": null,
+          "status": "UNCLEAR",
+          "reason": "MIXED_OR_OCCLUDED",
+          "samples": 251,
+          "supportFraction": 0,
+          "timestamp": 1000,
+          "stableFrames": 0,
+          "calibrated": false,
+          "quality": {
+            "version": "inset-grid-v2",
+            "method": "INSET_GRID",
+            "score": 0.1111111111111111,
+            "labelSupport": 0.4302788844621514,
+            "spatialAgreement": 0.1111111111111111,
+            "usableFraction": 0.8715277777777778,
+            "clippedFraction": 0,
+            "darkFraction": 0.1284722222222222,
+            "backgroundSeparation": 22.471336274437206,
+            "contextSamples": 104,
+            "sampledPixels": 288,
+            "calibrated": false
+          }
+        },
+        "oldWouldDescribeColour": false,
+        "newAudibleColour": ""
+      },
+      {
+        "imageId": "coco-181816",
+        "sourceGroup": "flickr-darakero",
+        "objectId": "352196",
+        "class": "car",
+        "reference": "black",
+        "referenceOrigin": "PUBLISHED_HUMAN_VISUAL_GENOME_NOT_MODEL_PREDICTION",
+        "referenceReviewedByBasira": false,
+        "old": {
+          "name": null,
+          "status": "UNCLEAR",
+          "reason": "MIXED_OR_OCCLUDED",
+          "samples": 990,
+          "supportFraction": 0,
+          "timestamp": 1000,
+          "stableFrames": 0,
+          "calibrated": false
+        },
+        "candidate": {
+          "name": null,
+          "status": "UNCLEAR",
+          "reason": "MIXED_OR_OCCLUDED",
+          "samples": 587,
+          "supportFraction": 0,
+          "timestamp": 1000,
+          "stableFrames": 0,
+          "calibrated": false,
+          "quality": {
+            "version": "inset-grid-v2",
+            "method": "INSET_GRID",
+            "score": 0.5604770017035775,
+            "labelSupport": 0.5604770017035775,
+            "spatialAgreement": 0.6666666666666666,
+            "usableFraction": 0.9982993197278912,
+            "clippedFraction": 0.0017006802721088435,
+            "darkFraction": 0,
+            "backgroundSeparation": 22.096643225679856,
+            "contextSamples": 219,
+            "sampledPixels": 588,
+            "calibrated": false
+          }
+        },
+        "oldWouldDescribeColour": false,
+        "newAudibleColour": ""
+      },
+      {
+        "imageId": "coco-422836",
+        "sourceGroup": "flickr-jojo-bean",
+        "objectId": "1841792",
+        "class": "suitcase",
+        "reference": "black",
+        "referenceOrigin": "PUBLISHED_HUMAN_VISUAL_GENOME_NOT_MODEL_PREDICTION",
+        "referenceReviewedByBasira": false,
+        "old": {
+          "name": null,
+          "status": "UNCLEAR",
+          "reason": "MIXED_OR_OCCLUDED",
+          "samples": 806,
+          "supportFraction": 0,
+          "timestamp": 1000,
+          "stableFrames": 0,
+          "calibrated": false
+        },
+        "candidate": {
+          "name": null,
+          "status": "UNCLEAR",
+          "reason": "MIXED_OR_OCCLUDED",
+          "samples": 402,
+          "supportFraction": 0,
+          "timestamp": 1000,
+          "stableFrames": 0,
+          "calibrated": false,
+          "quality": {
+            "version": "inset-grid-v2",
+            "method": "INSET_GRID",
+            "score": 0.4444444444444444,
+            "labelSupport": 0.5298507462686567,
+            "spatialAgreement": 0.4444444444444444,
+            "usableFraction": 0.8739130434782608,
+            "clippedFraction": 0,
+            "darkFraction": 0.12608695652173912,
+            "backgroundSeparation": 39.96405012605249,
+            "contextSamples": 209,
+            "sampledPixels": 460,
+            "calibrated": false
+          }
+        },
+        "oldWouldDescribeColour": false,
+        "newAudibleColour": ""
+      },
+      {
+        "imageId": "coco-301135",
+        "sourceGroup": "flickr-zoetnet",
+        "objectId": "355891",
+        "class": "car",
+        "reference": "black",
+        "referenceOrigin": "PUBLISHED_HUMAN_VISUAL_GENOME_NOT_MODEL_PREDICTION",
+        "referenceReviewedByBasira": false,
+        "old": {
+          "name": "black",
+          "status": "ESTIMATED",
+          "reason": "BOX_ESTIMATE",
+          "supportFraction": 0.8686274509803922,
+          "samples": 510,
+          "timestamp": 1000,
+          "stableFrames": 1,
+          "calibrated": false
+        },
+        "candidate": {
+          "name": null,
+          "status": "UNCLEAR",
+          "reason": "MIXED_OR_OCCLUDED",
+          "samples": 351,
+          "supportFraction": 0,
+          "timestamp": 1000,
+          "stableFrames": 0,
+          "calibrated": false,
+          "quality": {
+            "version": "inset-grid-v2",
+            "method": "INSET_GRID",
+            "score": 0.5294117647058824,
+            "labelSupport": 0.6809116809116809,
+            "spatialAgreement": 0.5555555555555556,
+            "usableFraction": 0.5294117647058824,
+            "clippedFraction": 0,
+            "darkFraction": 0.47058823529411764,
+            "backgroundSeparation": 36.5901098642156,
+            "contextSamples": 185,
+            "sampledPixels": 663,
+            "calibrated": false
+          }
+        },
+        "oldWouldDescribeColour": true,
+        "newAudibleColour": ""
+      }
+    ]
+  },
+  "synthetic": {
+    "scope": "CONTROLLED_RENDERER_ONLY_NOT_REAL_PHOTO_ACCURACY",
+    "cases": 66,
+    "knownColourCases": 22,
+    "before": {
+      "references": 22,
+      "estimated": 22,
+      "abstained": 0,
+      "coverage": 1,
+      "agreementWhenEstimated": 1,
+      "wrongEstimates": 0,
+      "abstentionReasons": {}
+    },
+    "after": {
+      "references": 22,
+      "estimated": 19,
+      "abstained": 3,
+      "coverage": 0.8636363636363636,
+      "agreementWhenEstimated": 1,
+      "wrongEstimates": 0,
+      "abstentionReasons": {
+        "MIXED_OR_OCCLUDED": 3
+      }
+    },
+    "stressCases": 44,
+    "stressEstimates": {
+      "before": 11,
+      "after": 1,
+      "meaning": "Expected abstention/ambiguity stress, not adjudicated real incorrect colours"
+    },
+    "temporalBefore": [
+      {
+        "id": "renderer-red-contrast",
+        "firstValidFrame": 2,
+        "recoveryFramesAfterInjectedAmbiguity": 3,
+        "nameChanges": 0,
+        "acceptedFrames": 7
+      },
+      {
+        "id": "renderer-blue-contrast",
+        "firstValidFrame": 2,
+        "recoveryFramesAfterInjectedAmbiguity": 3,
+        "nameChanges": 0,
+        "acceptedFrames": 7
+      },
+      {
+        "id": "renderer-green-contrast",
+        "firstValidFrame": 2,
+        "recoveryFramesAfterInjectedAmbiguity": 3,
+        "nameChanges": 0,
+        "acceptedFrames": 7
+      },
+      {
+        "id": "renderer-yellow-contrast",
+        "firstValidFrame": 2,
+        "recoveryFramesAfterInjectedAmbiguity": 3,
+        "nameChanges": 0,
+        "acceptedFrames": 7
+      },
+      {
+        "id": "renderer-orange-contrast",
+        "firstValidFrame": 2,
+        "recoveryFramesAfterInjectedAmbiguity": 3,
+        "nameChanges": 0,
+        "acceptedFrames": 7
+      },
+      {
+        "id": "renderer-purple-contrast",
+        "firstValidFrame": 2,
+        "recoveryFramesAfterInjectedAmbiguity": 3,
+        "nameChanges": 0,
+        "acceptedFrames": 7
+      },
+      {
+        "id": "renderer-pink-contrast",
+        "firstValidFrame": 2,
+        "recoveryFramesAfterInjectedAmbiguity": 3,
+        "nameChanges": 0,
+        "acceptedFrames": 7
+      },
+      {
+        "id": "renderer-black-contrast",
+        "firstValidFrame": 2,
+        "recoveryFramesAfterInjectedAmbiguity": 3,
+        "nameChanges": 0,
+        "acceptedFrames": 7
+      },
+      {
+        "id": "renderer-white-contrast",
+        "firstValidFrame": 2,
+        "recoveryFramesAfterInjectedAmbiguity": 3,
+        "nameChanges": 0,
+        "acceptedFrames": 7
+      },
+      {
+        "id": "renderer-gray-contrast",
+        "firstValidFrame": 2,
+        "recoveryFramesAfterInjectedAmbiguity": 3,
+        "nameChanges": 0,
+        "acceptedFrames": 7
+      },
+      {
+        "id": "renderer-brown-contrast",
+        "firstValidFrame": 2,
+        "recoveryFramesAfterInjectedAmbiguity": 3,
+        "nameChanges": 0,
+        "acceptedFrames": 7
+      }
+    ],
+    "temporalAfter": [
+      {
+        "id": "renderer-red-contrast",
+        "firstValidFrame": 2,
+        "recoveryFramesAfterInjectedAmbiguity": 1,
+        "nameChanges": 0,
+        "acceptedFrames": 9
+      },
+      {
+        "id": "renderer-blue-contrast",
+        "firstValidFrame": 2,
+        "recoveryFramesAfterInjectedAmbiguity": 1,
+        "nameChanges": 0,
+        "acceptedFrames": 9
+      },
+      {
+        "id": "renderer-green-contrast",
+        "firstValidFrame": 2,
+        "recoveryFramesAfterInjectedAmbiguity": 1,
+        "nameChanges": 0,
+        "acceptedFrames": 9
+      },
+      {
+        "id": "renderer-yellow-contrast",
+        "firstValidFrame": 2,
+        "recoveryFramesAfterInjectedAmbiguity": 1,
+        "nameChanges": 0,
+        "acceptedFrames": 9
+      },
+      {
+        "id": "renderer-orange-contrast",
+        "firstValidFrame": 2,
+        "recoveryFramesAfterInjectedAmbiguity": 1,
+        "nameChanges": 0,
+        "acceptedFrames": 9
+      },
+      {
+        "id": "renderer-purple-contrast",
+        "firstValidFrame": 2,
+        "recoveryFramesAfterInjectedAmbiguity": 1,
+        "nameChanges": 0,
+        "acceptedFrames": 9
+      },
+      {
+        "id": "renderer-pink-contrast",
+        "firstValidFrame": 2,
+        "recoveryFramesAfterInjectedAmbiguity": 1,
+        "nameChanges": 0,
+        "acceptedFrames": 9
+      },
+      {
+        "id": "renderer-black-contrast",
+        "firstValidFrame": 2,
+        "recoveryFramesAfterInjectedAmbiguity": 1,
+        "nameChanges": 0,
+        "acceptedFrames": 9
+      },
+      {
+        "id": "renderer-white-contrast",
+        "firstValidFrame": 2,
+        "recoveryFramesAfterInjectedAmbiguity": 1,
+        "nameChanges": 0,
+        "acceptedFrames": 9
+      },
+      {
+        "id": "renderer-gray-contrast",
+        "firstValidFrame": 2,
+        "recoveryFramesAfterInjectedAmbiguity": 1,
+        "nameChanges": 0,
+        "acceptedFrames": 9
+      },
+      {
+        "id": "renderer-brown-contrast",
+        "firstValidFrame": 2,
+        "recoveryFramesAfterInjectedAmbiguity": 1,
+        "nameChanges": 0,
+        "acceptedFrames": 9
+      }
+    ]
+  },
+  "maskRecommendation": {
+    "newModelLoaded": false,
+    "enabled": false,
+    "existingPublisher": "https://huggingface.co/nielsr/slimsam-77-uniform",
+    "recordedPublisherLicense": "Apache-2.0",
+    "priorLocalTest": {
+      "images": 12,
+      "acceptedMasks": 20,
+      "meanIoU": 0.820801505886187,
+      "worstIoU": 0.42150195340761104,
+      "medianMs": 23856.900000002235,
+      "p95Ms": 30545.20000000298,
+      "independentColourReferences": 1
+    },
+    "reason": "Prior mask geometry and desktop latency do not qualify body-colour accuracy or iPhone performance; instance masks do not by themselves separate glass, shadows or paint."
+  },
+  "coverageGaps": [
+    "No newly adjudicated Basira real-colour references",
+    "Insufficient final chair/bag/lighting/reflection coverage",
+    "No eligible new red/white-car supplement candidates in the cached licence-verified source pool",
+    "No new physical iPhone/Safari performance, battery or memory measurement",
+    "Six final reference objects are insufficient for95% qualification"
+  ],
+  "acceptance95Proven": false,
+  "modelTrainingPerformed": false,
+  "maskActivationPerformed": false,
+  "productionChanged": false,
+  "stairsV3Changed": false,
+  "imagesPublished": false,
+  "userMediaSaved": false,
+  "userMediaUploaded": false
+}

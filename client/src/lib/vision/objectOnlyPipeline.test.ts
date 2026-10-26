@@ -84,6 +84,13 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 describe("experimental objects never enter navigation", () => {
+  it('continues detection, tracking and ordinary speech when colour pixels cannot be read',async()=>{
+    const {options,callbacks}=setup();
+    vi.stubGlobal('document',{createElement:()=>({width:0,height:0,getContext:()=>({drawImage:()=>{},getImageData:()=>{throw Error('pixel-read-unavailable');}})})});
+    const session=new ObjectOnlyPipeline(options);await session.start();await vi.advanceTimersByTimeAsync(1600);
+    expect(session.active).toBe(true);expect(callbacks.fatal).not.toHaveBeenCalled();expect(options.vision.detect).toHaveBeenCalled();expect(callbacks.objectSpeech).toHaveBeenCalledOnce();expect(callbacks.objectSpeech.mock.calls[0][0]).toContain('كوب');expect(callbacks.alert).not.toHaveBeenCalled();
+    await session.stop();expect(options.vision.close).toHaveBeenCalledOnce();
+  });
   it("rejects research providers in the original pipeline, and rejects navigation/stairs in the object session", () => {
     const { options } = setup();
     expect(() => new VisionPipeline(options)).toThrow("Research providers");

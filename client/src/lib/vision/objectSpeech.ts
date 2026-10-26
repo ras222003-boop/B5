@@ -2,8 +2,8 @@ import type { HorizontalDirection, VisionDetection, VisionObjectType } from '@sh
 import type { VisionCopy } from './scene';
 import { validNormalizedBox } from './objectTracking';
 import type { VisualApproachObservation } from './visualApproach';
-import {objectLabel,COCO_LABELS} from './cocoLabels';
-import {colorDescription} from './objectColors';
+import {objectLabel} from './cocoLabels';
+import {colourForSpeech} from './colourAnnouncement';
 
 const speechKey = 'basira-vision-object-speech-v1';
 export function getObjectSpeechEnabled() { try { return localStorage.getItem(speechKey) !== 'false'; } catch { return true; } }
@@ -59,20 +59,18 @@ export class ObjectSpeechTracker {
       return text;
     }
     if(!ordinaryEnabled&&!colorEnabled)return null;
-    const signature=(track:SpokenTrack)=>colorEnabled&&track.detection.color?(track.detection.cocoClass==='person'?'person-clothing-unspecified':track.detection.color.name?[track.detection.color.name,track.detection.color.shade??'',...(track.detection.color.components??[])].join(':'):(track.detection.color.reason==='LOW_LIGHT'?'low-light':'unclear')):'';
+    const signature=(track:SpokenTrack)=>colorEnabled?colourForSpeech(track.detection,{now,live:true}):'';
     const candidates = Array.from(current.values()).filter(track => {
-      const firstStableColour=colorEnabled&&Boolean(track.detection.color?.name)&&['',undefined,'unclear'].includes(track.announcedColor);
+      const firstStableColour=Boolean(signature(track))&&['',undefined].includes(track.announcedColor);
       return ((ordinaryEnabled&&track.announcedDirection !== track.detection.horizontalDirection)||(colorEnabled&&signature(track)&&track.announcedColor!==signature(track)&&!['WARMING_UP','CHANGING'].includes(track.detection.color?.reason??''))) && now-track.announcedAt >= (firstStableColour?this.minimumGapMs:9000);
     })
       .sort((a, b) => central(b.detection.horizontalDirection) - central(a.detection.horizontalDirection) ||
         b.detection.boundingBox.width * b.detection.boundingBox.height - a.detection.boundingBox.width * a.detection.boundingBox.height).slice(0, 2);
     if (!candidates.length) return null;
     const text = `${candidates.map(track => {
-      const d=track.detection,name=objectLabel(d,this.copy),color=colorEnabled&&d.cocoClass!=='person'&&!['WARMING_UP','CHANGING'].includes(d.color?.reason??'')?colorDescription(d).replace(' (تقدير من الصورة)',''):'';
-      if(!ordinaryEnabled&&d.cocoClass==='person')return 'ألوان الملابس غير محددة دون فصل موثوق للملابس عن بقية الشخص';
-      if(colorEnabled&&d.color?.reason==='LOW_LIGHT')return 'اللون غير واضح بسبب ضعف الإضاءة';
+      const d=track.detection,name=objectLabel(d,this.copy),color=colorEnabled?colourForSpeech(d,{now,live:true}):'';
       const direction=colorEnabled&&this.copy.object.PERSON==='شخص'?(['LEFT','FRONT_LEFT'].includes(d.horizontalDirection)?'في يسار الصورة':['RIGHT','FRONT_RIGHT'].includes(d.horizontalDirection)?'في يمين الصورة':'في وسط الصورة'):this.copy.direction[d.horizontalDirection];
-      return ordinaryEnabled?`${name}${color?`، ${d.color?.name?(COCO_LABELS[d.cocoClass??'']?.feminine?'تبدو ':'يبدو '):''}${color}`:''} ${direction}`:`لون ${name}: ${d.color?.name?colorDescription({...d,cocoClass:undefined}).replace(' (تقدير من الصورة)',''):color||'غير واضح'}`;
+      return ordinaryEnabled?`${name}${color?` ${color}`:''} ${direction}`:`لون ${name}: ${color}`;
     }).join('، ')}.`;
     for(const [key,at] of Array.from(this.recentDescriptions))if(now-at>=12000)this.recentDescriptions.delete(key);
     if(this.recentDescriptions.has(text)) {
