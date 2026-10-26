@@ -28,7 +28,7 @@ interface Callbacks {
   scene:(description:SceneDescription)=>void;
   detectionFrame?:(frame:LiveDetectionFrame|null)=>void;
   alert:(text:string,risk:SceneDescription['riskLevel'])=>void;
-  objectSpeech?:(text:string)=>boolean;
+  objectSpeech?:(text:string)=>boolean|Promise<boolean>;
   approachSpeech?:(text:string)=>boolean;
   candidate:(candidate:PlaceCandidate)=>void;
   recognized:(place:RecognizedPlace,capturedAt:number)=>void;

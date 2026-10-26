@@ -207,6 +207,12 @@ export default function Vision() {
   const start=async()=>{
     if(selectedModel!=='original'&&!activeObjectProfile)return;
     if(state!=='STOPPED'||!videoRef.current||!nativeCanvasRef.current)return;
+    // Safari requires speak() inside the tap, before camera/model awaits.
+    // Use a declared local voice only; never send research object descriptions to TTS servers.
+    if(activeObjectProfile&&objectSpeechRef.current&&!getSpeechPreferences().screenReaderMode){
+      speechEngine.replaceAtPriority('INFORMATION');
+      void speechEngine.enqueueLocal(speechInput(lang==='ar'?'بدأ وصف الأشياء.':lang==='en'?'Object description started.':'物体描述已启动。',lang,'ENVIRONMENT'));
+    }
     const run=++generation.current;
     objectTrialRef.current=activeObjectProfile?new ObjectTrialRecorder(activeObjectProfile.id,activeObjectProfile.modelSha256,performance.now()):null;
     const trial=objectTrialRef.current;if(trial)void reportedBattery().then(b=>{if(b&&trial===objectTrialRef.current)trial.battery(b);});
@@ -214,6 +220,7 @@ export default function Vision() {
     setError('');setOCRWarning('');setModelWarning('');setDepthWarning('');setMetricInfo({status:'UNAVAILABLE',source:null});setMeterDiagnostic(autoMeterEnabledRef.current?'MODEL_LOADING':'OFF');setMeterSnapshot(null);setOverlayFrame(null);setPinnedFrame(null);setMeterSpokenStatus('');setMetricTiming({load:null,inference:null});setLastAlert('');setRisk(null);setSpokenSummary('');setState('STARTING');
     try {
       const safetyFlags=await loadSafetyFlags();
+      if(run!==generation.current)return;
       const detected=detectVisionCapabilities();setCapabilities(detected);
       const visionConfig=activeObjectProfile?{...DEFAULT_VISION_CONFIG,detectionThreshold:activeObjectProfile.threshold}:DEFAULT_VISION_CONFIG;
       const nativeFrames=activeObjectProfile?undefined:window.BasiraNativeFrames;
@@ -253,9 +260,17 @@ export default function Vision() {
           objectSpeech:text=>{
             if(run!==generation.current||(!objectSpeechRef.current&&!colorSpeechRef.current))return false;
             if(!getSpeechPreferences().screenReaderMode&&speechEngine.busy)return false;
-            objectTrialRef.current?.speech();
             setLastObjectText(text);
             setLastOutput(text);
+            if(activeObjectProfile&&!getSpeechPreferences().screenReaderMode){
+              const trial=objectTrialRef.current;
+              return speechEngine.enqueueLocalObserved(speechInput(text,lang,'ENVIRONMENT'),(perceptionRef.current?.capturedAt??performance.now())+PERCEPTION_TTL_MS).then(started=>{
+                if(run!==generation.current)return false;
+                if(started)trial?.speech();
+                return started;
+              });
+            }
+            objectTrialRef.current?.speech();
             if(!getSpeechPreferences().screenReaderMode)void (activeObjectProfile?speechEngine.enqueueLocal(speechInput(text,lang,'ENVIRONMENT'),(perceptionRef.current?.capturedAt??performance.now())+PERCEPTION_TTL_MS):speechEngine.enqueue(speechInput(text,lang,'ENVIRONMENT'),'INFORMATION',0,undefined,false,(perceptionRef.current?.capturedAt??performance.now())+PERCEPTION_TTL_MS));
             return true;
           },
@@ -345,6 +360,14 @@ export default function Vision() {
     objectSpeechRef.current=enabled;setObjectSpeechEnabled(saveObjectSpeechEnabled(enabled));
     pipelineRef.current?.setObjectSpeechEnabled(enabled);
     if(!enabled)speechEngine.replaceAtPriority('INFORMATION');
+    else if(activeObjectProfile&&!getSpeechPreferences().screenReaderMode)void speechEngine.enqueueLocal(speechInput(lang==='ar'?'وصف الأشياء مفعّل.':lang==='en'?'Object description enabled.':'物体描述已开启。',lang,'ENVIRONMENT'));
+  };
+  const testVisionVoice=()=>{
+    if(!activeObjectProfile){void testSpeech(assistant.testPhrase,lang);return;}
+    speechEngine.replaceAtPriority('INFORMATION');
+    // Retry current objects after the deliberate tap; a prior blocked attempt is not an announcement.
+    pipelineRef.current?.setObjectSpeechEnabled(objectSpeechRef.current);
+    void speechEngine.enqueueLocal(speechInput(assistant.testPhrase,lang,'ENVIRONMENT'),undefined,true);
   };
   const resumeCamera=async()=>{
     if(!cameraRef.current.active||!videoRef.current)return;
@@ -516,7 +539,8 @@ export default function Vision() {
       <p className="mt-2 text-stone-300">مؤشرات الاقتراب تتطلب تتبعًا مستقرًا وأدلة حركة متعددة. قد تتوقف عند بطء الجهاز أو دوران الكاميرا أو التكبير؛ لا تثبت احتمال اصطدام أو سلامة المشي.</p>
       <p className="mt-3 min-h-6" role={screenReaderMode?'status':undefined} aria-live={screenReaderMode?'polite':'off'}>{lastObjectText}</p>
       <p className="mt-2" role="status" aria-live="off">{assistant.speechStatus}: {screenReaderMode?assistant.speechMuted:speechError==='PLAYBACK_BLOCKED'?assistant.speechBlocked:speechError==='NO_VOICE'?assistant.speechNoVoice:speechMode==='PREMIUM'?assistant.speechPremium:assistant.speechLocal}</p>
-      <div className="mt-3 flex flex-wrap gap-2"><button type="button" className={secondary} onClick={()=>void (activeObjectProfile?speechEngine.enqueueLocal(speechInput(assistant.testPhrase,lang,'ENVIRONMENT'),undefined,true):testSpeech(assistant.testPhrase,lang))}>{assistant.testVoice}</button><button type="button" className={secondary} onClick={stopSpeaking}>{assistant.stopVoice}</button></div>
+      {activeObjectProfile&&speechError==='NO_VOICE'&&<p role="status">لم يظهر صوت محلي للغة المختارة؛ لن يُرسل الوصف لخادم صوت. تأكد من توفر صوت عربي في إعدادات iPhone، ثم اضغط «اختبر الصوت» مجددًا.</p>}
+      <div className="mt-3 flex flex-wrap gap-2"><button type="button" className={secondary} onClick={testVisionVoice}>{assistant.testVoice}</button><button type="button" className={secondary} onClick={stopSpeaking}>{assistant.stopVoice}</button></div>
     </section>
     <ObjectPhotoInput key={selectedModel} profile={activeObjectProfile} capture={activeObjectProfile?captureObjectPhoto:undefined} copy={t} objectsSpeech={objectSpeechEnabled} colorsSpeech={colorSpeechEnabled} cameraRunning={state!=='STOPPED'} beforeAnalyze={stop} announce={text=>{setLastObjectText(text);if(!getSpeechPreferences().screenReaderMode){if(activeObjectProfile)void speechEngine.enqueueLocal(speechInput(text,'ar','ENVIRONMENT'));else speak(text,.9,'ar','ENVIRONMENT');}}}/>
     {!activeObjectProfile&&<>

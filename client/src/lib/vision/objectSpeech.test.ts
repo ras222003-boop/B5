@@ -9,6 +9,29 @@ const detection = (at: number, changes: Partial<VisionDetection> = {}): VisionDe
 const approach = (at: number): VisualApproachObservation => ({ trackId: 'chair-1', type: 'CHAIR', state: 'POSSIBLE_APPROACH', capturedAt: at, frameId: `f-${at}`,
   reasons: [], evidence: ['TRACKING', 'BOX_EXPANSION', 'COMPENSATED_OPTICAL_FLOW'], experimental: true });
 describe('automatic object speech without metres', () => {
+  it('retries an unplayed asynchronous local description, and marks only a real playback start',async()=>{
+    const tracker=new ObjectSpeechTracker(visionMessages.ar);
+    let finish!:(started:boolean)=>void;
+    const announce=vi.fn(()=>new Promise<boolean>(resolve=>{finish=resolve;}));
+    tracker.observe([detection(1000)],1000,announce);
+    tracker.observe([detection(1200)],1200,announce);
+    expect(announce).toHaveBeenCalledOnce();
+    finish(false);await Promise.resolve();
+    tracker.observe([detection(1500)],1500,announce);
+    expect(announce).toHaveBeenCalledTimes(2);
+    finish(true);await Promise.resolve();
+    tracker.observe([detection(6500)],6500,announce);
+    expect(announce).toHaveBeenCalledTimes(2);
+  });
+  it('ignores a pending playback acknowledgement after stop/reset',async()=>{
+    const tracker=new ObjectSpeechTracker(visionMessages.ar);
+    let finish!:(started:boolean)=>void;
+    tracker.observe([detection(1000)],1000,()=>new Promise<boolean>(resolve=>{finish=resolve;}));
+    tracker.reset();finish(true);await Promise.resolve();
+    const announce=vi.fn(()=>true);
+    expect(tracker.observe([detection(1200)],1200,announce)).toContain('كرسي');
+    expect(announce).toHaveBeenCalledOnce();
+  });
   it('keeps the default800ms policy and allows object-only callers to match the existing1250ms perception TTL',()=>{
     const announce=vi.fn(()=>true),at=1000;
     expect(new ObjectSpeechTracker(visionMessages.ar).observe([detection(at)],2100,announce)).toBeNull();

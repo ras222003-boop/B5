@@ -84,6 +84,14 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 describe("experimental objects never enter navigation", () => {
+  it('does not publish or speak a late inference after stop',async()=>{
+    const {options,callbacks}=setup();let complete!:(detections:VisionDetection[])=>void;
+    vi.mocked(options.vision.detect).mockImplementation(()=>new Promise(resolve=>{complete=resolve;}));
+    const session=new ObjectOnlyPipeline(options);await session.start();await vi.advanceTimersByTimeAsync(1);
+    await session.stop();complete([candidate(0)]);await vi.advanceTimersByTimeAsync(2000);
+    expect(session.active).toBe(false);expect(callbacks.objectSpeech).not.toHaveBeenCalled();
+    expect(callbacks.perception.mock.calls.every(([p])=>p===null)).toBe(true);expect(options.vision.close).toHaveBeenCalledOnce();
+  });
   it('continues detection, tracking and ordinary speech when colour pixels cannot be read',async()=>{
     const {options,callbacks}=setup();
     vi.stubGlobal('document',{createElement:()=>({width:0,height:0,getContext:()=>({drawImage:()=>{},getImageData:()=>{throw Error('pixel-read-unavailable');}})})});

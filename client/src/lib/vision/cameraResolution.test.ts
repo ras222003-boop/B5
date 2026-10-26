@@ -5,6 +5,16 @@ import {DEFAULT_VISION_CONFIG} from './config';
 afterEach(()=>vi.unstubAllGlobals());
 
 describe('separate capture and detection resolutions',()=>{
+  it('does not open a camera after stop while the permission query is pending',async()=>{
+    let queried!:(value:{state:string})=>void;
+    const getUserMedia=vi.fn();
+    vi.stubGlobal('window',{isSecureContext:true});
+    vi.stubGlobal('navigator',{mediaDevices:{getUserMedia},permissions:{query:()=>new Promise(resolve=>{queried=resolve;})}});
+    const video={pause:vi.fn(),srcObject:null} as unknown as HTMLVideoElement;
+    const service=new CameraService(DEFAULT_VISION_CONFIG),start=service.start(video);
+    service.stop(video);queried({state:'granted'});
+    await expect(start).rejects.toThrow('FAILED');expect(getUserMedia).not.toHaveBeenCalled();expect(service.active).toBe(false);
+  });
   it('requests a high-resolution rear stream and reports negotiated pixels',async()=>{
     const stop=vi.fn(),play=vi.fn(async()=>{});
     const track={readyState:'live',stop,getSettings:()=>({width:1280,height:720})};

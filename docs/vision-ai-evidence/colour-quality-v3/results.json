@@ -806,7 +806,26 @@
       "iphoneTested": false,
       "voiceOverTested": false
     },
-    "physicalIphoneRetestPerformed": false
+    "physicalIphoneRetestPerformed": true,
+    "ownerReportedIphoneRetest": {
+      "date": "2026-10-27",
+      "build": "fcd0c5f",
+      "device": "iPhone 14 Pro (previously identified by owner; not independently attested)",
+      "objectSpeech": "FAILED_OWNER_REPORT",
+      "colourDisplay": "Black candidate displayed; other colours undefined",
+      "cameraStop": "UNRESOLVED_OWNER_FOLLOWUP_ONLY_CONFIRMED_NO_SPEECH",
+      "audioEventsCaptured": false,
+      "iosVersion": null,
+      "newQuantitativePerformance": null,
+      "mediaSaved": false
+    },
+    "functionalSpeechFix": {
+      "status": "IMPLEMENTED_AWAITING_BUILD_AND_PHONE_RETEST",
+      "colourPolicyChanged": false,
+      "detectorWeightsChanged": false,
+      "finalColourTestRepeated": false,
+      "scope": "Gesture-start local speech and playback-start acknowledgement; old frozen colour metrics remain bound to their original sources"
+    }
   },
   "metricsAudit": {
     "audioCountsRecomputedFromSavedRows": true,

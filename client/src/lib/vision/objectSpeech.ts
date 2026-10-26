@@ -8,6 +8,7 @@ import {colourForSpeech} from './colourAnnouncement';
 const speechKey = 'basira-vision-object-speech-v1';
 export function getObjectSpeechEnabled() { try { return localStorage.getItem(speechKey) !== 'false'; } catch { return true; } }
 export function saveObjectSpeechEnabled(value: boolean) { try { localStorage.setItem(speechKey, String(value)); } catch { /* Storage is optional. */ } return value; }
+export type ObjectSpeechAcceptance = boolean | Promise<boolean>;
 
 interface SpokenTrack { detection: VisionDetection; announcedDirection: HorizontalDirection | null; announcedAt: number; approachAt: number;announcedColor?:string }
 const excluded = new Set<VisionObjectType>(['STAIRS_UP', 'STAIRS_DOWN', 'STAIRS_UNCERTAIN', 'DROP_OFF', 'DROP_OFF_UNCERTAIN', 'UNKNOWN_OBSTACLE']);
@@ -18,12 +19,14 @@ export class ObjectSpeechTracker {
   private tracks = new Map<string, SpokenTrack>();
   private lastSpeech = -Infinity;
   private recentDescriptions = new Map<string,number>();
+  private pending=false;
+  private epoch=0;
   constructor(private readonly copy: VisionCopy, private readonly minimumGapMs = 4500,
     private readonly approachPhrase = copy.approachPossible,private readonly minimumScore=.65,private readonly maximumAgeMs=800) {}
-  reset() { this.tracks.clear(); this.recentDescriptions.clear(); this.lastSpeech = -Infinity; }
-  observe(detections: readonly VisionDetection[], now: number, announce: (text: string) => boolean,
+  reset() { this.epoch++;this.pending=false;this.tracks.clear(); this.recentDescriptions.clear(); this.lastSpeech = -Infinity; }
+  observe(detections: readonly VisionDetection[], now: number, announce: (text: string) => ObjectSpeechAcceptance,
     approaches: readonly VisualApproachObservation[] = [],ordinaryEnabled=true,
-    announceApproach:(text:string)=>boolean=announce,colorEnabled=false): string | null {
+    announceApproach:(text:string)=>boolean=text=>announce(text)===true,colorEnabled=false): string | null {
     if (!Number.isFinite(now)) return null;
     const current = new Map<string, SpokenTrack>();
     for (const detection of detections) {
@@ -42,7 +45,7 @@ export class ObjectSpeechTracker {
     for (const [id, track] of Array.from(this.tracks)) if (now - track.detection.timestamp > 1200 ||
       !detections.some(d => d.trackId === id)) this.tracks.delete(id);
     for (const [id, track] of Array.from(current)) this.tracks.set(id, track);
-    if (now - this.lastSpeech < this.minimumGapMs) return null;
+    if (this.pending || now - this.lastSpeech < this.minimumGapMs) return null;
 
     const approaching = Array.from(current.values()).map(track => ({ track, approach: approaches.find(a =>
       a.trackId === track.detection.trackId && a.type === track.detection.type && a.capturedAt === track.detection.timestamp &&
@@ -77,10 +80,25 @@ export class ObjectSpeechTracker {
       for(const track of candidates){if(ordinaryEnabled)track.announcedDirection=track.detection.horizontalDirection;track.announcedColor=signature(track);track.announcedAt=now;}
       return null;
     }
-    if (!announce(text)) return null;
-    this.recentDescriptions.set(text,now);
-    for (const track of candidates) { if(ordinaryEnabled)track.announcedDirection = track.detection.horizontalDirection;track.announcedColor=signature(track);track.announcedAt = now; }
-    this.lastSpeech = now;
+    const accepted=announce(text);
+    if(accepted===false)return null;
+    const epoch=this.epoch;
+    const confirm=()=>{
+      if(epoch!==this.epoch)return;
+      this.recentDescriptions.set(text,now);
+      for(const candidate of candidates){
+        const track=this.tracks.get(candidate.detection.trackId!);
+        if(!track||track.detection.type!==candidate.detection.type||track.detection.cocoClass!==candidate.detection.cocoClass)continue;
+        if(ordinaryEnabled)track.announcedDirection=candidate.detection.horizontalDirection;
+        track.announcedColor=signature(candidate);track.announcedAt=now;
+      }
+      this.lastSpeech=now;
+    };
+    if(typeof accepted==='boolean')confirm();
+    else {
+      this.pending=true;
+      void accepted.then(started=>{if(epoch===this.epoch){this.pending=false;if(started)confirm();}},()=>{if(epoch===this.epoch)this.pending=false;});
+    }
     return text;
   }
 }

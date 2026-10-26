@@ -22,6 +22,7 @@ export class CameraService {
     if (!navigator.mediaDevices?.getUserMedia || !window.isSecureContext) throw new CameraServiceError('UNAVAILABLE');
     let previousPermission: PermissionState | 'unavailable' = 'prompt';
     try { previousPermission = (await navigator.permissions?.query({ name: 'camera' as PermissionName }))?.state ?? 'prompt'; } catch { /* unsupported permission query */ }
+    if(token!==this.generation)throw new CameraServiceError('FAILED');
     // Ask for a real high-resolution stream; the detector is downsampled separately.
     // "ideal" lets Safari select its supported size without inventing pixels.
     const base = { width: { ideal: this.config.photoResolution.width }, height: { ideal: this.config.photoResolution.height }, frameRate: { ideal: this.config.maxFPS, max: this.config.maxFPS } };
