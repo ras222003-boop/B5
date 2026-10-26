@@ -22,6 +22,7 @@ import {freshTimestamp,observationFor,PerceptionTelemetry,type PerceptionSnapsho
 import {sampleColorFrame,analyzeObjectColor,ObjectColorTracker} from './objectColors';
 
 interface Callbacks {
+  objectSourceSignature?:(signature:number)=>void;
   perception?:(snapshot:PerceptionSnapshot|null)=>void;
   analysisState?:(state:'WAITING'|'LIVE'|'STALE'|'PAUSED'|'SLOW')=>void;
   scene:(description:SceneDescription)=>void;

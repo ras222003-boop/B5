@@ -39,7 +39,7 @@ async function memory(pid) {
 }
 const server = await chromium.launchServer({
   channel: "chrome",
-  headless: true,
+  headless: !process.argv.includes('--headful'),
 });
 const browser = await chromium.connect(server.wsEndpoint());
 const report = {
@@ -54,6 +54,7 @@ const report = {
   modelAccuracy: null,
   groundTruthStatus: "NO_INDEPENDENT_LIVE_SCENE_REFERENCE",
   mediaSourceOverride: false,
+  headless: !process.argv.includes('--headful'),
   fakeCaptureArguments: [],
   pageErrors: [],
   uploads: [],

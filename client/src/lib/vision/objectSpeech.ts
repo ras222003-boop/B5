@@ -17,9 +17,10 @@ const central = (direction: HorizontalDirection) => direction === 'FRONT' ? 2 : 
 export class ObjectSpeechTracker {
   private tracks = new Map<string, SpokenTrack>();
   private lastSpeech = -Infinity;
+  private recentDescriptions = new Map<string,number>();
   constructor(private readonly copy: VisionCopy, private readonly minimumGapMs = 4500,
-    private readonly approachPhrase = copy.approachPossible,private readonly minimumScore=.65) {}
-  reset() { this.tracks.clear(); this.lastSpeech = -Infinity; }
+    private readonly approachPhrase = copy.approachPossible,private readonly minimumScore=.65,private readonly maximumAgeMs=800) {}
+  reset() { this.tracks.clear(); this.recentDescriptions.clear(); this.lastSpeech = -Infinity; }
   observe(detections: readonly VisionDetection[], now: number, announce: (text: string) => boolean,
     approaches: readonly VisualApproachObservation[] = [],ordinaryEnabled=true,
     announceApproach:(text:string)=>boolean=announce,colorEnabled=false): string | null {
@@ -29,11 +30,11 @@ export class ObjectSpeechTracker {
       if (!detection.trackId || detection.tracking?.state !== 'TRACKED' || detection.tracking.observations < 2 ||
         !Number.isFinite(detection.confidence) || detection.confidence < this.minimumScore || detection.confidence > 1 ||
         (excluded.has(detection.type)&&!(detection.type==='UNKNOWN_OBSTACLE'&&detection.cocoClass)) || detection.experimental || detection.source === 'SEGMENTATION' || !validNormalizedBox(detection.boundingBox) ||
-        !Number.isFinite(detection.timestamp) || now - detection.timestamp > 800 || detection.timestamp > now + 5) continue;
+        !Number.isFinite(detection.timestamp) || now - detection.timestamp > this.maximumAgeMs || detection.timestamp > now + 5) continue;
       const previous = this.tracks.get(detection.trackId);
       // Repeated snapshots are not new observations and cannot trigger delayed speech.
       if (previous && detection.timestamp <= previous.detection.timestamp) continue;
-      current.set(detection.trackId, previous && previous.detection.type === detection.type
+      current.set(detection.trackId, previous && previous.detection.type === detection.type && previous.detection.cocoClass === detection.cocoClass
         ? { ...previous, detection }
         : { detection, announcedDirection: null, announcedAt: -Infinity, approachAt: -Infinity });
     }
@@ -58,7 +59,7 @@ export class ObjectSpeechTracker {
       return text;
     }
     if(!ordinaryEnabled&&!colorEnabled)return null;
-    const signature=(track:SpokenTrack)=>colorEnabled&&track.detection.color?(track.detection.cocoClass==='person'?'person-clothing-unspecified':track.detection.color.name??(track.detection.color.reason==='LOW_LIGHT'?'low-light':'unclear')):'';
+    const signature=(track:SpokenTrack)=>colorEnabled&&track.detection.color?(track.detection.cocoClass==='person'?'person-clothing-unspecified':track.detection.color.name?[track.detection.color.name,track.detection.color.shade??'',...(track.detection.color.components??[])].join(':'):(track.detection.color.reason==='LOW_LIGHT'?'low-light':'unclear')):'';
     const candidates = Array.from(current.values()).filter(track => {
       const firstStableColour=colorEnabled&&Boolean(track.detection.color?.name)&&['',undefined,'unclear'].includes(track.announcedColor);
       return ((ordinaryEnabled&&track.announcedDirection !== track.detection.horizontalDirection)||(colorEnabled&&signature(track)&&track.announcedColor!==signature(track)&&!['WARMING_UP','CHANGING'].includes(track.detection.color?.reason??''))) && now-track.announcedAt >= (firstStableColour?this.minimumGapMs:9000);
@@ -73,7 +74,13 @@ export class ObjectSpeechTracker {
       const direction=colorEnabled&&this.copy.object.PERSON==='شخص'?(['LEFT','FRONT_LEFT'].includes(d.horizontalDirection)?'في يسار الصورة':['RIGHT','FRONT_RIGHT'].includes(d.horizontalDirection)?'في يمين الصورة':'في وسط الصورة'):this.copy.direction[d.horizontalDirection];
       return ordinaryEnabled?`${name}${color?`، ${d.color?.name?(COCO_LABELS[d.cocoClass??'']?.feminine?'تبدو ':'يبدو '):''}${color}`:''} ${direction}`:`لون ${name}: ${d.color?.name?colorDescription({...d,cocoClass:undefined}).replace(' (تقدير من الصورة)',''):color||'غير واضح'}`;
     }).join('، ')}.`;
+    for(const [key,at] of Array.from(this.recentDescriptions))if(now-at>=12000)this.recentDescriptions.delete(key);
+    if(this.recentDescriptions.has(text)) {
+      for(const track of candidates){if(ordinaryEnabled)track.announcedDirection=track.detection.horizontalDirection;track.announcedColor=signature(track);track.announcedAt=now;}
+      return null;
+    }
     if (!announce(text)) return null;
+    this.recentDescriptions.set(text,now);
     for (const track of candidates) { if(ordinaryEnabled)track.announcedDirection = track.detection.horizontalDirection;track.announcedColor=signature(track);track.announcedAt = now; }
     this.lastSpeech = now;
     return text;

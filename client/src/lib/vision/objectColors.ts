@@ -46,7 +46,10 @@ export function colorDescription(detection: VisionDetection) {
       : color.reason === "CHANGING"
         ? "اللون غير واضح؛ يجري التحقق من تغيره"
         : "اللون غير واضح";
-  return `${colorWord(color.name, COCO_LABELS[detection.cocoClass ?? ""]?.feminine)}${color.status === "ESTIMATED" ? " (تقدير من الصورة)" : color.status === "MASK_SUPPORTED" ? " (من قناع آلي تجريبي)" : ""}`;
+  const feminine=COCO_LABELS[detection.cocoClass ?? ""]?.feminine;
+  const components=color.name==='multicolor'&&color.components?.length?` (${color.components.map(c=>colorWord(c)).join(' و')})`:'';
+  const shade=color.shade?(color.shade==='LIGHT'?(feminine?' فاتحة':' فاتح'):(feminine?' داكنة':' داكن')):'';
+  return `${colorWord(color.name, feminine)}${shade}${components}${color.status === "ESTIMATED" ? " (تقدير من الصورة)" : color.status === "MASK_SUPPORTED" ? " (من قناع آلي تجريبي)" : ""}`;
 }
 export function sampleColorFrame(
   source: HTMLVideoElement | HTMLCanvasElement | OffscreenCanvas,
@@ -269,6 +272,12 @@ export function analyzeObjectColor(
   }
   return {
     name,
+    ...(name==='multicolor'?{components:ranked.slice(0,2).map(r=>r[0])}:{ }),
+    ...(!['black','white','gray','multicolor'].includes(name)?(()=>{
+      const values=core.filter(p=>hsvLabel(...p as [number,number,number])===name).map(p=>lab(p)[0]).sort((a,b)=>a-b);
+      const L=values[Math.floor(values.length/2)];
+      return L<35?{shade:'DARK' as const}:L>70?{shade:'LIGHT' as const}:{};
+    })():{}),
     status: aligned ? "MASK_SUPPORTED" : "ESTIMATED",
     reason: aligned ? "ALIGNED_INSTANCE_MASK" : "BOX_ESTIMATE",
     supportFraction: support,
@@ -282,7 +291,7 @@ export function analyzeObjectColor(
 export class ObjectColorTracker {
   private tracks = new Map<
     string,
-    { name: ObjectColorName | null; count: number; at: number }
+    { name: string; count: number; at: number }
   >();
   reset() {
     this.tracks.clear();
@@ -317,9 +326,10 @@ export class ObjectColorTracker {
         reason: "WARMING_UP",
         stableFrames: 0,
       };
-    const count = previous?.name === observation.name ? previous.count + 1 : 1;
+    const signature=[observation.name,observation.shade??'',...(observation.components??[])].join(':');
+    const count = previous?.name === signature ? previous.count + 1 : 1;
     this.tracks.set(id, {
-      name: observation.name,
+      name: signature,
       count,
       at: observation.timestamp,
     });
@@ -330,7 +340,7 @@ export class ObjectColorTracker {
           name: null,
           status: "UNCLEAR",
           reason:
-            previous && previous.name !== observation.name
+            previous && previous.name !== signature
               ? "CHANGING"
               : "WARMING_UP",
           stableFrames: count,

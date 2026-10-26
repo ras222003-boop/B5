@@ -8,6 +8,18 @@ export interface ProposedMask {
   reason: string;
   mask: AlignedObjectMask;
 }
+export type SamPromptMode = "points" | "native-box";
+/** A box is transformed to the encoder's resized pixel space, never passed as unsupported point labels. */
+export function nativeBoxPrompts(frame: Pick<ColorPixels,"width"|"height">, detections: readonly VisionDetection[], resized: readonly number[]) {
+  if (resized.length !== 2 || !resized.every(v=>Number.isFinite(v)&&v>0) || frame.width<=0 || frame.height<=0)
+    throw new Error("slimsam_resize_contract");
+  return detections.map(d=>{
+    const b=d.boundingBox;
+    if (![b.x,b.y,b.width,b.height].every(Number.isFinite)||b.x<0||b.y<0||b.width<=0||b.height<=0||b.x+b.width>1.00001||b.y+b.height>1.00001)
+      throw new Error("slimsam_box_contract");
+    return [b.x*resized[1],b.y*resized[0],Math.min(1,b.x+b.width)*resized[1],Math.min(1,b.y+b.height)*resized[0]];
+  });
+}
 /** Installed decoder accepts point labels 0/1 only. These heuristic points are NOT native box prompts. */
 export function pointPromptsForBox(
   frame: Pick<ColorPixels, "width" | "height">,
@@ -53,7 +65,7 @@ export function qualifyObjectMask(
   const coverage = inside / (b.width * b.height * frame.width * frame.height),
     accepted =
       data.length === frame.width * frame.height &&
-      score >= 0.9 &&
+      Number.isFinite(score) && score >= 0.9 && score <= 1 &&
       total >= 24 &&
       inside / total >= 0.92 &&
       coverage >= 0.08 &&
@@ -80,20 +92,24 @@ export class SlimSamObjectMasks {
   private constructor(
     private model: import("@huggingface/transformers").SamModel,
     private processor: import("@huggingface/transformers").SamProcessor,
-    private library: typeof import("@huggingface/transformers")
+    private library: typeof import("@huggingface/transformers"),
+    private mode: SamPromptMode
   ) {}
-  static async open() {
+  static async open(options: {promptMode?:SamPromptMode;modelPath?:string} = {}) {
     const lib = await import("@huggingface/transformers");
     lib.env.allowLocalModels = true;
     lib.env.allowRemoteModels = false;
     // Absolute same-origin model path; no mutation of the existing scene-model local root.
     lib.env.backends.onnx.wasm!.wasmPaths = "/vision/onnx/";
     lib.env.backends.onnx.wasm!.numThreads = 1;
-    const path = "/api/vision/object-quality/assets/slimsam/";
+    const mode=options.promptMode??"points";
+    const path = options.modelPath??"/api/vision/object-quality/assets/slimsam/";
+    if (!path.startsWith("/api/vision/") || path.includes("..") || path.includes("\\") || path.includes("?") || path.includes("#"))
+      throw new Error("slimsam_local_path_required");
     const [model, processor] = await Promise.all([
       lib.SamModel.from_pretrained(path, {
         device: "wasm",
-        dtype: "q8",
+        dtype: mode === "native-box" ? {vision_encoder:"q8",prompt_encoder_mask_decoder:"fp32"} : "q8",
         local_files_only: true,
       }),
       lib.AutoProcessor.from_pretrained(path, { local_files_only: true }),
@@ -101,7 +117,8 @@ export class SlimSamObjectMasks {
     return new SlimSamObjectMasks(
       model as import("@huggingface/transformers").SamModel,
       processor as import("@huggingface/transformers").SamProcessor,
-      lib
+      lib,
+      mode
     );
   }
   async segment(
@@ -121,10 +138,14 @@ export class SlimSamObjectMasks {
       prompts = objects.map(d => pointPromptsForBox(frame, d));
     // This export has no input_boxes and no label-2/3 corner embeddings.
     // A hollow/occluded object may have a background centre; this mode remains research-only.
-    const inputs = await this.processor(image, {
+    const inputs = this.mode === "native-box" ? await this.processor(image) : await this.processor(image, {
       input_points: prompts.map(p => p.points),
       input_labels: prompts.map(p => p.labels),
     });
+    if (this.mode === "native-box") {
+      const boxes=nativeBoxPrompts(frame,objects,inputs.reshaped_input_sizes[0]);
+      inputs.input_boxes=new this.library.Tensor("float32",Float32Array.from(boxes.flat()),[1,objects.length,4]);
+    }
     const output = await this.model(inputs),
       processed = await this.processor.post_process_masks(
         output.pred_masks,
@@ -135,7 +156,8 @@ export class SlimSamObjectMasks {
       scores = output.iou_scores.data as Float32Array,
       size = frame.width * frame.height,
       result: ProposedMask[] = [];
-    if (
+    if (output.iou_scores.dims.join(",") !== `1,${objects.length},3` ||
+      scores.length !== objects.length*3 || !Array.from(scores).every(Number.isFinite) ||
       masks.dims[0] !== objects.length ||
       masks.dims[1] !== 3 ||
       masks.dims[2] !== frame.height ||

@@ -27,7 +27,7 @@ export class WorkerObjectProvider implements VisionProvider {
      const cleanup=()=>{clearTimeout(timer);worker.removeEventListener('message',ready);worker.removeEventListener('error',failed);signal?.removeEventListener('abort',failed);};
      const failed=()=>{cleanup();worker.terminate();reject(new Error('object_worker_init'));};
      const ready=(event:MessageEvent)=>{if(event.data.kind==='ready'){cleanup();resolve();}else if(event.data.kind==='error'){cleanup();worker.terminate();reject(new Error(typeof event.data.message==='string'?event.data.message:'object_worker_init'));}};
-     const timer=setTimeout(failed,withMasks?45_000:15_000);
+     const timer=setTimeout(failed,withMasks?45_000:profile?30_000:15_000);
      worker.addEventListener('message',ready);worker.addEventListener('error',failed);signal?.addEventListener('abort',failed,{once:true});if(signal?.aborted){failed();return;}worker.postMessage({kind:'init',config,profile,withMasks});
    });return provider;
  }

@@ -10,6 +10,7 @@ import {
 import { objectLabel } from "@/lib/vision/cocoLabels";
 import type { VisionCopy } from "@/lib/vision/scene";
 import type { ObjectQualityProfile } from "@shared/objectQuality";
+import {describeObjectScene,imagePosition} from "@/lib/vision/objectSceneDescription";
 export function ObjectPhotoInput({
   copy,
   objectsSpeech,
@@ -18,6 +19,7 @@ export function ObjectPhotoInput({
   beforeAnalyze,
   announce,
   profile,
+  capture,
 }: {
   copy: VisionCopy;
   objectsSpeech: boolean;
@@ -26,6 +28,7 @@ export function ObjectPhotoInput({
   beforeAnalyze: () => Promise<void>;
   announce: (text: string) => void;
   profile?: ObjectQualityProfile;
+  capture?:()=>Promise<File|null>;
 }) {
   const canvas = useRef<HTMLCanvasElement>(null),
     provider = useRef<VisionProvider | null>(null),
@@ -45,6 +48,7 @@ export function ObjectPhotoInput({
     opening.current = null;
     void provider.current?.close();
     provider.current = null;
+    if(alive.current)setMilliseconds(null);
     if (canvas.current) {
       canvas.current.width = 640;
       canvas.current.height = 480;
@@ -166,7 +170,7 @@ export function ObjectPhotoInput({
       );
       if (objectsSpeech || colorsSpeech)
         announce(
-          phrases.length
+          copy.object.PERSON === "شخص" ? 'وصف صورة ثابتة؛ '+describeObjectScene(result,{now:capturedAt,objects:objectsSpeech,colors:colorsSpeech,relations:true,minimumScore:profile?.threshold??.65}) : phrases.length
             ? phrases.join("؛ ")
             : "لم يُكتشف جسم بدرجة كافية؛ لا يثبت ذلك خلو الصورة."
         );
@@ -221,6 +225,7 @@ export function ObjectPhotoInput({
         }}
       />
       <p role="status">{notice}</p>
+      {capture&&<><button type="button" className="min-h-12 rounded-lg border border-amber-300 px-4" disabled={!rights||busy||!cameraRunning} aria-describedby="object-local-capture-note" onClick={()=>void (async()=>{try{const file=await capture();if(file)await analyze(file);else setNotice('لا تتوفر لقطة حديثة من الكاميرا.');}catch{setNotice('تعذر التقاط الصورة محليًا.');}})()}>التقاط صورة ووصفها محليًا</button><p id="object-local-capture-note">يوقف البث ثم يحلل لقطة ثابتة محليًا؛ الوصف يخص الصورة الملتقطة ولا يمثل قراءة مباشرة.</p></>}
       {busy && (
         <button
           type="button"
@@ -250,7 +255,7 @@ export function ObjectPhotoInput({
           <li key={d.id}>
             {objectLabel(d, copy)} — درجة غير معايرة{" "}
             {Math.round(d.confidence * 100)}٪ —{" "}
-            {copy.direction[d.horizontalDirection]} —{" "}
+            {copy.object.PERSON === "شخص" ? imagePosition(d) : copy.direction[d.horizontalDirection]} —{" "}
             {d.cocoClass === "person"
               ? "ألوان الملابس غير محددة"
               : colorDescription(d)}{" "}

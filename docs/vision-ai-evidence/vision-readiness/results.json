@@ -1,0 +1,187 @@
+{
+  "schemaVersion": 1,
+  "baseCommit": "47ea29e78c1c3d80006d04997c4c5a2a4d97998b",
+  "scope": "LOCAL_OBJECT_DESCRIPTION_AND_PREVIEW_PREPARATION_NOT_NAVIGATION_QUALIFICATION",
+  "detectorTrainingRepeated": false,
+  "validationAblation": {
+    "images": 42,
+    "models": {
+      "baseline": {
+        "overall": {
+          "tp": 95,
+          "fp": 14,
+          "fn": 119,
+          "referenceCount": 214,
+          "ignoredCrowdDetections": 0,
+          "precision": 0.8715596330275229,
+          "recall": 0.4439252336448598,
+          "f1": 0.5882352941176471,
+          "ignoredOutOfScopePredictions": 658,
+          "ignoredOutOfScopeAtThreshold": 45
+        },
+        "map": 0.4821024431603905
+      },
+      "tiles_065": {
+        "overall": {
+          "tp": 99,
+          "fp": 17,
+          "fn": 115,
+          "referenceCount": 214,
+          "ignoredCrowdDetections": 0,
+          "precision": 0.853448275862069,
+          "recall": 0.46261682242990654,
+          "f1": 0.6,
+          "ignoredOutOfScopePredictions": 659,
+          "ignoredOutOfScopeAtThreshold": 46
+        },
+        "map": 0.4945625375121921
+      },
+      "tiles_080": {
+        "overall": {
+          "tp": 95,
+          "fp": 16,
+          "fn": 119,
+          "referenceCount": 214,
+          "ignoredCrowdDetections": 0,
+          "precision": 0.8558558558558559,
+          "recall": 0.4439252336448598,
+          "f1": 0.5846153846153846,
+          "ignoredOutOfScopePredictions": 658,
+          "ignoredOutOfScopeAtThreshold": 45
+        },
+        "map": 0.4791820804719478
+      }
+    },
+    "promoted": false
+  },
+  "masks": {
+    "images": 12,
+    "attempted": 23,
+    "matchedMasks": 21,
+    "acceptedMatchedMasks": 20,
+    "meanAcceptedIoU": 0.820801505886187,
+    "meanMatchedIoU": 0.7911607260542249,
+    "meanAcceptedPurity": 0.8955026275738183,
+    "worstAcceptedIoU": 0.42150195340761104,
+    "medianMs": 23856.900000002235,
+    "p95Ms": 30545.20000000298,
+    "productMasksMayEnable": false
+  },
+  "publishedColourOracleDiagnostic": {
+    "images": 7,
+    "attempted": 10,
+    "colourAgreement": {
+      "before": {
+        "matchedReferences": 10,
+        "knownColourReferences": 10,
+        "decided": 5,
+        "correctDecided": 1,
+        "agreementWhenDecided": 0.2,
+        "coverage": 0.5,
+        "abstainedOnKnown": 5,
+        "unclearReferenceAbstentions": 0
+      },
+      "after": {
+        "matchedReferences": 10,
+        "knownColourReferences": 10,
+        "decided": 7,
+        "correctDecided": 1,
+        "agreementWhenDecided": 0.14285714285714285,
+        "coverage": 0.7,
+        "abstainedOnKnown": 3,
+        "unclearReferenceAbstentions": 0
+      }
+    },
+    "productMasksMayEnable": false
+  },
+  "colourStatus": "UNPROVEN_MASKS_DISABLED",
+  "asus": {
+    "physicalCameraTested": true,
+    "headless": false,
+    "sceneVariationObserved": true,
+    "camera": {
+      "width": 1920,
+      "height": 1080,
+      "frameRate": 15,
+      "audioTracks": 0
+    },
+    "measurement": {
+      "before": {
+        "at": 15074.89999999851,
+        "width": 1920,
+        "height": 1080,
+        "currentTime": 4.218721,
+        "totalVideoFrames": 57,
+        "droppedVideoFrames": 0,
+        "documentVisibility": "visible",
+        "meanLuminance": 50.252050520833336,
+        "luminanceStd": 7.352909515573975
+      },
+      "after": {
+        "at": 25116.10000000149,
+        "width": 1920,
+        "height": 1080,
+        "currentTime": 14.259911,
+        "totalVideoFrames": 198,
+        "droppedVideoFrames": 0,
+        "documentVisibility": "visible",
+        "meanLuminance": 104.06681666666663,
+        "luminanceStd": 62.12817475976695
+      },
+      "elapsedMs": 10041.20000000298,
+      "processedAnalyses": 20,
+      "observedAnalysisFps": 1.991793809504249,
+      "sessionRollingP95Ms": 465,
+      "availableVideoFrames": 141,
+      "browserDroppedVideoFrames": 0,
+      "unanalysedVideoFrames": 121,
+      "note": "Unanalysed frames include deliberate2FPS sampling; rollingP95 includes session startup, not pure ONNX latency."
+    },
+    "memoryAfterAnalysis": {
+      "rssMiB": 1243.140625,
+      "processes": 10
+    },
+    "modelSha256": "427cc366d34e27ff7a03e2899b5e3671425c262ea2291f88bb942bc1cc70b0f7",
+    "appStopEndsTracks": true,
+    "modelAccuracy": null,
+    "rawFramesSaved": false,
+    "mediaUploaded": false,
+    "caveat": "Headless feed was unchanged earlier. A later visible Chrome trial changed; the underlying cause is not established. Text-only user reference is not frame/bbox ground truth."
+  },
+  "localSpeech": {
+    "status": "API_COMPLETED",
+    "elapsedMs": 5791.20000000298,
+    "headless": false,
+    "localArabicVoices": 1,
+    "audibleIntelligibilityVerified": false,
+    "microphoneUsed": false,
+    "audioSaved": false,
+    "paidSynthesisRequested": false
+  },
+  "softwareTests": {
+    "total": 509,
+    "passed": 509,
+    "failed": 0,
+    "success": true,
+    "note": "Before the additional five isolated Manus preview boundary tests, which passed separately.",
+    "browserActualOnnxTestPassed": true,
+    "nonVacuousSpeechSubmissionVerified": true,
+    "sourcePixelVariationExportVerified": true,
+    "keyboardAndReaderControlsVerified": true,
+    "softwareCameraIsNotHardwareTrial": true
+  },
+  "preview": {
+    "branch": "codex/basira-vision-readiness-v1",
+    "projectCopyCreated": false,
+    "remoteDeploymentPerformed": false,
+    "httpsUrl": null,
+    "blocker": "Shared replay URL is readable, but no authenticated editable Manus project is available; browser runtime failed initialization even after reset.",
+    "databaseConnected": false,
+    "originalProjectChanged": false,
+    "localPreviewBoundaryTestsPassed": 5
+  },
+  "iphoneTested": false,
+  "voiceOverTested": false,
+  "navigationEligible": false,
+  "productionEligible": false
+}

@@ -16,9 +16,11 @@ export function permittedPath(path){
  if(['/src/','/assets/','/vision/','/node_modules/.vite/'].some(p=>path.startsWith(p)))return true;
  const shared='/@fs/'+resolve(repo,'shared').split(sep).join('/')+'/';
  if(path.startsWith(shared)&&path.endsWith('.ts'))return true;
+ const cache='/@fs/'+resolve(repo,'.vision-ai/vite-readiness-cache/deps').split(sep).join('/')+'/';
+ if(path.startsWith(cache)&&/^[a-zA-Z0-9_@.-]+\.js(?:\.map)?$/.test(path.slice(cache.length)))return true;
  return /^\/api\/vision\/object-quality\/(manifest|knowledge|(?:models\/objects-basira-v3\/)?(?:assets\/yolox\/[a-zA-Z0-9_.-]+|knowledge))$/.test(path);
 }
-export function createPhoneHandler({origin='http://127.0.0.1:4350',host='127.0.0.1',getPort,token,durationSeconds=900}={}){
+export function createPhoneHandler({origin='http://127.0.0.1:4350',host='127.0.0.1',getPort,token,durationSeconds=900,allowedClientIp,onRead=()=>{}}={}){
  const upstream=new URL(origin);
  if(upstream.protocol!=='http:'||!['127.0.0.1','localhost'].includes(upstream.hostname)||upstream.pathname!=='/'||upstream.search||upstream.hash||upstream.username||upstream.password)throw Error('Fixed loopback source required');
  if(typeof token!=='string'||token.length<32)throw Error('Strong token required');
@@ -30,6 +32,8 @@ export function createPhoneHandler({origin='http://127.0.0.1:4350',host='127.0.0
   res.setHeader('Content-Security-Policy',"default-src 'self'; connect-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; worker-src 'self' blob:; img-src 'self' data: blob:; media-src 'self' data: blob:; font-src 'self' data:; object-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'");
   try{
    const expected=`${host}:${getPort()}`,base=`https://${expected}`;
+   const remote=req.socket?.remoteAddress?.replace('::ffff:','');
+   if(allowedClientIp&&![allowedClientIp,'127.0.0.1',host].includes(remote))return reject(403,'Phone address rejected');
    if(req.headers.host!==expected||req.headers.origin&&req.headers.origin!==base||['cross-site','same-site'].includes(req.headers['sec-fetch-site']))return reject(403,'Origin rejected');
    if(Date.now()-started>durationSeconds*1000)return reject(410,'Phone test session expired');
    if(!['GET','HEAD'].includes(req.method)||Number(req.headers['content-length']??0)>0||req.headers['transfer-encoding'])return reject(405,'Uploads and writes disabled');
@@ -42,6 +46,7 @@ export function createPhoneHandler({origin='http://127.0.0.1:4350',host='127.0.0
    }
    if(!(req.headers.cookie??'').split(';').some(c=>equal(c.trim(),`basira_phone_v3=${token}`)))return reject(401,'Pairing required');
    counts.authenticatedReads++;
+   onRead({type:'AUTHENTICATED_PHONE_READ',path:url.pathname,atUtc:new Date().toISOString(),remoteAddress:remote??null,userAgent:req.headers['user-agent']?.slice(0,300)??null});
    const result=await fetch(new URL(url.pathname+url.search,upstream),{method:req.method,redirect:'error',headers:{host:upstream.host},signal:AbortSignal.timeout(30000)});
    if(url.pathname==='/api/vision/object-quality/manifest'&&result.ok){
     const data=await result.json();data.profiles=(data.profiles??[data.profile]).filter(p=>p&&['objects-yolox-tiny','objects-basira-v3'].includes(p.id));
@@ -55,11 +60,12 @@ export function createPhoneHandler({origin='http://127.0.0.1:4350',host='127.0.0
  };
  return {handler,counts};
 }
-export async function createPhoneBridge({origin='http://127.0.0.1:4350',host='127.0.0.1',port=0,lan=false,certPath,keyPath,token=randomBytes(32).toString('hex'),durationSeconds=900}={}){
+export async function createPhoneBridge({origin='http://127.0.0.1:4350',host='127.0.0.1',port=0,lan=false,certPath,keyPath,token=randomBytes(32).toString('hex'),durationSeconds=900,allowedClientIp,onRead}={}){
  if(host!=='127.0.0.1'&&(!lan||!isPrivateIPv4(host)||!Object.values(networkInterfaces()).flat().some(i=>i?.address===host)))throw Error('Explicit assigned private LAN address required');
  if(!certPath||!keyPath||token.length<32||durationSeconds<1||durationSeconds>1800)throw Error('TLS, strong access token and bounded duration required');
  let server;
- const {handler,counts}=createPhoneHandler({origin,host,getPort:()=>server.address().port,token,durationSeconds});
+ if(allowedClientIp&&!isPrivateIPv4(allowedClientIp))throw Error('Explicit private phone address required');
+ const {handler,counts}=createPhoneHandler({origin,host,getPort:()=>server.address().port,token,durationSeconds,allowedClientIp,onRead});
  server=https.createServer({cert:await readFile(certPath),key:await readFile(keyPath),minVersion:'TLSv1.2'},handler);
  await new Promise((done,reject)=>{server.once('error',reject);server.listen(port,host,done);});
  const url=`https://${host}:${server.address().port}`;

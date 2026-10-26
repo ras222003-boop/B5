@@ -11,10 +11,12 @@ import {
   freshTimestamp,
   observationFor,
   PerceptionTelemetry,
+  PERCEPTION_TTL_MS,
   type PerceptionSnapshot,
 } from "./perception";
 import { assessFrameLight } from "./frameQuality";
 import { COCO_LABELS } from "./cocoLabels";
+import {sourcePixelSignature} from './objectTrial';
 
 /** Existing Basira camera UI, object-only inference. No fusion, depth, OCR, hazards or navigation calls. */
 export class ObjectOnlyPipeline {
@@ -37,7 +39,7 @@ export class ObjectOnlyPipeline {
     )
       throw new Error("object_only_policy_required");
     this.tracker = new ObjectTracker(
-      1200,
+      PERCEPTION_TTL_MS,
       1800,
       options.config.detectionThreshold
     );
@@ -45,7 +47,8 @@ export class ObjectOnlyPipeline {
       options.copy,
       4500,
       undefined,
-      options.config.detectionThreshold
+      options.config.detectionThreshold,
+      PERCEPTION_TTL_MS
     );
     this.objectSpeechEnabled = options.objectSpeechEnabled !== false;
     this.colorSpeechEnabled = options.colorSpeechEnabled === true;
@@ -123,13 +126,14 @@ export class ObjectOnlyPipeline {
     canvas.height = Math.max(1, Math.round(video.videoHeight * scale));
     try {
       canvas
-        .getContext("2d")!
+        .getContext("2d",{willReadFrequently:true})!
         .drawImage(video, 0, 0, canvas.width, canvas.height);
       const at = performance.now(),
         frameId = `objects-${at}`,
         wallTime = Date.now(),
         pixels = sampleColorFrame(canvas, at, frameId),
         light = pixels ? assessFrameLight(pixels.data) : "UNKNOWN";
+      if(pixels&&this.options.callbacks.objectSourceSignature)this.options.callbacks.objectSourceSignature(sourcePixelSignature(pixels));
       const raw = await this.options.vision.detect(canvas, at);
       if (!this.running || run !== this.generation) return;
       if (

@@ -1,7 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {permittedPath,createPhoneHandler} from './phone-bridge.mjs';
+import {fileURLToPath} from 'node:url';
+import {resolve} from 'node:path';
 test('phone bridge exposes existing vision/client assets, never arbitrary API or restricted models',()=>{
+ const repo=fileURLToPath(new URL('../..',import.meta.url));
+ const cache='/@fs/'+resolve(repo,'.vision-ai/vite-readiness-cache/deps').replaceAll('\\','/')+'/';
+ assert.equal(permittedPath(cache+'@huggingface_transformers.js'),true);
+ assert.equal(permittedPath(cache+'../private-model.onnx'),false);
  for(const p of ['/navigation/vision','/src/pages/Vision.tsx','/vision/onnx/ort-wasm-simd-threaded.wasm','/api/vision/object-quality/models/objects-basira-v3/assets/yolox/yolox_tiny.onnx'])assert.equal(permittedPath(p),true);
  for(const p of ['/api/trpc/auth.me','/api/vision/object-quality/models/objects-basira-v2/assets/yolox/yolox_tiny.onnx','/.env','/src/../../.env','/src/%252e%252e/.env','/@fs/C:/Users/Asus/.aws/credentials'])assert.equal(permittedPath(p),false);
 });

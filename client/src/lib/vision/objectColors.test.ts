@@ -31,6 +31,23 @@ function pixels(fg: number[], background = [30, 180, 70]): ColorPixels {
   return { width, height, data, timestamp: 1, frameId: "frame-1" };
 }
 describe("conservative per-object pixel colour", () => {
+  it('describes a conservative shade and both major colours, rather than averaging them into a new colour',()=>{
+    const p=pixels([20,40,160]);
+    const result=analyzeObjectColor(p,detection);
+    expect(result.name).toBe('blue');expect(result.shade).toBe('DARK');
+    for(let y=20;y<80;y++)for(let x=20;x<50;x++)p.data.set([200,20,20,255],(y*100+x)*4);
+    const mixed=analyzeObjectColor(p,detection);
+    expect(mixed.name).toBe('multicolor');expect(new Set(mixed.components)).toEqual(new Set(['red','blue']));
+    expect(colorDescription({...detection,cocoClass:'chair',color:mixed})).toContain('أحمر وأزرق');
+  });
+  it('requires new stable observations when only the shade changes',()=>{
+    const tracker=new ObjectColorTracker(),d={...detection,trackId:'t',tracking:{state:'TRACKED' as const,observations:5,firstSeenAt:0,lastSeenAt:10,gapMs:1}};
+    const c=analyzeObjectColor(pixels([20,40,160]),d);c.timestamp=1;
+    tracker.update(d,c);tracker.update(d,{...c,timestamp:2});expect(tracker.update(d,{...c,timestamp:3}).name).toBe('blue');
+    expect(tracker.update(d,{...c,timestamp:4,shade:'LIGHT'}).reason).toBe('CHANGING');
+    expect(tracker.update(d,{...c,timestamp:5,shade:'LIGHT'}).name).toBeNull();
+    expect(tracker.update(d,{...c,timestamp:6,shade:'LIGHT'}).name).toBe('blue');
+  });
   it("covers all 80 actual COCO labels without manufacturing unsupported categories", () => {
     expect(Object.keys(COCO_LABELS)).toHaveLength(80);
     expect(COCO_LABELS.cup.ar).toBe("كوب");

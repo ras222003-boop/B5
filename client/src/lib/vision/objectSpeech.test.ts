@@ -9,6 +9,19 @@ const detection = (at: number, changes: Partial<VisionDetection> = {}): VisionDe
 const approach = (at: number): VisualApproachObservation => ({ trackId: 'chair-1', type: 'CHAIR', state: 'POSSIBLE_APPROACH', capturedAt: at, frameId: `f-${at}`,
   reasons: [], evidence: ['TRACKING', 'BOX_EXPANSION', 'COMPENSATED_OPTICAL_FLOW'], experimental: true });
 describe('automatic object speech without metres', () => {
+  it('keeps the default800ms policy and allows object-only callers to match the existing1250ms perception TTL',()=>{
+    const announce=vi.fn(()=>true),at=1000;
+    expect(new ObjectSpeechTracker(visionMessages.ar).observe([detection(at)],2100,announce)).toBeNull();
+    expect(new ObjectSpeechTracker(visionMessages.ar,4500,undefined,.5,1250).observe([detection(at)],2100,announce)).toContain('كرسي');
+    expect(new ObjectSpeechTracker(visionMessages.ar,4500,undefined,.5,1250).observe([detection(at)],2300,announce)).toBeNull();
+  });
+  it('suppresses an identical description after identity churn, without blocking a real direction change',()=>{
+    const tracker=new ObjectSpeechTracker(visionMessages.ar),announce=vi.fn(()=>true);
+    expect(tracker.observe([detection(1000)],1000,announce)).toBeTruthy();
+    expect(tracker.observe([detection(6000,{trackId:'replacement-id'})],6000,announce)).toBeNull();
+    expect(announce).toHaveBeenCalledTimes(1);
+    expect(tracker.observe([detection(16000,{trackId:'replacement-id',horizontalDirection:'RIGHT'})],16000,announce)).toContain('يمين');
+  });
   it('announces a tracked object with camera-relative direction and no distance', () => {
     const tracker = new ObjectSpeechTracker(visionMessages.ar), announce = vi.fn(() => true);
     expect(tracker.observe([detection(1000)], 1000, announce)).toBe('كرسي أمام الكاميرا.');

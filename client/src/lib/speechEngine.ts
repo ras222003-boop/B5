@@ -39,7 +39,7 @@ export class PremiumTtsProvider implements TtsProvider {
   stop() { /* Fetch cancellation is owned by the playback manager. */ }
 }
 
-type Item = { input: SpeechRequest; priority: SpeechPriority; pauseAfterMs: number; key?: string; expiresAt?:number; manualTest:boolean; resolve: () => void };
+type Item = { input: SpeechRequest; priority: SpeechPriority; pauseAfterMs: number; key?: string; expiresAt?:number; manualTest:boolean; localOnly:boolean; resolve: () => void };
 export class AudioPlaybackManager {
   private queue: Item[] = [];
   private current: Item | null = null;
@@ -60,10 +60,13 @@ export class AudioPlaybackManager {
   get busy() { return this.current!==null||this.queue.length>0; }
   get cancellationEpoch() { return this.cancellations; }
   private muted() { return typeof localStorage !== 'undefined' && getSpeechPreferences().screenReaderMode; }
-  enqueue(input: SpeechRequest, priority: SpeechPriority = 'INFORMATION', pauseAfterMs = 0, key?: string, manualTest = false, expiresAt?:number) {
+  enqueueLocal(input:SpeechRequest,expiresAt?:number,manualTest=false) {
+    return this.enqueue(input,'INFORMATION',0,undefined,manualTest,expiresAt,true);
+  }
+  enqueue(input: SpeechRequest, priority: SpeechPriority = 'INFORMATION', pauseAfterMs = 0, key?: string, manualTest = false, expiresAt?:number,localOnly=false) {
     if (!input.text.trim() || (this.muted() && !manualTest)) { this.update({ mode: 'MUTED', isSpeaking: false }); return Promise.resolve(); }
     return new Promise<void>(resolve => {
-      const item = { input, priority, pauseAfterMs, key, expiresAt, manualTest, resolve };
+      const item = { input, priority, pauseAfterMs, key, expiresAt, manualTest,localOnly, resolve };
       if (this.current && priorityRank[priority] > priorityRank[this.current.priority]) {
         this.cancelCurrent();
         this.queue = this.queue.filter(old => { if (priorityRank[old.priority] < priorityRank[priority]) { old.resolve(); return false; } return true; });
@@ -119,7 +122,7 @@ export class AudioPlaybackManager {
     const start = performance.now(); this.metrics.requests++;
     const expiryTimer=item.expiresAt===undefined?undefined:setTimeout(()=>abort.abort(),Math.max(0,item.expiresAt-performance.now()));
     try {
-      if (!this.premium.isAvailable()) throw new Error('offline');
+      if (item.localOnly || !this.premium.isAvailable()) throw new Error('local_speech');
       const prepared = item.key ? this.prepared.get(item.key) : undefined;
       const usedPrepared = Boolean(prepared && JSON.stringify(prepared.input) === JSON.stringify(item.input));
       const blob = usedPrepared ? await prepared!.promise : await this.premium.synthesize(item.input, abort.signal);
@@ -149,8 +152,8 @@ export class AudioPlaybackManager {
       if (generation !== this.generation) return;
       if(!expired()&&!abort.signal.aborted&&!muted()){
         if(expiryTimer!==undefined)clearTimeout(expiryTimer);
-        this.metrics.fallbacks++;
-        await this.browserFallback(item.input, generation, abort.signal, item.expiresAt);
+        if(!item.localOnly)this.metrics.fallbacks++;
+        await this.browserFallback(item.input, generation, abort.signal, item.expiresAt,item.localOnly);
       }
     } finally {
       if(expiryTimer!==undefined)clearTimeout(expiryTimer);
@@ -161,14 +164,15 @@ export class AudioPlaybackManager {
     if (item.pauseAfterMs) await new Promise<void>(resolve => { this.timerResolve = resolve; this.timer = setTimeout(() => { this.timer = null; this.timerResolve = null; resolve(); }, item.pauseAfterMs); });
     if (generation === this.generation) void this.next();
   }
-  private browserFallback(input: SpeechRequest, generation: number, signal: AbortSignal, expiresAt?:number) {
+  private browserFallback(input: SpeechRequest, generation: number, signal: AbortSignal, expiresAt?:number,localOnly=false) {
     return new Promise<void>(resolve => {
       if (typeof window === 'undefined' || !window.speechSynthesis || typeof SpeechSynthesisUtterance === 'undefined') { this.update({mode:'LOCAL',isSpeaking:false,error:'NO_VOICE'});resolve(); return; }
       const utterance = new SpeechSynthesisUtterance(input.text);
       utterance.lang = input.language === 'ar' ? (input.arabicStyle === 'SAUDI' ? 'ar-SA' : 'ar') : input.language === 'en' ? 'en-US' : 'zh-CN';
       utterance.rate = input.rate;
-      const voices = window.speechSynthesis.getVoices();
+      const voices = window.speechSynthesis.getVoices().filter(v=>!localOnly||v.localService===true);
       utterance.voice = voices.find(v => v.lang.toLowerCase() === utterance.lang.toLowerCase()) ?? voices.find(v => v.lang.toLowerCase().startsWith(input.language.slice(0, 2))) ?? null;
+      if(localOnly&&!utterance.voice){this.update({mode:'LOCAL',isSpeaking:false,error:'NO_VOICE'});resolve();return;}
       let started=false;
       const expired=()=>expiresAt!==undefined&&performance.now()>=expiresAt;
       const expiry=expiresAt===undefined?undefined:setTimeout(()=>{
