@@ -393,6 +393,7 @@ const metrics = (values, key) => {
 };
 const known = synthetic.filter(r => r.reference !== null),
   stress = synthetic.filter(r => r.reference === null);
+const spokenRows = rows.filter(r => r.newAudibleColour);
 const report = {
   scope:
     "PUBLISHED_HUMAN_ATTRIBUTE_AGREEMENT_WITH_ORACLE_REFERENCE_BOXES_NOT_END_TO_END_OR_PRODUCT_QUALIFICATION",
@@ -404,10 +405,12 @@ const report = {
   before: metrics(rows, "old"),
   after: metrics(rows, "candidate"),
   audio: {
-    announced: rows.filter(r => r.newAudibleColour).length,
+    announced: spokenRows.length,
     selectiveAccuracy: null,
-    wrongColoursAnnounced: 0,
-    abstentionRate: 1,
+    wrongColoursAnnounced: spokenRows.filter(
+      r => r.candidate.name !== r.reference
+    ).length,
+    abstentionRate: rows.length ? 1 - spokenRows.length / rows.length : null,
     qualificationPassed: false,
     reason:
       "Independent diverse reviewed real references insufficient; numeric quality scores are not calibrated.",
