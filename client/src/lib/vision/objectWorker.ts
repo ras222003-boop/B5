@@ -12,12 +12,12 @@ scope.onmessage=event=>{
    void (request.profile?ObjectQualityProvider.open(request.profile,request.withMasks):MediaPipeVisionProvider.open(request.config)).then(value=>{provider=value;scope.postMessage({kind:'ready'});})
      .catch(error=>scope.postMessage({kind:'error',id:0,message:error instanceof Error?error.message:'object_worker_init'}));return;
  }
- void (async()=>{try{
+ void (async()=>{let canvas:OffscreenCanvas|null=null;try{
    if(!provider)throw new Error('not_ready');
-   const canvas=new OffscreenCanvas(request.bitmap.width,request.bitmap.height);
-   const context=canvas.getContext('2d');if(!context)throw new Error('no_canvas');
+   canvas=new OffscreenCanvas(request.bitmap.width,request.bitmap.height);
+   const context=canvas.getContext('2d',provider.usagePolicy==='EXPERIMENTAL_OBJECTS_ONLY'?{willReadFrequently:true}:undefined);if(!context)throw new Error('no_canvas');
    context.drawImage(request.bitmap,0,0);
    const detections=await provider.detect(canvas,request.timestamp);
    scope.postMessage({kind:'result',id:request.id,detections});
- }catch{scope.postMessage({kind:'error',id:request.id});}finally{request.bitmap.close();}})();
+ }catch{scope.postMessage({kind:'error',id:request.id});}finally{request.bitmap.close();if(canvas)canvas.width=canvas.height=0;}})();
 };

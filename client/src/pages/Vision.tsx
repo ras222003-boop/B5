@@ -6,11 +6,11 @@ import { visionMessages } from '@/i18n/locales/vision';
 import { visionAssistantMessages } from '@/i18n/locales/visionAssistant';
 import { navigationMessages } from '@/i18n/locales/navigation';
 import { useSpeechToText, useTextToSpeech } from '@/hooks/useSpeech';
-import {getSpeechPreferences,speechEngine,speechInput,testSpeech} from '@/lib/speechEngine';
+import {getSpeechPreferences,saveSpeechPreferences,speechEngine,speechInput,testSpeech} from '@/lib/speechEngine';
 import {authClient} from '@/lib/auth-client';
 import { permissionService, type PermissionState } from '@/lib/permissionService';
 import { DEFAULT_VISION_CONFIG } from '@/lib/vision/config';
-import { CameraService, CameraServiceError } from '@/lib/vision/camera';
+import { CameraService, CameraServiceError,captureFrame } from '@/lib/vision/camera';
 import { TesseractOCRProvider, UnavailableDepthProvider } from '@/lib/vision/providers';
 import {openObjectProvider} from '@/lib/vision/workerObjectProvider';
 import {currentPerception,freshTimestamp,PERCEPTION_TTL_MS,APPROACH_TTL_MS,type PerceptionSnapshot} from '@/lib/vision/perception';
@@ -47,6 +47,8 @@ import type {ObjectQualityProfile} from '@shared/objectQuality';
 import {ObjectOnlyPipeline} from '@/lib/vision/objectOnlyPipeline';
 import {objectLabel} from '@/lib/vision/cocoLabels';
 import {colorDescription} from '@/lib/vision/objectColors';
+import {describeObjectScene} from '@/lib/vision/objectSceneDescription';
+import {ObjectTrialRecorder,reportedBattery} from '@/lib/vision/objectTrial';
 
 const button='inline-flex min-h-14 items-center justify-center rounded-xl bg-amber-300 px-6 py-3 text-lg font-bold text-stone-950 hover:bg-amber-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-300';
 const secondary='inline-flex min-h-14 items-center justify-center rounded-xl border border-amber-300/50 px-6 py-3 text-lg font-bold text-amber-100 hover:bg-amber-300/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-300';
@@ -57,6 +59,7 @@ export default function Vision() {
   const {speak,stop:stopSpeaking,speechMode,speechError}=useTextToSpeech();
   const dictation=useSpeechToText();
   const videoRef=useRef<HTMLVideoElement|null>(null);
+  const objectTrialRef=useRef<ObjectTrialRecorder|null>(null);
   const nativeCanvasRef=useRef<HTMLCanvasElement|null>(null);
   const cameraRef=useRef<CameraService>(new CameraService(DEFAULT_VISION_CONFIG));
   const pipelineRef=useRef<VisionPipeline|ObjectOnlyPipeline|null>(null);
@@ -75,6 +78,7 @@ export default function Vision() {
   const [selectedModel,setSelectedModel]=useState('original');
   const [objectQualityProfiles,setObjectQualityProfiles]=useState<ObjectQualityProfile[]>([]);
   const activeObjectProfile=objectQualityProfiles.find(profile=>profile.id===selectedModel);
+  const enqueueInformation=(text:string,expiresAt?:number)=>activeObjectProfile?speechEngine.enqueueLocal(speechInput(text,lang,'ENVIRONMENT'),expiresAt):speechEngine.enqueue(speechInput(text,lang,'ENVIRONMENT'),'INFORMATION',0,undefined,false,expiresAt);
   useEffect(()=>{const abort=new AbortController();void availableObjectQualityProfiles(abort.signal).then(setObjectQualityProfiles).catch(()=>{});return()=>abort.abort();},[]);
   const [registryNotice,setRegistryNotice]=useState('');
   useEffect(()=>{
@@ -155,7 +159,7 @@ export default function Vision() {
         perceptionRef.current=null;setPerception(null);setOverlayFrame(null);setScene(null);setLastObjectText('');setLastAlert('');setRisk(null);
         setAnalysisNotice('توقّف وصول إطارات حديثة؛ لا تتوفر قراءة مباشرة.');
         speechEngine.stop();
-        if(!getSpeechPreferences().screenReaderMode)void speechEngine.enqueue(speechInput('توقف وصول إطارات حديثة؛ لا تتوفر قراءة مباشرة.',lang,'ENVIRONMENT'),'INFORMATION',0,undefined,false,now+1500);
+        if(!getSpeechPreferences().screenReaderMode)void enqueueInformation('توقف وصول إطارات حديثة؛ لا تتوفر قراءة مباشرة.',now+1500);
       }
     },250);
     return()=>window.clearInterval(timer);
@@ -181,6 +185,7 @@ export default function Vision() {
     descriptionAbort.current?.abort();descriptionAbort.current=null;descriptionBusyRef.current=false;
     const pipeline=pipelineRef.current;pipelineRef.current=null;
     cameraRef.current.stop(videoRef.current??undefined);
+    objectTrialRef.current?.finish(performance.now(),!cameraRef.current.active);
     setVideoPaused(false);
     stopSpeaking();
     perceptionRef.current=null;lastAskedPerceptionRef.current=null;setPerception(null);setLastObjectText('');setLastOutput('');setAnalysisNotice('توقف تحليل الكاميرا.');
@@ -202,6 +207,8 @@ export default function Vision() {
     if(selectedModel!=='original'&&!activeObjectProfile)return;
     if(state!=='STOPPED'||!videoRef.current||!nativeCanvasRef.current)return;
     const run=++generation.current;
+    objectTrialRef.current=activeObjectProfile?new ObjectTrialRecorder(activeObjectProfile.id,activeObjectProfile.modelSha256,performance.now()):null;
+    const trial=objectTrialRef.current;if(trial)void reportedBattery().then(b=>{if(b&&trial===objectTrialRef.current)trial.battery(b);});
     setVideoPaused(false);
     setError('');setOCRWarning('');setModelWarning('');setDepthWarning('');setMetricInfo({status:'UNAVAILABLE',source:null});setMeterDiagnostic(autoMeterEnabledRef.current?'MODEL_LOADING':'OFF');setMeterSnapshot(null);setOverlayFrame(null);setPinnedFrame(null);setMeterSpokenStatus('');setMetricTiming({load:null,inference:null});setLastAlert('');setRisk(null);setSpokenSummary('');setState('STARTING');
     try {
@@ -210,6 +217,7 @@ export default function Vision() {
       const visionConfig=activeObjectProfile?{...DEFAULT_VISION_CONFIG,detectionThreshold:activeObjectProfile.threshold}:DEFAULT_VISION_CONFIG;
       const nativeFrames=activeObjectProfile?undefined:window.BasiraNativeFrames;
       if(!nativeFrames)await cameraRef.current.start(videoRef.current);
+      if(trial&&cameraRef.current.frameSize)trial.camera(cameraRef.current.frameSize);
       if(run!==generation.current){cameraRef.current.stop(videoRef.current);return;}
       if(!nativeFrames){setCameraPermission('allowed');setCameraSize(videoRef.current.videoWidth&&videoRef.current.videoHeight?{width:videoRef.current.videoWidth,height:videoRef.current.videoHeight}:cameraRef.current.frameSize);}
       else setCameraSize({width:nativeCanvasRef.current.width,height:nativeCanvasRef.current.height});
@@ -229,8 +237,9 @@ export default function Vision() {
         segmentationIntervalMs:detected.segmentationIntervalMs,depthIntervalMs:detected.depthIntervalMs,
         config:visionConfig,copy:t,mode:'EXPLORATION',buildingId:currentBuildingId,floorId:null,announcement,safetyFlags,
         callbacks:{
-          perception:snapshot=>{if(run===generation.current){perceptionRef.current=snapshot;setPerception(snapshot);setObservationClock(performance.now());}},
-          analysisState:status=>{if(run===generation.current){setAnalysisNotice(status==='PAUSED'?'الكاميرا متوقفة أو مفقودة؛ توقفت الملاحظات المباشرة.':status==='STALE'?'لا تتوفر إطارات حديثة؛ توقفت الملاحظات المباشرة.':status==='SLOW'?'موثوقية التتبع منخفضة؛ التحليل بطيء أو الإضاءة ضعيفة.':'');if(status==='PAUSED'||status==='STALE'){setOverlayFrame(null);setScene(null);setLastObjectText('');setLastAlert('');setRisk(null);speechEngine.stop();if(!getSpeechPreferences().screenReaderMode)void speechEngine.enqueue(speechInput('توقف تحليل الكاميرا؛ لا تتوفر قراءة مباشرة.',lang,'ENVIRONMENT'),'INFORMATION',0,undefined,false,performance.now()+1500);}}},
+          objectSourceSignature:signature=>{if(run===generation.current)objectTrialRef.current?.source(signature);},
+          perception:snapshot=>{if(run===generation.current){objectTrialRef.current?.record(snapshot);perceptionRef.current=snapshot;setPerception(snapshot);setObservationClock(performance.now());}},
+          analysisState:status=>{if(run===generation.current){objectTrialRef.current?.state(status);setAnalysisNotice(status==='PAUSED'?'الكاميرا متوقفة أو مفقودة؛ توقفت الملاحظات المباشرة.':status==='STALE'?'لا تتوفر إطارات حديثة؛ توقفت الملاحظات المباشرة.':status==='SLOW'?'موثوقية التتبع منخفضة؛ التحليل بطيء أو الإضاءة ضعيفة.':'');if(status==='PAUSED'||status==='STALE'){setOverlayFrame(null);setScene(null);setLastObjectText('');setLastAlert('');setRisk(null);speechEngine.stop();if(!getSpeechPreferences().screenReaderMode)void enqueueInformation('توقف تحليل الكاميرا؛ لا تتوفر قراءة مباشرة.',performance.now()+1500);}}},
           scene:description=>{if(run===generation.current){setScene(description);setState('ANALYZING');}},
           detectionFrame:frame=>{if(run===generation.current)setOverlayFrame(frame);},
           approachSpeech:text=>{
@@ -243,9 +252,10 @@ export default function Vision() {
           objectSpeech:text=>{
             if(run!==generation.current||(!objectSpeechRef.current&&!colorSpeechRef.current))return false;
             if(!getSpeechPreferences().screenReaderMode&&speechEngine.busy)return false;
+            objectTrialRef.current?.speech();
             setLastObjectText(text);
             setLastOutput(text);
-            if(!getSpeechPreferences().screenReaderMode)void speechEngine.enqueue(speechInput(text,lang,'ENVIRONMENT'),'INFORMATION',0,undefined,false,(perceptionRef.current?.capturedAt??performance.now())+PERCEPTION_TTL_MS);
+            if(!getSpeechPreferences().screenReaderMode)void (activeObjectProfile?speechEngine.enqueueLocal(speechInput(text,lang,'ENVIRONMENT'),(perceptionRef.current?.capturedAt??performance.now())+PERCEPTION_TTL_MS):speechEngine.enqueue(speechInput(text,lang,'ENVIRONMENT'),'INFORMATION',0,undefined,false,(perceptionRef.current?.capturedAt??performance.now())+PERCEPTION_TTL_MS));
             return true;
           },
           candidate:candidate=>{if(run===generation.current)setCandidates(previous=>[candidate,...previous].slice(0,10));},
@@ -305,12 +315,12 @@ export default function Vision() {
     const snapshot=currentPerception(perceptionRef.current,performance.now());
     const answer=answerLocalQuestion('ماذا يوجد أمام الكاميرا؟',snapshot,performance.now(),t);
     const researchObjects=snapshot?.observations.filter(o=>o.validity==='CURRENT'&&o.detection.tracking?.state==='TRACKED').slice(0,5)??[];
-    const value=activeObjectProfile?(researchObjects.length?researchObjects.map(({detection:d})=>`${objectLabel(d,t)}، ${d.cocoClass==='person'?'ألوان الملابس غير محددة':colorDescription(d)} ${['LEFT','FRONT_LEFT'].includes(d.horizontalDirection)?'في يسار الصورة':['RIGHT','FRONT_RIGHT'].includes(d.horizontalDirection)?'في يمين الصورة':'في وسط الصورة'}`).join('؛ '):t.noDetections):detail&&snapshot&&scene?scene.detailedText:answer.route==='LOCAL'?answer.text:t.noDetections;
+    const value=activeObjectProfile?(lang==='ar'?describeObjectScene(researchObjects.map(o=>o.detection),{now:performance.now(),objects:objectSpeechRef.current,colors:colorSpeechRef.current,relations:detail,minimumScore:activeObjectProfile.threshold})||'وصف الأشياء والألوان متوقف.':researchObjects.length?researchObjects.map(({detection:d})=>`${objectLabel(d,t)}، ${d.cocoClass==='person'?'ألوان الملابس غير محددة':colorDescription(d)} ${['LEFT','FRONT_LEFT'].includes(d.horizontalDirection)?'في يسار الصورة':['RIGHT','FRONT_RIGHT'].includes(d.horizontalDirection)?'في يمين الصورة':'في وسط الصورة'}`).join('؛ '):t.noDetections):detail&&snapshot&&scene?scene.detailedText:answer.route==='LOCAL'?answer.text:t.noDetections;
     setSpokenSummary(value);setLastOutput(value);
-    if(!getSpeechPreferences().screenReaderMode)void speechEngine.enqueue(speechInput(value,lang,'ENVIRONMENT'),'INFORMATION',0,undefined,false,snapshot?snapshot.capturedAt+PERCEPTION_TTL_MS:performance.now()+PERCEPTION_TTL_MS);
+    if(!getSpeechPreferences().screenReaderMode)void (activeObjectProfile?speechEngine.enqueueLocal(speechInput(value,lang,'ENVIRONMENT'),snapshot?snapshot.capturedAt+PERCEPTION_TTL_MS:performance.now()+PERCEPTION_TTL_MS):speechEngine.enqueue(speechInput(value,lang,'ENVIRONMENT'),'INFORMATION',0,undefined,false,snapshot?snapshot.capturedAt+PERCEPTION_TTL_MS:performance.now()+PERCEPTION_TTL_MS));
   };
   const setAlerts=(enabled:boolean)=>{experimentalAlertsRef.current=enabled;setExperimentalAlerts(enabled);pipelineRef.current?.setExperimentalApproachEnabled(enabled);};
-  const repeatLast=()=>{const value=lastOutput?`إعادة الوصف السابق، وقد لا يمثل المشهد الحالي: ${lastOutput}`:'لا يوجد وصف سابق لإعادته.';setSpokenSummary(value);if(!getSpeechPreferences().screenReaderMode)speak(value,0.9,lang);};
+  const repeatLast=()=>{const value=lastOutput?`إعادة الوصف السابق، وقد لا يمثل المشهد الحالي: ${lastOutput}`:'لا يوجد وصف سابق لإعادته.';setSpokenSummary(value);if(!getSpeechPreferences().screenReaderMode){if(activeObjectProfile)void speechEngine.enqueueLocal(speechInput(value,lang,'ENVIRONMENT'));else speak(value,0.9,lang);}};
   useEffect(()=>{
     const command=localVoiceCommand(dictation.transcript);
     if(!command)return;
@@ -453,14 +463,30 @@ export default function Vision() {
   const previewFrame=currentPinnedFrame?.frame??overlayFrame;
   const researchModel=researchModels.find(model=>model.id===selectedModel);
   const chooseModel=(id:string)=>{void stop();setSelectedModel(id);};
+  const exportObjectTrial=async()=>{
+    const trial=objectTrialRef.current;if(!trial)return;
+    const battery=await reportedBattery(),video=videoRef.current,quality=video?.getVideoPlaybackQuality?.();
+    const out=trial.export(performance.now(),{battery,camera:cameraRef.current.frameSize,
+      playback:quality?{total:quality.totalVideoFrames,dropped:quality.droppedVideoFrames}:null,
+      jsHeapBytes:(performance as Performance&{memory?:{usedJSHeapSize:number}}).memory?.usedJSHeapSize??null,
+      speech:{mode:screenReaderMode?'SCREEN_READER':speechMode,error:speechError??null},browser:{userAgent:navigator.userAgent,secureContext:window.isSecureContext}});
+    const url=URL.createObjectURL(new Blob([JSON.stringify(out,null,2)],{type:'application/json'}));
+    const link=document.createElement('a');link.href=url;link.download=`basira-object-trial-${trial.sceneId}.json`;link.click();window.setTimeout(()=>URL.revokeObjectURL(url),1000);
+  };
+  const captureObjectPhoto=async()=>{
+    if(!videoRef.current||!cameraRef.current.active||videoRef.current.paused||videoRef.current.ended||videoRef.current.readyState<2)return null;
+    const captured=await captureFrame(videoRef.current,{...DEFAULT_VISION_CONFIG,inputResolution:{width:1280,height:1280}});
+    return captured?new File([captured.blob],'basira-local-camera-snapshot.jpg',{type:captured.blob.type}):null;
+  };
   return <Layout><div className="container max-w-4xl space-y-4 py-6 text-stone-100" data-testid="vision-page" data-vision-mode={selectedModel} data-state={state}>
     <Link href="/navigation" className="text-amber-300 underline">{nav.title}</Link>
     <header><h1 className="text-3xl font-black">{t.title}</h1><p className="mt-3 text-lg text-stone-300">{researchModel?'تعرف تجريبي محلي على السلالم داخل بصيرة، دون توجيه أو تحذير سقوط.':activeObjectProfile?'تعرف محلي تجريبي على الأشياء وألوانها، دون توجيه أو قياس مسافة أو تحذيرات ملاحية.':t.description}</p></header>
     <section className="space-y-2 rounded-xl border border-amber-300/40 p-4" aria-label="اختيار نموذج بصيرة">
       <label htmlFor="basira-vision-model">نموذج الرؤية</label>
-      <select id="basira-vision-model" className="mx-3 min-h-12 max-w-full rounded-xl bg-stone-900 px-3" value={selectedModel} onChange={event=>chooseModel(event.target.value)}>
-        <option value="original">النموذج الأصلي — افتراضي</option>{objectQualityProfiles.map(profile=><option key={profile.id} value={profile.id}>{profile.name}</option>)}{researchModels.map(model=><option key={model.id} value={model.id}>{model.name} — تجريبي</option>)}
+      <select id="basira-vision-model" aria-describedby="vision-model-source" className="mx-3 min-h-12 max-w-full rounded-xl bg-stone-900 px-3" value={selectedModel} onChange={event=>chooseModel(event.target.value)}>
+        <option value="original">النموذج الأصلي Lite0 — افتراضي</option>{objectQualityProfiles.map(profile=><option key={profile.id} value={profile.id}>{profile.name}</option>)}{researchModels.map(model=><option key={model.id} value={model.id}>{model.name} — تجريبي</option>)}
       </select><p className="text-sm text-stone-300">{registryNotice}</p>
+      <p id="vision-model-source" role="status" aria-live="polite" className="text-sm text-stone-300">مصدر النتائج: {activeObjectProfile?.name??researchModel?.name??'EfficientDet-Lite0 الأصلي'}؛ الاستدلال محلي ودرجات الكشف غير معايرة.</p>
     </section>
     {researchModel?<ExperimentalVision key={researchModel.id} model={researchModel} onOriginal={()=>chooseModel('original')}/>:<>
     {activeObjectProfile&&<div role="status" className="rounded-xl border border-amber-300 p-4"><p>تعرف تجريبي على الأشياء فقط؛ دون قياس مسافة أو توجيه أو تحذير سقوط. الألوان غير مثبتة بشريًا. {activeObjectProfile.maskForStills?'التقسيم المحلي للصور الثابتة فقط وقد يستغرق عدة ثوانٍ.':'أوقف التقسيم الآلي بسبب إخفاق فحص الجودة النهائي؛ اللون تقدير محافظ من الصندوق أو غير واضح.'} لم يختبر هذا النموذج على iPhone.</p>{activeObjectProfile.commercialTrainingAllowed&&<p>مصادر التدريب الإضافي مرخصة للاستخدام المستهدف؛ النموذج تجريبي ولم يعتمد للإنتاج. <a href='/api/vision/object-quality/models/objects-basira-v3/knowledge' target='_blank' rel='noreferrer'>معرفة بصيرة — سجل النماذج</a></p>}{activeObjectProfile.researchOnlyData&&<p>بيانات هذا الإصدار مرخصة للبحث فقط؛ لا تمنح أهلية الاستخدام التجاري. <a href='/api/vision/object-quality/knowledge' target='_blank' rel='noreferrer'>معرفة بصيرة — سجل النماذج</a></p>}{activeObjectProfile.id!=='objects-yolox-tiny'&&<button className={secondary} onClick={()=>chooseModel('objects-yolox-tiny')}>الرجوع فورًا إلى Tiny السابق</button>}<button className={secondary} onClick={()=>chooseModel('original')}>الرجوع فورًا إلى Lite0</button></div>}
@@ -479,6 +505,8 @@ export default function Vision() {
     <p role="status" aria-live="polite" className="text-amber-200">{analysisNotice}</p>
     <VisualRadar snapshot={current} copy={t} visible={radarVisible} onToggle={()=>setRadarVisible(value=>!value)} onDescribe={()=>report(false)}/>
     <section className="rounded-2xl border border-amber-300/50 bg-stone-900 p-5" aria-label={assistant.objectSpeech}>
+      <button type="button" className={secondary} aria-pressed={screenReaderMode} onClick={()=>{speechEngine.stop();saveSpeechPreferences({...getSpeechPreferences(),screenReaderMode:!screenReaderMode});}}>وضع قارئ الشاشة: {screenReaderMode?'تشغيل؛ الوصف عبر قارئ الشاشة':'إيقاف؛ الوصف عبر صوت بصيرة'}</button>
+      {activeObjectProfile&&<button type="button" className={`${secondary} mx-2`} disabled={!objectTrialRef.current} onClick={()=>void exportObjectTrial()}>حفظ سجل اختبار الكاميرا محليًا دون صور</button>}
       <button type="button" className={secondary} aria-pressed={objectSpeechEnabled} onClick={toggleObjectSpeech}>{assistant.objectSpeech}: {objectSpeechEnabled?assistant.objectSpeechOn:assistant.objectSpeechOff}</button>
       <button type="button" className={`${secondary} mx-2`} aria-pressed={colorSpeechEnabled} onClick={()=>{const enabled=!colorSpeechEnabled;colorSpeechRef.current=enabled;setColorSpeechEnabled(saveColorSpeechEnabled(enabled));pipelineRef.current?.setColorSpeechEnabled(enabled);if(!enabled)speechEngine.replaceAtPriority('INFORMATION');}}>وصف الألوان صوتيًا: {colorSpeechEnabled?'تشغيل':'إيقاف'}</button>
       <p className="mt-2 text-stone-300">درجات الكاشف غير معايرة وليست نسب صحة مثبتة. الألوان تقديرية من بكسلات الإطار نفسه؛ عند غياب قناع جسم موثوق قد يمتنع النظام. يمين الصورة ويسارها مواضع بصرية وليسا تعليمات للمشي.</p>
@@ -486,9 +514,9 @@ export default function Vision() {
       <p className="mt-2 text-stone-300">مؤشرات الاقتراب تتطلب تتبعًا مستقرًا وأدلة حركة متعددة. قد تتوقف عند بطء الجهاز أو دوران الكاميرا أو التكبير؛ لا تثبت احتمال اصطدام أو سلامة المشي.</p>
       <p className="mt-3 min-h-6" role={screenReaderMode?'status':undefined} aria-live={screenReaderMode?'polite':'off'}>{lastObjectText}</p>
       <p className="mt-2" role="status" aria-live="off">{assistant.speechStatus}: {screenReaderMode?assistant.speechMuted:speechError==='PLAYBACK_BLOCKED'?assistant.speechBlocked:speechError==='NO_VOICE'?assistant.speechNoVoice:speechMode==='PREMIUM'?assistant.speechPremium:assistant.speechLocal}</p>
-      <div className="mt-3 flex flex-wrap gap-2"><button type="button" className={secondary} onClick={()=>void testSpeech(assistant.testPhrase,lang)}>{assistant.testVoice}</button><button type="button" className={secondary} onClick={stopSpeaking}>{assistant.stopVoice}</button></div>
+      <div className="mt-3 flex flex-wrap gap-2"><button type="button" className={secondary} onClick={()=>void (activeObjectProfile?speechEngine.enqueueLocal(speechInput(assistant.testPhrase,lang,'ENVIRONMENT'),undefined,true):testSpeech(assistant.testPhrase,lang))}>{assistant.testVoice}</button><button type="button" className={secondary} onClick={stopSpeaking}>{assistant.stopVoice}</button></div>
     </section>
-    <ObjectPhotoInput key={selectedModel} profile={activeObjectProfile} copy={t} objectsSpeech={objectSpeechEnabled} colorsSpeech={colorSpeechEnabled} cameraRunning={state!=='STOPPED'} beforeAnalyze={stop} announce={text=>{setLastObjectText(text);if(!getSpeechPreferences().screenReaderMode)speak(text,.9,'ar','ENVIRONMENT');}}/>
+    <ObjectPhotoInput key={selectedModel} profile={activeObjectProfile} capture={activeObjectProfile?captureObjectPhoto:undefined} copy={t} objectsSpeech={objectSpeechEnabled} colorsSpeech={colorSpeechEnabled} cameraRunning={state!=='STOPPED'} beforeAnalyze={stop} announce={text=>{setLastObjectText(text);if(!getSpeechPreferences().screenReaderMode){if(activeObjectProfile)void speechEngine.enqueueLocal(speechInput(text,'ar','ENVIRONMENT'));else speak(text,.9,'ar','ENVIRONMENT');}}}/>
     {!activeObjectProfile&&<>
     <section className="rounded-2xl border border-amber-300/50 bg-stone-900 p-5" aria-label={assistant.title}>
       <h2 className="text-xl font-bold">{assistant.title}</h2>

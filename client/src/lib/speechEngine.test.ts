@@ -6,6 +6,20 @@ const input: SpeechRequest = { text: 'Turn right', language: 'en', arabicStyle: 
 afterEach(() => vi.unstubAllGlobals());
 
 describe('audio playback manager', () => {
+  it('uses an explicit local-only information path without calling paid synthesis',async()=>{
+    const synthesize=vi.fn(),speak=vi.fn((u:{onend?:()=>void})=>queueMicrotask(()=>u.onend?.()));
+    vi.stubGlobal('window',{speechSynthesis:{getVoices:()=>[{lang:'ar-SA',localService:true}],speak,cancel:vi.fn()}});
+    vi.stubGlobal('SpeechSynthesisUtterance',class{lang='';rate=1;voice=null;onend?:()=>void;constructor(public text:string){}});
+    const m=new AudioPlaybackManager({isAvailable:()=>true,synthesize,stop:vi.fn()});
+    await m.enqueueLocal({...input,text:'كرسي في الصورة',language:'ar',context:'ENVIRONMENT'});
+    expect(speak).toHaveBeenCalledOnce();expect(synthesize).not.toHaveBeenCalled();expect(m.status.mode).toBe('LOCAL');
+  });
+  it('does not send local-only text to a remote browser voice when no local language voice exists',async()=>{
+    const speak=vi.fn(),synthesize=vi.fn();vi.stubGlobal('window',{speechSynthesis:{getVoices:()=>[{lang:'ar-SA',localService:false}],speak,cancel:vi.fn()}});
+    vi.stubGlobal('SpeechSynthesisUtterance',class{lang='';rate=1;voice=null;constructor(public text:string){}});
+    const m=new AudioPlaybackManager({isAvailable:()=>true,synthesize,stop:vi.fn()});await m.enqueueLocal({...input,language:'ar',context:'ENVIRONMENT'});
+    expect(speak).not.toHaveBeenCalled();expect(synthesize).not.toHaveBeenCalled();expect(m.status.error).toBe('NO_VOICE');
+  });
   it('uses local fallback offline and records a fallback without retaining text', async () => {
     const speak = vi.fn((utterance: { onend?: () => void }) => queueMicrotask(() => utterance.onend?.()));
     vi.stubGlobal('window', { speechSynthesis: { speak, getVoices: () => [], cancel: vi.fn() } });

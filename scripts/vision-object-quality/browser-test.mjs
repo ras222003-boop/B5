@@ -90,11 +90,14 @@ try {
   );
   assert.equal(await select.inputValue(), "original");
   await select.selectOption(modelId);
-  await page.evaluate(async () => {
-    const { speechEngine } = await import("/src/lib/speechEngine.ts");
+  await page.evaluate(async readiness => {
+    const source=readiness?await fetch('/src/pages/Vision.tsx').then(r=>r.text()):'';
+    const modulePath=readiness?source.match(/from\s+["']([^"']*\/speechEngine\.ts[^"']*)["']/)?.[1]:'/src/lib/speechEngine.ts';
+    if(!modulePath)throw Error('Cannot bind the actual page speech-engine instance');
+    const { speechEngine } = await import(modulePath);
     speechEngine.enqueue = async (input, priority) =>
       window.__speech.push({ text: input.text, priority });
-  });
+  },process.argv[5]==='readiness');
   const input = page.getByTestId("object-photo-input");
   await input.getByRole("checkbox").check();
   await input
@@ -109,6 +112,7 @@ try {
     { timeout: 90000 }
   );
   const photoText = await page.getByTestId("photo-object-results").innerText();
+  if(process.argv[5]==='readiness')assert.ok(await page.evaluate(()=>window.__speech.length>0),'The grounded still description must actually reach the page speech queue');
   assert.ok(Number(await input.getAttribute("data-count")) > 1);
   const profile = await page.evaluate(async id => {
     const r = await fetch("/api/vision/object-quality/manifest");
@@ -140,19 +144,42 @@ try {
     {},
     { timeout: 45000 }
   );
-  await page.waitForFunction(
+  const currentObjects=await page.waitForFunction(
     () =>
-      document.querySelectorAll("[data-testid=perception-objects] li").length >
-      0,
+      document.querySelectorAll("[data-testid=perception-objects] li").length > 0 ? document.querySelector('[data-testid=perception-objects]').textContent : null,
     {},
-    { timeout: 15000 }
+    { timeout: process.argv[5]==='readiness'?45000:15000 }
   );
-  await page.waitForTimeout(6500);
-  const cameraText = await page.getByTestId("perception-objects").innerText(),
+  if(process.argv[5]!=='readiness')await page.waitForTimeout(6500);
+  const cameraText = process.argv[5]==='readiness'?await currentObjects.jsonValue():await page.getByTestId("perception-objects").innerText(),
     speech = await page.evaluate(() => window.__speech),
     haptics = await page.evaluate(() => window.__haptics);
   assert.ok(speech.every(s => s.priority === "INFORMATION"));
   assert.deepEqual(haptics, []);
+  if(process.argv[5]==='readiness'){
+    const source=await page.locator('#vision-model-source').innerText();assert.ok(source.includes(profile.name));
+    const reader=page.getByRole('button',{name:/^وضع قارئ الشاشة:/});await reader.click();assert.equal(await reader.getAttribute('aria-pressed'),'true');
+    const before=await page.evaluate(()=>window.__speech.length);await page.waitForTimeout(5000);
+    assert.equal(await page.evaluate(()=>window.__speech.length),before,'VoiceOver mode must not enqueue a second Basira voice');
+    const download=page.waitForEvent('download');await page.getByRole('button',{name:'حفظ سجل اختبار الكاميرا محليًا دون صور',exact:true}).click();
+    const file=await download;await file.saveAs(resolve(out,'camera-trial-software.json'));
+    const trial=JSON.parse(await readFile(resolve(out,'camera-trial-software.json'),'utf8'));
+    assert.equal(trial.modelId,modelId);assert.equal(trial.mediaSaved,false);assert.equal(trial.referenceLabels,false);assert.equal(trial.detectionAccuracy,null);
+    assert.ok(trial.processedFrames>0);assert.ok(trial.frames.length>0);assert.equal(trial.navigationEligible,false);
+    assert.ok(trial.sourceSignatureSamples>=2);assert.equal(trial.sourcePixelVariation,'OBSERVED');
+    assert.equal(await page.locator('#basira-vision-model').getAttribute('aria-describedby'),'vision-model-source');
+    const focus=[];await page.locator('#basira-vision-model').focus();
+    for(let i=0;i<45;i++){await page.keyboard.press('Tab');focus.push(await page.evaluate(()=>({tag:document.activeElement?.tagName,text:document.activeElement?.textContent?.trim().slice(0,90)})));}
+    assert.ok(focus.some(f=>f.tag==='BUTTON'&&f.text.startsWith('وضع قارئ الشاشة:')),'Screen-reader mode must be keyboard reachable');
+    await reader.click();assert.equal(await reader.getAttribute('aria-pressed'),'false');
+    await input.getByRole('button',{name:'التقاط صورة ووصفها محليًا',exact:true}).click();
+    await page.waitForFunction(()=>document.querySelector('[data-testid=object-photo-input]')?.textContent.includes('صورة ثابتة'),{},{timeout:90000});
+    assert.ok(Number(await input.getAttribute('data-count'))>0);
+    assert.equal(await page.evaluate(()=>window.__tracks.every(t=>t.readyState==='ended')),true,'A captured-frame description must stop camera tracks');
+    await writeFile(resolve(out,'readiness-accessibility.json'),JSON.stringify({scope:'ACTUAL_DESKTOP_BROWSER_WITH_SOFTWARE_CAMERA_NOT_VOICEOVER_DEVICE',modelId,source,
+      controlsLabelled:true,readerModePressedVerified:true,duplicateVoiceSuppressed:true,keyboardReaderControlReachable:true,localTrialExportVerified:true,
+      trialModelSha256:trial.modelSha256,capturedFrameDescriptionVerified:true,continuousLiveAvailabilityNotGuaranteed:true,voiceOverOnIphoneTested:false,mediaUploads:uploads.length},null,2),{flag:'wx'});
+  }
   await page.screenshot({ path: resolve(out, "camera.png"), fullPage: true });
   if (modelId.startsWith("objects-basira-v")) {
     await page

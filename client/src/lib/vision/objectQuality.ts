@@ -59,6 +59,12 @@ export class ObjectQualityProvider implements VisionProvider {
       throw new Error("object_quality_hash_mismatch");
     const detector = await YoloXProvider.open(bytes, profile.threshold, profile.inputSize ?? 416);
     try {
+      // Compile/cache the stateless WASM graph before timestamping a real camera observation.
+      // Warm-up outputs are discarded; they are never detections, labels, training or telemetry frames.
+      const size=profile.inputSize??416,warmup=new OffscreenCanvas(size,size);
+      warmup.getContext('2d')!.fillRect(0,0,size,size);
+      try{for(let pass=0;pass<3;pass++)await detector.detect(warmup,performance.now());}
+      finally{warmup.width=warmup.height=0;}
       return new ObjectQualityProvider(
         detector,
         withMasks && profile.maskForStills
@@ -81,7 +87,7 @@ export class ObjectQualityProvider implements VisionProvider {
     if (!this.masks || !pixels) return detections;
     const masks = await this.masks.segment(pixels, detections);
     return detections.map(d => {
-      const proposed = masks.find(m => m.objectId === d.id);
+      const proposed = masks.find(m => m.objectId === (d.trackId ?? d.id));
       const color = proposed?.accepted
         ? analyzeObjectColor(pixels, d, detections, proposed.mask)
         : proposed

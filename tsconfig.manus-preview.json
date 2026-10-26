@@ -1,0 +1,5 @@
+{
+  "extends": "./tsconfig.json",
+  "include": ["scripts/manus-preview/server.ts", "server/objectQuality.ts", "shared/objectQuality.ts"],
+  "compilerOptions": { "target": "ES2022", "allowJs": true, "checkJs": false, "incremental": false }
+}

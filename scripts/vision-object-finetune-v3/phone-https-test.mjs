@@ -7,7 +7,7 @@ import assert from 'node:assert/strict';
 import {execFile} from 'node:child_process';
 import {validateCertificate} from '../vision-ai/camera-lab/tls-diagnostic.mjs';
 import {createPhoneBridge} from './phone-bridge.mjs';
-const origin=process.argv[2]??'http://127.0.0.1:4350',root=resolve(process.argv[3]),cert=resolve(root,'phone-tls-001');
+const origin=process.argv[2]??'http://127.0.0.1:4350',root=resolve(process.argv[3]),cert=resolve(root,process.argv[5]??'phone-tls-001');
 const ca=await readFile(resolve(cert,'root-ca.pem')),leaf=await readFile(resolve(cert,'server-cert.pem')),
  expected=validateCertificate({leaf,ca,host:'127.0.0.1'}),token=randomBytes(32).toString('hex'),
  agent=new https.Agent({ca,rejectUnauthorized:true});

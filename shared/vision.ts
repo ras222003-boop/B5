@@ -52,6 +52,7 @@ export interface VisionDetection {
 export type ObjectColorName='red'|'blue'|'green'|'yellow'|'orange'|'purple'|'pink'|'black'|'white'|'gray'|'brown'|'multicolor';
 export interface ObjectColorObservation {
   name:ObjectColorName|null;status:'ESTIMATED'|'MASK_SUPPORTED'|'UNCLEAR';
+    components?:ObjectColorName[];shade?:'LIGHT'|'DARK';
   reason:'BOX_ESTIMATE'|'ALIGNED_INSTANCE_MASK'|'LOW_LIGHT'|'CLIPPED_OR_REFLECTIVE'|'BACKGROUND_AMBIGUOUS'|'MIXED_OR_OCCLUDED'|'TOO_SMALL'|'WARMING_UP'|'CHANGING';
   supportFraction:number;samples:number;timestamp:number;stableFrames:number;calibrated:false;
 }
