@@ -83,6 +83,9 @@ try {
   );
   for (const id of ["original", "objects-yolox-tiny", "objects-basira-v3"]) {
     activeModel = id;
+    console.log(
+      JSON.stringify({ phase: "photo-start", id, hosted: Boolean(hosted) })
+    );
     await select.selectOption(id);
     const panel = page.getByTestId("object-photo-input");
     await panel.getByRole("checkbox").check();
@@ -106,6 +109,7 @@ try {
       wallPhotoMs: Date.now() - at,
       referenceAccuracy: null,
     });
+    console.log(JSON.stringify({ phase: "photo-passed", ...results.at(-1) }));
   }
   const blocked = await page.evaluate(async () => {
     const response = await fetch("/api/vision/describe", {

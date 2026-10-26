@@ -4,7 +4,7 @@ import { prefixModelPaths, validBase, previewModelLoading } from "./paths.mjs";
 import { previewReadUrl } from "./network-policy.mjs";
 import { rangedAssetFetch } from "./ranged-fetch.mjs";
 
-test("range transport reconstructs exact bytes with bounded concurrency, preserving WASM MIME and bypassing unrelated APIs", async () => {
+test("range transport reconstructs exact bytes with bounded concurrency, rejects wrong ranges and bypasses unrelated APIs", async () => {
   const source = new Uint8Array(4602795);
   for (let i = 0; i < source.length; i++) source[i] = i % 251;
   let active = 0,

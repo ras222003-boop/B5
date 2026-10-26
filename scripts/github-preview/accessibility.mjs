@@ -39,7 +39,7 @@ try {
     await page.goto(base.href + "#/" + route, {
       waitUntil: "domcontentloaded",
     });
-    await page.locator("main").waitFor();
+    await page.locator("main").first().waitFor();
     if (route === "navigation/vision")
       await page.locator("#basira-vision-model").waitFor();
     else
