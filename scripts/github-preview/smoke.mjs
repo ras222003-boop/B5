@@ -9,15 +9,23 @@ const [folder, photo, output] = process.argv.slice(2).map(x => resolve(x)),
     await readFile(resolve(folder, "static-build-receipt.json"))
   ),
   base = receipt.base;
+const hosted = process.argv[5] ? new URL(process.argv[5]) : null;
+if (
+  hosted &&
+  (hosted.protocol !== "https:" ||
+    hosted.hostname !== "ras222003-boop.github.io" ||
+    hosted.pathname !== base)
+)
+  throw Error("Use only the independent Pages HTTPS origin");
 const app = express();
 app.use((req, res, next) => {
   if (!["GET", "HEAD"].includes(req.method)) return void res.status(405).end();
   next();
 });
 app.use(base, express.static(resolve(folder, "site"), { dotfiles: "allow" }));
-const server = app.listen(4378, "127.0.0.1");
-await new Promise(r => server.once("listening", r));
-const origin = "http://127.0.0.1:4378";
+const server = hosted ? null : app.listen(4378, "127.0.0.1");
+if (server) await new Promise(r => server.once("listening", r));
+const origin = hosted ? hosted.origin : "http://127.0.0.1:4378";
 const browser = await chromium.launch({
     channel: "chrome",
     headless: true,
@@ -30,6 +38,8 @@ const browser = await chromium.launch({
   writes = [],
   escaped = [],
   results = [];
+let activeModel = null,
+  currentPage = null;
 try {
   const context = await browser.newContext({
     viewport: { width: 1280, height: 1000 },
@@ -58,6 +68,7 @@ try {
     };
   });
   const page = await context.newPage();
+  currentPage = page;
   page.on("pageerror", e => errors.push(e.message));
   await page.goto(origin + base + "#/navigation/vision", {
     waitUntil: "domcontentloaded",
@@ -71,6 +82,7 @@ try {
     )
   );
   for (const id of ["original", "objects-yolox-tiny", "objects-basira-v3"]) {
+    activeModel = id;
     await select.selectOption(id);
     const panel = page.getByTestId("object-photo-input");
     await panel.getByRole("checkbox").check();
@@ -84,7 +96,7 @@ try {
             ?.getAttribute("data-count")
         ) > 0,
       {},
-      { timeout: 90000 }
+      { timeout: hosted ? 210000 : 90000 }
     );
     const count = Number(await panel.getAttribute("data-count"));
     assert.ok(count > 0);
@@ -165,7 +177,7 @@ try {
     mediaWritesObserved: writes.length,
     outsidePreviewRequests: escaped.length,
     manusOriginalModified: false,
-    hostedHttpsTested: false,
+    hostedHttpsTested: Boolean(hosted),
     iphoneTested: false,
     voiceOverTested: false,
   };
@@ -178,6 +190,14 @@ try {
       {
         status: "FAILED",
         message: e.message,
+        activeModel,
+        results,
+        panelText: currentPage
+          ? await currentPage
+              .getByTestId("object-photo-input")
+              .innerText()
+              .catch(() => null)
+          : null,
         pageErrors: errors,
         escaped,
         writes,
@@ -191,6 +211,8 @@ try {
   throw e;
 } finally {
   await browser.close();
-  server.closeAllConnections();
-  await new Promise(r => server.close(r));
+  if (server) {
+    server.closeAllConnections();
+    await new Promise(r => server.close(r));
+  }
 }
