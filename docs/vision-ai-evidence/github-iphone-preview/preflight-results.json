@@ -94,15 +94,15 @@
   "iphoneTested": false,
   "voiceOverTested": false,
   "productionEligible": false,
-  "completedAtUtc": "2026-10-26T20:06:30.156Z",
+  "completedAtUtc": "2026-10-26T20:29:52.661Z",
   "previewBranch": "codex/basira-iphone-preview-handoff",
   "draftPr": "https://github.com/ras222003-boop/B5/pull/52",
-  "previewRuntimeSourceCommit": "8aa29a83d5820a4adee8f34fc224878c12489a7a",
-  "previewDeploymentCommit": "000ce9cc71e2d18faebc920b8aaa408d05058a4e",
+  "previewRuntimeSourceCommit": "0b6cc62e43f243a967bfc97b7afd589d7780a05d",
+  "previewDeploymentCommit": "78af15cc3e3a8f6487a3e2da9e2101353b762bc6",
   "previewUrl": "https://ras222003-boop.github.io/basira-iphone-research-preview/#/navigation/vision",
   "previewHostingRepository": "https://github.com/ras222003-boop/basira-iphone-research-preview",
-  "previewDeploymentRun": "https://github.com/ras222003-boop/basira-iphone-research-preview/actions/runs/40391371267",
-  "sourceCiRun": "https://github.com/ras222003-boop/B5/actions/runs/40391123657",
+  "previewDeploymentRun": "https://github.com/ras222003-boop/basira-iphone-research-preview/actions/runs/40395271804",
+  "sourceCiRun": "https://github.com/ras222003-boop/B5/actions/runs/40394852917",
   "sourceCiConclusion": "success",
   "previewPolicyTests": {
     "passed": 5,
@@ -111,9 +111,9 @@
   "hostedAssets": {
     "status": "VERIFIED_PUBLIC_HTTPS_STATIC_ASSETS",
     "url": "https://ras222003-boop.github.io/basira-iphone-research-preview/#/navigation/vision",
-    "sourceCommit": "8aa29a83d5820a4adee8f34fc224878c12489a7a",
+    "sourceCommit": "0b6cc62e43f243a967bfc97b7afd589d7780a05d",
     "verifiedFiles": 40,
-    "bytes": 142242982,
+    "bytes": 142243705,
     "strictTlsVerification": true,
     "models": [
       {
@@ -134,32 +134,33 @@
   },
   "hostedBrowserSmoke": {
     "scope": "STATIC_EXISTING_VISION_PAGE_REAL_MODELS_WITH_SOFTWARE_CAMERA_MICROPHONE_NOT_DEVICE_ACCURACY",
-    "sourceCommit": "8aa29a83d5820a4adee8f34fc224878c12489a7a",
+    "sourceCommit": "0b6cc62e43f243a967bfc97b7afd589d7780a05d",
     "developmentBuild": false,
     "base": "/basira-iphone-research-preview/",
     "results": [
       {
         "id": "original",
         "photoDetections": 4,
-        "wallPhotoMs": 9652,
+        "wallPhotoMs": 8143,
         "referenceAccuracy": null
       },
       {
         "id": "objects-yolox-tiny",
         "photoDetections": 9,
-        "wallPhotoMs": 13867,
+        "wallPhotoMs": 22469,
         "referenceAccuracy": null
       },
       {
         "id": "objects-basira-v3",
         "photoDetections": 9,
-        "wallPhotoMs": 26146,
+        "wallPhotoMs": 22017,
         "referenceAccuracy": null
       }
     ],
     "softwareCameraPipelineStarted": true,
     "softwareMicrophonePermissionAndTeardown": true,
     "allTracksEnded": true,
+    "localColourDiagnosticExportVerified": true,
     "blockedPostBeforeNetwork": true,
     "beaconDisabled": true,
     "nativeTranscriptionDisabled": true,
@@ -408,5 +409,83 @@
   },
   "iphoneTrialPerformed": true,
   "iphoneFullValidationPassed": false,
-  "iphoneTestedMeaning": "Complete structured device validation is not completed. Initial owner-reported trial is recorded separately; automated nested reports are desktop-only."
+  "iphoneTestedMeaning": "Complete structured device validation is not completed. Initial owner-reported trial is recorded separately; automated nested reports are desktop-only.",
+  "previousHostedVerification": {
+    "sourceCommit": "8aa29a83d5820a4adee8f34fc224878c12489a7a",
+    "hostedAssets": {
+      "status": "VERIFIED_PUBLIC_HTTPS_STATIC_ASSETS",
+      "url": "https://ras222003-boop.github.io/basira-iphone-research-preview/#/navigation/vision",
+      "sourceCommit": "8aa29a83d5820a4adee8f34fc224878c12489a7a",
+      "verifiedFiles": 40,
+      "bytes": 142242982,
+      "strictTlsVerification": true,
+      "models": [
+        {
+          "id": "objects-yolox-tiny",
+          "sha256": "427cc366d34e27ff7a03e2899b5e3671425c262ea2291f88bb942bc1cc70b0f7"
+        },
+        {
+          "id": "objects-basira-v3",
+          "sha256": "1f0e088797c8792329c0270151fc375193158f5406a94c9c214cfb3d72e54a38"
+        }
+      ],
+      "cameraHardwareTested": false,
+      "microphoneHardwareTested": false,
+      "arabicAudibleQualityTested": false,
+      "iphoneTested": false,
+      "voiceOverTested": false,
+      "originalManusModified": false
+    },
+    "hostedBrowserSmoke": {
+      "scope": "STATIC_EXISTING_VISION_PAGE_REAL_MODELS_WITH_SOFTWARE_CAMERA_MICROPHONE_NOT_DEVICE_ACCURACY",
+      "sourceCommit": "8aa29a83d5820a4adee8f34fc224878c12489a7a",
+      "developmentBuild": false,
+      "base": "/basira-iphone-research-preview/",
+      "results": [
+        {
+          "id": "original",
+          "photoDetections": 4,
+          "wallPhotoMs": 9652,
+          "referenceAccuracy": null
+        },
+        {
+          "id": "objects-yolox-tiny",
+          "photoDetections": 9,
+          "wallPhotoMs": 13867,
+          "referenceAccuracy": null
+        },
+        {
+          "id": "objects-basira-v3",
+          "photoDetections": 9,
+          "wallPhotoMs": 26146,
+          "referenceAccuracy": null
+        }
+      ],
+      "softwareCameraPipelineStarted": true,
+      "softwareMicrophonePermissionAndTeardown": true,
+      "allTracksEnded": true,
+      "blockedPostBeforeNetwork": true,
+      "beaconDisabled": true,
+      "nativeTranscriptionDisabled": true,
+      "rollbackToLite0": true,
+      "experimentalDefault": false,
+      "pageErrors": [],
+      "mediaWritesObserved": 0,
+      "outsidePreviewRequests": 0,
+      "manusOriginalModified": false,
+      "hostedHttpsTested": true,
+      "iphoneTested": false,
+      "voiceOverTested": false
+    }
+  },
+  "colourDiagnosticExport": {
+    "fields": ["frames[].objects[].colourReason", "colourUnclearReasonCounts"],
+    "allowlistOnly": true,
+    "pixelsSaved": false,
+    "masksSaved": false,
+    "hostedDownloadVerified": true,
+    "changesColourDecisions": false,
+    "sourceUnitTestsPassed": 4,
+    "sourceUnitTestsFailed": 0
+  }
 }
