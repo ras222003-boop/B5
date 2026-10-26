@@ -4,6 +4,7 @@ import { pathToFileURL } from "node:url";
 import { resolve } from "node:path";
 import { createHash } from "node:crypto";
 import { PINNED } from "./pins.mjs";
+import { PROTECTED_HOSTS } from "./protected-origins.mjs";
 export async function checkHttps(origin, username, password) {
   const url = new URL(origin);
   if (
@@ -11,7 +12,7 @@ export async function checkHttps(origin, username, password) {
     url.origin !== origin ||
     url.username ||
     url.password ||
-    url.hostname === "basira-ve3h8rof.manus.space"
+    PROTECTED_HOSTS.has(url.hostname)
   )
     throw Error("Provide the exact new preview HTTPS origin");
   const headers = {

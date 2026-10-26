@@ -3,9 +3,23 @@ import {
   TesseractOCRProvider,
 } from "../../../../client/src/lib/vision/providers";
 import { DEFAULT_VISION_CONFIG } from "../../../../client/src/lib/vision/config";
+import { SegFormerSceneProvider } from "../../../../client/src/lib/vision/modelProviders";
+import { detectionsFromSegmentation } from "../../../../client/src/lib/vision/segmentation";
 let detector,
   ocr,
+  segmenter,
   timestamp = 0;
+export async function analyzeLocalStairs(url) {
+  segmenter ??= await SegFormerSceneProvider.open();
+  const response = await fetch(url);
+  if (!response.ok) throw new Error('Local stairs image unavailable');
+  const grid = await segmenter.segment(await response.blob(), performance.now());
+  return detectionsFromSegmentation(grid)
+    .filter(d => d.type === 'STAIRS_UNCERTAIN')
+    .map(d => ({ classId: 2303,
+      box: [d.boundingBox.x, d.boundingBox.y, d.boundingBox.width, d.boundingBox.height],
+      score: d.confidence, confidenceKind: 'region_heuristic_not_calibrated' }));
+}
 export async function analyzeLocalImage(
   url,
   taxonomy,
@@ -82,5 +96,6 @@ export async function analyzeLocalImage(
 export async function closeLocalModels() {
   await detector?.close();
   await ocr?.close();
-  detector = ocr = null;
+  await segmenter?.close();
+  detector = ocr = segmenter = null;
 }

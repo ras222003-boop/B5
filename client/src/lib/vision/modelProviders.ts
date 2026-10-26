@@ -19,7 +19,9 @@ export class SegFormerSceneProvider implements SceneSegmentationProvider {
   static async open():Promise<SegFormerSceneProvider> {
     const {pipeline}=await localTransformers();
     const model=await pipeline('image-segmentation','Xenova/segformer-b0-finetuned-ade-512-512',{device:'wasm',dtype:'q8'});
-    return new SegFormerSceneProvider(frame=>model(frame,{subtask:'semantic'}),()=>model.dispose());
+    // Transformers.js 3.7.6 selects the semantic postprocessor automatically;
+    // passing subtask explicitly leaves an unbound function name in this version.
+    return new SegFormerSceneProvider(frame=>model(frame),()=>model.dispose());
   }
   async segment(frame:Blob,timestamp:number):Promise<SegmentationGrid> {
     const masks=await this.run(frame),width=64,height=48,labels=new Uint8Array(width*height);

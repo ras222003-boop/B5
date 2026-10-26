@@ -12,6 +12,7 @@ import { BatchReview } from "./batch-review.mjs";
 import { prepareApprovedStairs } from "./stairs-readiness.mjs";
 import { modelRuntime, assetMime } from "./model-runtime.mjs";
 import { reviewPlan } from "./review-plan.mjs";
+import { SelfTraining } from "./self-training.mjs";
 import {
   checkLocalRequest,
   localCookieName,
@@ -31,6 +32,7 @@ export async function createStudio(root, { port = 0 } = {}) {
   const workspace = await new StudioWorkspace(root).init();
   const batchReview = await new BatchReview(workspace).init();
   const runtime = await modelRuntime();
+  const selfTraining = await new SelfTraining(workspace).init();
   const sessions = new Map(),
     failures = new Map();
   let cached,
@@ -109,6 +111,7 @@ export async function createStudio(root, { port = 0 } = {}) {
           "/prereview-ui.mjs",
           "/label-draft.mjs",
           "/batch-review-ui.mjs",
+          "/self-training-ui.mjs",
           "/styles.css",
         ].includes(pathname)
       ) {
@@ -440,6 +443,20 @@ export async function createStudio(root, { port = 0 } = {}) {
         json(200, await workspace.experiments());
         return;
       }
+      if (pathname === "/api/self-training" && req.method === "GET") {
+        json(200, selfTraining.public());
+        return;
+      }
+      if (pathname.startsWith("/api/self-training/") && req.method === "POST") {
+        const p = await body();
+        if (pathname === "/api/self-training/start") json(200, await selfTraining.start(p, session.actor, runtime.manifest));
+        else if (pathname === "/api/self-training/submit") json(200, await selfTraining.submit(p, session.actor));
+        else if (pathname === "/api/self-training/finish") json(200, await selfTraining.finish(session.actor));
+        else if (pathname === "/api/self-training/stop") json(200, await selfTraining.stop("Stopped by local user", session.actor));
+        else if (pathname === "/api/self-training/fail") json(200, await selfTraining.fail(p.reason, session.actor));
+        else json(404, { error: "Not found" });
+        return;
+      }
       if (pathname === "/api/export-reviewed" && req.method === "POST") {
         const p = await body();
         json(200, await workspace.exportBatch(p.batch, session.actor));
@@ -576,11 +593,13 @@ export async function createStudio(root, { port = 0 } = {}) {
     server,
     workspace,
     url: `http://127.0.0.1:${server.address().port}`,
-    close: () =>
-      new Promise(ok => {
+    close: async () => {
+      await selfTraining.close();
+      return new Promise(ok => {
         server.closeAllConnections();
         server.close(ok);
-      }),
+      });
+    },
   };
 }
 

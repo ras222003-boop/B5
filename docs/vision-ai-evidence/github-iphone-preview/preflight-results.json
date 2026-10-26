@@ -1,0 +1,99 @@
+{
+  "schemaVersion": 1,
+  "originalOrigin": "https://basira-m7myneuo.manus.space",
+  "publicLandingStatus": 200,
+  "publicAuditScope": "GET_ONLY_PUBLIC_RESOURCES_NO_LOGIN_OR_MUTATION",
+  "originalVisionChunk": [
+    "/assets/Vision-BAimjXDZ.js"
+  ],
+  "originalFeatureStringFindings": {
+    "objectModelV3": false,
+    "localTrial": false,
+    "objectColour": false,
+    "previewSourceCommit": false
+  },
+  "originalModelApiStatus": {
+    "/api/health": 200,
+    "/api/readiness": 200,
+    "/api/vision/object-quality/manifest": 404,
+    "/api/vision/experimental-models": 404,
+    "/api/speech/capabilities": 404
+  },
+  "originalLite0Identity": "NOT_VERIFIED_PUBLIC_FETCH_TIMED_OUT",
+  "fullSourceCompared": false,
+  "configurationOrDatabaseSecretsCompared": false,
+  "deployedCommitVerified": false,
+  "originalModified": false,
+  "limitations": [
+    "Absence of bundle strings is not a full runtime or source comparison.",
+    "Public status endpoints do not disclose or verify the complete Manus configuration.",
+    "Read-only exported source/configuration names or a deployed Git SHA are required for full reconciliation."
+  ],
+  "studioUnitTests": {
+    "passed": 89,
+    "failed": 0
+  },
+  "driveBackupUnitTests": {
+    "passed": 4,
+    "failed": 0,
+    "skippedMissingVerifiedAgeTools": 2
+  },
+  "segformerLocalSmoke": {
+    "syntheticPixelsOnly": true,
+    "offlineLoaded": true,
+    "outputLabels": 3,
+    "trainingPerformed": false,
+    "notIncludedInHostedPreview": true
+  },
+  "vitest": {
+    "numTotalTests": 514,
+    "numPassedTests": 514,
+    "numFailedTests": 0,
+    "success": true
+  },
+  "previewDevelopmentSmoke": {
+    "scope": "STATIC_EXISTING_VISION_PAGE_REAL_MODELS_WITH_SOFTWARE_CAMERA_MICROPHONE_NOT_DEVICE_ACCURACY",
+    "sourceCommit": "c06f056ef56c181b77d952cb050e52eeafe9f152",
+    "developmentBuild": true,
+    "base": "/basira-iphone-research-preview/",
+    "results": [
+      {
+        "id": "original",
+        "photoDetections": 4,
+        "wallPhotoMs": 1278,
+        "referenceAccuracy": null
+      },
+      {
+        "id": "objects-yolox-tiny",
+        "photoDetections": 9,
+        "wallPhotoMs": 2923,
+        "referenceAccuracy": null
+      },
+      {
+        "id": "objects-basira-v3",
+        "photoDetections": 9,
+        "wallPhotoMs": 2414,
+        "referenceAccuracy": null
+      }
+    ],
+    "softwareCameraPipelineStarted": true,
+    "softwareMicrophonePermissionAndTeardown": true,
+    "allTracksEnded": true,
+    "blockedPostBeforeNetwork": true,
+    "beaconDisabled": true,
+    "nativeTranscriptionDisabled": true,
+    "rollbackToLite0": true,
+    "experimentalDefault": false,
+    "pageErrors": [],
+    "mediaWritesObserved": 0,
+    "outsidePreviewRequests": 0,
+    "manusOriginalModified": false,
+    "hostedHttpsTested": false,
+    "iphoneTested": false,
+    "voiceOverTested": false
+  },
+  "hostingScope": "Independent browser vision research preview only; Express/MySQL/account/exam backend not hosted by Pages",
+  "iphoneTested": false,
+  "voiceOverTested": false,
+  "productionEligible": false
+}

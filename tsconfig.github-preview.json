@@ -1,0 +1,8 @@
+{
+  "extends": "./tsconfig.manus-preview.json",
+  "include": [
+    "scripts/github-preview/entry.tsx",
+    "scripts/github-preview/boot.ts",
+    "client/src/types/*.d.ts"
+  ]
+}

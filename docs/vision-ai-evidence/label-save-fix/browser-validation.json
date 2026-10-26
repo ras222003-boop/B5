@@ -1,0 +1,38 @@
+{
+  "contentKind": "synthetic-test-only",
+  "status": "passed",
+  "checks": [
+    "Missing reason is explained inside the editor before any invalid POST.",
+    "Delayed stale poll cannot overwrite saved version; four clicks issue one POST; fresh reopen retains x=0.22.",
+    "A newly drawn object saves and reopens with server-owned unknown spatial evidence.",
+    "Disjoint external class and local box changes both persist.",
+    "Overlapping edits retain unsaved fields/reason, expose comparison and require explicit reconciliation.",
+    "400 Invalid class or bounding box is visible in-modal; draft survives and correction saves.",
+    "Genuine late 409 includes currentVersion, retains draft and saves successfully after reconciliation.",
+    "Chrome save/reopen after same-port server restart persists version, actor, timestamp and reason. Annotator cannot approve.",
+    "Separate fixture reviewer reviews the saved labels; rights/privacy remain pending; original and revision chain retained."
+  ],
+  "badRequest": {
+    "status": 400,
+    "body": {
+      "error": "Invalid class or bounding box",
+      "code": "VALIDATION_FAILED"
+    }
+  },
+  "conflict": {
+    "status": 409,
+    "body": {
+      "error": "Revision conflict; refresh before saving",
+      "code": "REVISION_CONFLICT",
+      "currentVersion": 8
+    }
+  },
+  "savedVersionBeforeIndependentReview": 10,
+  "historyRevisions": 11,
+  "positiveConsoleErrors": 0,
+  "positiveNetworkErrors": 0,
+  "pageErrors": 0,
+  "externalRequests": 0,
+  "originalUnchanged": true,
+  "actualHumanAccountsUsed": false
+}

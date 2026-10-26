@@ -390,16 +390,29 @@
           <div class="section-heading">
             <div>
               <h2>تجارب التدريب والنتائج</h2>
-              <p>سجلات المسار القائم، للقراءة والمراجعة.</p>
+              <p>مسار بحثي محلي مستقل وسجلات المسار الرسمي.</p>
             </div>
-            <span class="badge pending">بدء التدريب معطّل</span>
+            <span class="badge pending">لا نشر للإنتاج</span>
+          </div>
+          <div class="panel" id="self-training-panel">
+            <h3>التدريب الذاتي بالذكاء الاصطناعي</h3>
+            <p>افحص صورة واحدة تعليميًا، أو جرّب مجموعة صور مؤهلة. الوسوم الآلية غير معتمدة بشريًا. التدريب البحثي يستخدم وسوم السلالم البشرية المراجعة فقط، ويحتاج ثلاث مجموعات تطوير مستقلة على الأقل.</p>
+            <div class="button-row">
+              <label>النطاق<select id="self-mode"><option value="single">صورة واحدة تعليمية</option><option value="multi">صور متعددة</option></select></label>
+              <label>الصورة<select id="self-image"></select></label>
+              <label>الوكيل<select id="self-provider"><option value="studio-segformer">SegFormer المحلي للسلالم</option><option value="studio-local">كاشف الاستوديو المحلي العام</option><option value="codex" disabled>Codex — يتطلب موصلًا محليًا موثوقًا</option><option value="claude" disabled>Claude — يتطلب موصلًا محليًا موثوقًا</option><option value="local-compatible" disabled>نموذج محلي متوافق — موصل قيد الإعداد</option></select></label>
+              <label>الحد بالدقائق<input id="self-minutes" type="number" min="1" max="30" value="15"></label>
+              <label>خيوط CPU<input id="self-threads" type="number" min="1" max="4" value="2"></label>
+            </div>
+            <label class="check"><input id="self-authorize" type="checkbox">أفوّض هذه التجربة البحثية غير التجارية محليًا فقط على CPU ضمن الحد المحدد، مع حفظ نتائجها محليًا دون اعتماد أو نشر.</label>
+            <div class="button-row"><button id="self-start" class="primary">ابدأ التجربة البحثية</button><button id="self-stop" class="quiet" disabled>إيقاف التجربة</button><button id="self-download" class="quiet" disabled>تنزيل التقرير</button></div>
+            <p id="self-status" role="status" aria-live="polite"></p>
+            <pre id="self-report" class="research-report" tabindex="0"></pre>
           </div>
           <div class="panel">
-            <h3>الاعتماد أولًا</h3>
+            <h3>مسار الاعتماد الرسمي</h3>
             <p>
-              ابدأ التجارب لاحقًا من أدوات ml/vision بعد اعتماد البيانات
-              والأوزان والخطة وتجميد الاختبار. لا توفر هذه اللوحة زرًا يتجاوز
-              تلك البوابات.
+              يبقى مستقلًا ويتطلب اعتماد البيانات والأوزان والخطة وتجميد الاختبار.
             </p>
           </div>
           <div id="experiment-list"></div>

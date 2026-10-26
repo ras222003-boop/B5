@@ -934,6 +934,7 @@ summary {
   z-index: 2;
   box-shadow: 0 -3px 10px #0002;
 }
+.research-report { max-height: 360px; overflow: auto; direction: ltr; text-align: left; white-space: pre-wrap; }
 #batch-draft-diff {
   max-height: 260px;
   overflow: auto;

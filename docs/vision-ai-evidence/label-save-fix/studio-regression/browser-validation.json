@@ -1,0 +1,49 @@
+{
+  "at": "2026-10-16T11:14:11.725Z",
+  "contentKind": "synthetic-ui-only",
+  "checks": [
+    "12 synthetic images decode and display bounding boxes",
+    "Arabic search and class/source filters",
+    "UI saves versioned boxes; contributor cannot approve",
+    "existing importBundle adds new synthetic batch automatically without HTML regeneration",
+    "synthetic reference video decodes through authenticated ranged endpoint",
+    "experiment area has no training trigger",
+    "390px RTL viewport has no horizontal overflow",
+    "axe accessibility scan passes on library"
+  ],
+  "autoUpdate": {
+    "before": 12,
+    "after": 13,
+    "observedMs": 1583,
+    "timeoutMs": 10000,
+    "importStatus": "IMPORTED_PENDING_PRIVACY_AND_INDEPENDENT_LABEL_REVIEW",
+    "recreatedHtml": false
+  },
+  "externalRequests": [],
+  "pageErrors": [],
+  "accessibilityViolations": 0,
+  "screenshots": [
+    {
+      "path": "docs/vision-ai-evidence/label-save-fix/studio-regression/desktop-synthetic.png",
+      "sha256": "0dfc2183708a86541537fe051227f7ecf89c804397183faabb6f4c13dc3027c3",
+      "contentKind": "synthetic-ui-only"
+    },
+    {
+      "path": "docs/vision-ai-evidence/label-save-fix/studio-regression/editor-synthetic.png",
+      "sha256": "344a54beb4b6a8ec59f09cfdfa523d29cf498efe93b754473b09a0998192734f",
+      "contentKind": "synthetic-ui-only"
+    },
+    {
+      "path": "docs/vision-ai-evidence/label-save-fix/studio-regression/experiments-synthetic.png",
+      "sha256": "1f1e5842f914192c4bb0e93df740c5cf2ae25799cd677b8837bc1065550fa7a8",
+      "contentKind": "synthetic-ui-only"
+    },
+    {
+      "path": "docs/vision-ai-evidence/label-save-fix/studio-regression/mobile-synthetic.png",
+      "sha256": "9e50e6c0ba337ddc7a1b975bb69a88addb4db3e5a415dde2f3bb8c42a378aeec",
+      "contentKind": "synthetic-ui-only"
+    }
+  ],
+  "trainingPerformed": false,
+  "limitation": "All identities, rights approvals, images and video are fictional fixtures. An import flag of real is required by the existing file importer, and is not a claim that fixture content is real training data."
+}
