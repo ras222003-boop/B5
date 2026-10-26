@@ -33,6 +33,7 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: node scripts/metric-depth/verify-artifact.mjs
       - run: pnpm check
+      - run: pnpm exec tsc --noEmit -p tsconfig.manus-preview.json
       - run: pnpm test
       - run: pnpm test:perception-metrics
       - run: pnpm test:vision-ai

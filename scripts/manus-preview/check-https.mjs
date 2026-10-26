@@ -2,6 +2,8 @@
 import { writeFile } from "node:fs/promises";
 import { pathToFileURL } from "node:url";
 import { resolve } from "node:path";
+import { createHash } from "node:crypto";
+import { PINNED } from "./pins.mjs";
 export async function checkHttps(origin, username, password) {
   const url = new URL(origin);
   if (
@@ -56,10 +58,29 @@ export async function checkHttps(origin, username, password) {
     iphoneTested: false,
     voiceOverTested: false,
     privateMediaUploaded: false,
+    onnxAssetsHashVerified: [],
   };
   for (const id of results.modelIds)
     if (!["objects-yolox-tiny", "objects-basira-v3"].includes(id))
       throw Error("Restricted model exposed");
+  for (const p of models.profiles ?? []) {
+    const path =
+      p.id === "objects-yolox-tiny"
+        ? "/api/vision/object-quality/assets/yolox/yolox_tiny.onnx"
+        : "/api/vision/object-quality/models/" +
+          p.id +
+          "/assets/yolox/yolox_tiny.onnx";
+    const r = await get(path);
+    if (!r.ok) throw Error("ONNX asset unavailable");
+    const bytes = Buffer.from(await r.arrayBuffer());
+    if (
+      bytes.length > 25_000_000 ||
+      createHash("sha256").update(bytes).digest("hex") !== PINNED[p.id] ||
+      p.modelSha256 !== PINNED[p.id]
+    )
+      throw Error("ONNX identity mismatch");
+    results.onnxAssetsHashVerified.push(p.id);
+  }
   for (const path of [
     "/vision/onnx/ort-wasm-simd-threaded.wasm",
     "/vision/mediapipe/vision_wasm_module_internal.wasm",

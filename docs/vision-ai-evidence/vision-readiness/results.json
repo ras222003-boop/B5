@@ -159,11 +159,11 @@
     "paidSynthesisRequested": false
   },
   "softwareTests": {
-    "total": 509,
-    "passed": 509,
+    "total": 514,
+    "passed": 514,
     "failed": 0,
     "success": true,
-    "note": "Before the additional five isolated Manus preview boundary tests, which passed separately.",
+    "note": "514 tests passed on the clean committed preview checkout, including five preview boundary tests.",
     "browserActualOnnxTestPassed": true,
     "nonVacuousSpeechSubmissionVerified": true,
     "sourcePixelVariationExportVerified": true,
@@ -178,8 +178,110 @@
     "blocker": "Shared replay URL is readable, but no authenticated editable Manus project is available; browser runtime failed initialization even after reset.",
     "databaseConnected": false,
     "originalProjectChanged": false,
-    "localPreviewBoundaryTestsPassed": 5
+    "localPreviewBoundaryTestsPassed": 5,
+    "builtSoftwareSmoke": {
+      "scope": "BUILT_PAGE_REAL_ONNX_WITH_LOOPBACK_SOFTWARE_CAMERA_AND_MICROPHONE_NOT_MANUS_HTTPS_OR_IPHONE",
+      "sourceCommit": "7c7405a1932211516be6abc79d87aec48ce116d5",
+      "results": [
+        {
+          "id": "objects-yolox-tiny",
+          "photoDetections": 9,
+          "maskEnabled": false,
+          "actualModelSha256": "427cc366d34e27ff7a03e2899b5e3671425c262ea2291f88bb942bc1cc70b0f7"
+        },
+        {
+          "id": "objects-basira-v3",
+          "photoDetections": 9,
+          "maskEnabled": false,
+          "actualModelSha256": "1f0e088797c8792329c0270151fc375193158f5406a94c9c214cfb3d72e54a38"
+        }
+      ],
+      "softwareCameraPipelineStarted": true,
+      "microphoneApiWithSoftwareDevice": {
+        "tracks": 1,
+        "allEnded": true,
+        "isSecureContext": true
+      },
+      "rollbackToLite0": true,
+      "experimentalDefault": false,
+      "privateMediaUploads": 0,
+      "pageErrors": [],
+      "externalRequestsBlocked": 0,
+      "databaseConnected": false,
+      "cloudInferenceEnabled": false,
+      "testTransportEmulatesHttpsOrigin": true,
+      "manusDeploymentTested": false,
+      "trustedPublicHttpsTested": false,
+      "iphoneTested": false,
+      "voiceOverTested": false
+    }
   },
+  "motion": [
+    {
+      "model": "yolox-tiny",
+      "clip": "waiting-for-bus",
+      "frames": 13,
+      "observations": 7,
+      "uniqueIds": 3,
+      "ambiguous": 0,
+      "tracked": 4,
+      "colorDecisions": 0,
+      "colorAbstentions": 7,
+      "speech": 1,
+      "repeatedExactSpeech": 0,
+      "medianMs": 561,
+      "identityAccuracy": null,
+      "referenceStatus": "independent_frame_identity_annotations_pending"
+    },
+    {
+      "model": "yolox-tiny",
+      "clip": "london-bus-2014",
+      "frames": 13,
+      "observations": 31,
+      "uniqueIds": 12,
+      "ambiguous": 2,
+      "tracked": 18,
+      "colorDecisions": 0,
+      "colorAbstentions": 31,
+      "speech": 2,
+      "repeatedExactSpeech": 0,
+      "medianMs": 548.6000000089407,
+      "identityAccuracy": null,
+      "referenceStatus": "independent_frame_identity_annotations_pending"
+    },
+    {
+      "model": "objects-basira-v3",
+      "clip": "waiting-for-bus",
+      "frames": 13,
+      "observations": 7,
+      "uniqueIds": 3,
+      "ambiguous": 0,
+      "tracked": 4,
+      "colorDecisions": 0,
+      "colorAbstentions": 7,
+      "speech": 1,
+      "repeatedExactSpeech": 0,
+      "medianMs": 564.5,
+      "identityAccuracy": null,
+      "referenceStatus": "independent_frame_identity_annotations_pending"
+    },
+    {
+      "model": "objects-basira-v3",
+      "clip": "london-bus-2014",
+      "frames": 13,
+      "observations": 31,
+      "uniqueIds": 12,
+      "ambiguous": 2,
+      "tracked": 18,
+      "colorDecisions": 0,
+      "colorAbstentions": 31,
+      "speech": 2,
+      "repeatedExactSpeech": 0,
+      "medianMs": 582.9000000059605,
+      "identityAccuracy": null,
+      "referenceStatus": "independent_frame_identity_annotations_pending"
+    }
+  ],
   "iphoneTested": false,
   "voiceOverTested": false,
   "navigationEligible": false,

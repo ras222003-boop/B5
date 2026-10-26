@@ -5,7 +5,7 @@ import { readFile } from "node:fs/promises";
 import { timingSafeEqual, createHash } from "node:crypto";
 import { pathToFileURL } from "node:url";
 import { objectQualityHandler } from "../../server/objectQuality";
-import { PINNED } from "./prepare-models.mjs";
+import { PINNED } from "./pins.mjs";
 const hash = (b: Buffer) => createHash("sha256").update(b).digest("hex");
 const same = (a: string, b: string) => {
   const x = Buffer.from(a),
@@ -178,9 +178,13 @@ export async function createPreviewApp({
       )
     )
       return void res.status(404).end("Unregistered preview asset");
+    const resourceUrl =
+      req.path === "/api/vision/object-quality/knowledge"
+        ? "/api/vision/object-quality/models/objects-basira-v3/knowledge"
+        : req.url;
     await raw(
       {
-        url: req.url,
+        url: resourceUrl,
         method: req.method,
         headers: { host: "localhost" },
         socket: { remoteAddress: "127.0.0.1" },
@@ -192,13 +196,11 @@ export async function createPreviewApp({
   app.use(
     "/api",
     (_req, res) =>
-      void res
-        .status(503)
-        .json({
-          error: "ISOLATED_VISION_PREVIEW",
-          databaseConnected: false,
-          cloudServicesEnabled: false,
-        })
+      void res.status(503).json({
+        error: "ISOLATED_VISION_PREVIEW",
+        databaseConnected: false,
+        cloudServicesEnabled: false,
+      })
   );
   app.use((req, res, next) => {
     if (

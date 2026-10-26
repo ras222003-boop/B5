@@ -3,18 +3,19 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { resolve, dirname } from "node:path";
 import { createHash } from "node:crypto";
 import { pathToFileURL } from "node:url";
-export const PINNED = {
-  "objects-yolox-tiny":
-    "427cc366d34e27ff7a03e2899b5e3671425c262ea2291f88bb942bc1cc70b0f7",
-  "objects-basira-v3":
-    "1f0e088797c8792329c0270151fc375193158f5406a94c9c214cfb3d72e54a38",
-};
+import { PINNED } from "./pins.mjs";
 const sha = b => createHash("sha256").update(b).digest("hex");
 // Preserve required public author/source attributions, redact local machine paths from research metadata.
 const publicMetadata = value => {
-  if (typeof value === 'string') return /^(?:[a-z]:[\\/]|\\\\|\/(?:Users|home|tmp|mnt)\/)/i.test(value) ? '[local artifact path redacted]' : value;
+  if (typeof value === "string")
+    return /^(?:[a-z]:[\\/]|\\\\|\/(?:Users|home|tmp|mnt)\/)/i.test(value)
+      ? "[local artifact path redacted]"
+      : value;
   if (Array.isArray(value)) return value.map(publicMetadata);
-  if (value && typeof value === 'object') return Object.fromEntries(Object.entries(value).map(([k,v])=>[k,publicMetadata(v)]));
+  if (value && typeof value === "object")
+    return Object.fromEntries(
+      Object.entries(value).map(([k, v]) => [k, publicMetadata(v)])
+    );
   return value;
 };
 export async function prepareModels(source, destination, sourceCommit) {
@@ -96,7 +97,16 @@ export async function prepareModels(source, destination, sourceCommit) {
         throw Error("Lineage/knowledge mismatch");
       pending.push({
         path: folder + "basira-knowledge.json",
-        bytes: Buffer.from(JSON.stringify({...publicMetadata(JSON.parse(knowledge.toString())),previewLocalPathsRedacted:true},null,2)),
+        bytes: Buffer.from(
+          JSON.stringify(
+            {
+              ...publicMetadata(JSON.parse(knowledge.toString())),
+              previewLocalPathsRedacted: true,
+            },
+            null,
+            2
+          )
+        ),
       });
       clean.knowledgeSha256 = sha(pending.at(-1).bytes);
     }

@@ -8,7 +8,7 @@ mask=read(root/'mask-evaluation-test-native-box.json')
 colour=read(root/'mask-evaluation-colour-diagnostic-native-box.json')
 camera=read(root/'camera-asus-user-scene-003-headful.json')
 voice=read(root/'local-voice-headful.json')
-tests=read(root/'vitest-final-509.json')
+tests=read(root/'vitest-preview-final-514.json')
 browser=read(root/'browser-verified/browser-validation.json')
 access=read(root/'browser-verified/readiness-accessibility.json')
 summary=dict(schemaVersion=1,baseCommit='47ea29e78c1c3d80006d04997c4c5a2a4d97998b',
@@ -24,12 +24,14 @@ summary=dict(schemaVersion=1,baseCommit='47ea29e78c1c3d80006d04997c4c5a2a4d97998
   caveat='Headless feed was unchanged earlier. A later visible Chrome trial changed; the underlying cause is not established. Text-only user reference is not frame/bbox ground truth.'),
  localSpeech={k:voice[k] for k in ['status','elapsedMs','headless','localArabicVoices','audibleIntelligibilityVerified','microphoneUsed','audioSaved','paidSynthesisRequested']},
  softwareTests=dict(total=tests['numTotalTests'],passed=tests['numPassedTests'],failed=tests['numFailedTests'],success=tests['success'],
-  note='Before the additional five isolated Manus preview boundary tests, which passed separately.',
+  note='514 tests passed on the clean committed preview checkout, including five preview boundary tests.',
   browserActualOnnxTestPassed=True,nonVacuousSpeechSubmissionVerified=True,sourcePixelVariationExportVerified=True,keyboardAndReaderControlsVerified=True,
   softwareCameraIsNotHardwareTrial=True),
  preview=dict(branch='codex/basira-vision-readiness-v1',projectCopyCreated=False,remoteDeploymentPerformed=False,httpsUrl=None,
   blocker='Shared replay URL is readable, but no authenticated editable Manus project is available; browser runtime failed initialization even after reset.',
-  databaseConnected=False,originalProjectChanged=False,localPreviewBoundaryTestsPassed=5),
+  databaseConnected=False,originalProjectChanged=False,localPreviewBoundaryTestsPassed=5,
+  builtSoftwareSmoke=read(root/'manus-preview-smoke-002.json')),
+ motion=[r['summary'] for r in read(root/'motion-comparison.json')['results']],
  iphoneTested=False,voiceOverTested=False,navigationEligible=False,productionEligible=False)
 # Frame fingerprints/timing are local diagnostics, not identifying camera frames or publishing private media.
 for when in ['before','after']:
