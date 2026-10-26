@@ -65,6 +65,7 @@ export function objectQualityHandler({
       const trainingRoots = {
         "objects-basira-v1": "finetuned",
         "objects-basira-v2": "finetuned-v2",
+        "objects-basira-v3": "finetuned-v3",
       } as const;
       const modelId = (
         Object.keys(trainingRoots) as (keyof typeof trainingRoots)[]
@@ -76,9 +77,23 @@ export function objectQualityHandler({
       const profile = JSON.parse(
         await readFile(resolve(activeRoot, "manifest.json"), "utf8")
       );
+      const validLineage = async (candidate: typeof profile, folder: string) => {
+        if (candidate.id !== "objects-basira-v3") return true;
+        const base = await realpath(root), file = await realpath(resolve(folder, "yolox/LINEAGE.json"));
+        const rel = relative(base, file);
+        if (rel.startsWith("..") || isAbsolute(rel)) return false;
+        const bytes = await readFile(file);
+        if (bytes.length > 100_000 || hash(bytes) !== candidate.lineageEvidenceSha256) return false;
+        const lineage = JSON.parse(bytes.toString("utf8"));
+        return lineage.modelSha256 === candidate.modelSha256 &&
+          lineage.initialTinySha256 === "9de513de589ac98bb92d3bca53b5af7b9acfa9b0bacb831f7999d0f7afaee8f0" &&
+          lineage.usedRestrictedSources === false && lineage.usedV1OrV2WeightsOrTeacher === false &&
+          lineage.commercialTrainingAllowed === true;
+      };
       if (
         !validObjectQualityProfile(profile) ||
-        profile.id !== (modelId ?? "objects-yolox-tiny")
+        profile.id !== (modelId ?? "objects-yolox-tiny") ||
+        !(await validLineage(profile, activeRoot))
       )
         throw new Error("Unqualified object profile");
       if (url.pathname === prefix + "/manifest") {
@@ -93,7 +108,8 @@ export function objectQualityHandler({
                 "utf8"
               )
             );
-            if (validObjectQualityProfile(trained) && trained.id === id)
+            if (validObjectQualityProfile(trained) && trained.id === id &&
+                await validLineage(trained, resolve(root, trainingRoots[id])))
               profiles.push(trained);
           } catch {
             /* An absent/unqualified training run cannot hide the previous model. */
@@ -101,17 +117,18 @@ export function objectQualityHandler({
         send(200, { enabled: true, profile, profiles });
         return;
       }
-      if (url.pathname === prefix + "/knowledge") {
-        const trained = JSON.parse(
+      if (url.pathname === prefix + "/knowledge" ||
+          (modelId === "objects-basira-v3" && url.pathname === activePrefix + "/knowledge")) {
+        const trained = modelId === "objects-basira-v3" ? profile : JSON.parse(
           await readFile(resolve(root, "finetuned-v2/manifest.json"), "utf8")
         );
         if (
           !validObjectQualityProfile(trained) ||
-          trained.id !== "objects-basira-v2"
+          !["objects-basira-v2","objects-basira-v3"].includes(trained.id)
         )
           throw new Error("Knowledge model unavailable");
         const file = await realpath(
-          resolve(root, "finetuned-v2/basira-knowledge.json")
+          resolve(root, trained.id === "objects-basira-v3" ? "finetuned-v3/basira-knowledge.json" : "finetuned-v2/basira-knowledge.json")
         );
         const rel = relative(await realpath(root), file);
         if (rel.startsWith("..") || isAbsolute(rel))

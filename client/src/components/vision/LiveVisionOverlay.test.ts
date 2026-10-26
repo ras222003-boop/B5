@@ -5,24 +5,24 @@ import type {HorizontalDirection,VisionDetection,VisionObjectType} from '@shared
 import type {AutoMeterSnapshot} from '@/lib/vision/autoMeter';
 import {LiveVisionOverlay} from './LiveVisionOverlay';
 
-const detection={id:'one',type:'CHAIR',horizontalDirection:'FRONT',source:'OBJECT_DETECTOR',
+const detection={id:'one',type:'CHAIR',cocoClass:'chair',confidence:.9,horizontalDirection:'FRONT',source:'OBJECT_DETECTOR',
   boundingBox:{x:.2,y:.2,width:.3,height:.4}} as VisionDetection;
 const frame={frameId:'f1',capturedAt:1000,width:640,height:480,detections:[detection]};
 const snapshot={frameId:'f1',capturedAt:1000,nativeSource:'MONOCULAR_METRIC',measurements:[
   {id:'one',frameId:'f1',distanceMeters:1.2},
 ]} as AutoMeterSnapshot;
 const props={frame,snapshot,now:1500,names:{CHAIR:'كرسي'} as Record<VisionObjectType,string>,
-  directions:{FRONT:'أمامك'} as Record<HorizontalDirection,string>,metersLabel:'متر',experimentalLabel:'تقدير تجريبي',rtl:true};
+  directions:{FRONT:'أمام الكاميرا'} as Record<HorizontalDirection,string>,metersLabel:'متر',experimentalLabel:'تقدير تجريبي',rtl:true};
 
 describe('SVG camera overlay',()=>{
   it('renders object, direction, and only a same-frame experimental distance',()=>{
     const visible=renderToStaticMarkup(createElement(LiveVisionOverlay,props));
-    expect(visible).toContain('كرسي أمامك');
+    expect(visible).toContain('كرسي · 90% أمام الكاميرا');
     expect(visible).toContain('1.20');
     expect(visible).toContain('تقدير تجريبي');
     expect(visible).toContain('viewBox="0 0 640 480"');
     const mismatched=renderToStaticMarkup(createElement(LiveVisionOverlay,{...props,snapshot:{...snapshot,frameId:'f2'}}));
-    expect(mismatched).toContain('كرسي أمامك');
+    expect(mismatched).toContain('كرسي · 90% أمام الكاميرا');
     expect(mismatched).not.toContain('1.20');
   });
   it('keeps a labelled pinned measurement on its captured frame, then expires it',()=>{

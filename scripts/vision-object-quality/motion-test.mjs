@@ -26,7 +26,9 @@ try {
   );
   const page = await context.newPage();
   await page.goto(origin + "/navigation/vision");
-  for (const model of process.argv[4] === "finetune-v2"
+  for (const model of process.argv[4] === "finetune-v3"
+    ? ["yolox-tiny", "objects-basira-v1", "objects-basira-v2", "objects-basira-v3"]
+    : process.argv[4] === "finetune-v2"
     ? ["yolox-tiny", "objects-basira-v1", "objects-basira-v2"]
     : process.argv[4] === "finetune"
       ? ["yolox-tiny", "objects-basira-v1"]

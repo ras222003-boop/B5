@@ -6,12 +6,15 @@ import numpy as np
 from knowledge import evaluate_rows, _iou
 
 root=Path(sys.argv[1]).resolve()
+v3=len(sys.argv)>2 and sys.argv[2]=='finetune-v3'
+model_names=['lite0','yolox-tiny','objects-basira-v1','objects-basira-v2']+(['objects-basira-v3'] if v3 else [])
+selected_name='objects-basira-v3' if v3 else 'objects-basira-v2'
 read=lambda p:json.loads(Path(p).read_text(encoding='utf-8'))
 assert read(root/'selection-lock.json')['finalUsedForSelection'] is False
 manifest=read(root/'manifest.json');rows=[r for r in manifest['samples'] if r['split']=='test']
 names=[c['name'] for c in manifest['categories']]
 models={};matched={};grouped={}
-for name in ['lite0','yolox-tiny','objects-basira-v1','objects-basira-v2']:
+for name in model_names:
     predictions={r['id']:r for r in read(root/'results/test'/f'{name}.json')['predictions']}
     matched[name]=set();sizes=defaultdict(Counter);reasons=Counter();fps=Counter();examples=[]
     for row in rows:
@@ -59,19 +62,20 @@ deltas=[]
 for _ in range(10000):
     chosen=[groups[i] for groups in sources.values() for i in rng.integers(0,len(groups),size=len(groups))]
     metrics=[]
-    for name in ['yolox-tiny','objects-basira-v2']:
+    for name in ['yolox-tiny',selected_name]:
         totals={k:sum(grouped[name][g][k] for g in chosen) for k in ['tp','fp','fn']}
         metrics.append([totals['tp']/(totals['tp']+totals['fn']),2*totals['tp']/(2*totals['tp']+totals['fp']+totals['fn'])])
     deltas.append(np.subtract(metrics[1],metrics[0]))
 ci=np.quantile(deltas,[.025,.975],axis=0)
-diagnostic=dict(models=models,matchedGainsVsTiny=len(matched['objects-basira-v2']-matched['yolox-tiny']),
-    matchedLossesVsTiny=len(matched['yolox-tiny']-matched['objects-basira-v2']),
+diagnostic=dict(models=models,selectedModel=selected_name,matchedGainsVsTiny=len(matched[selected_name]-matched['yolox-tiny']),
+    matchedLossesVsTiny=len(matched['yolox-tiny']-matched[selected_name]),
     pairedSceneBootstrap=dict(replicates=10000,seed=20261026,sourceStratified=True,
         recallDelta95=ci[:,0].tolist(),f1Delta95=ci[:,1].tolist(),
-        limitation='Descriptive small-cohort interval, especially only three YCB scenes; not population or safety qualification'),
+        sourcesWithUnestimableSceneUncertainty=[s for s,g in sources.items() if len(g)<2],
+        limitation='Descriptive only: single-component sources cannot estimate source-domain uncertainty; no population or safety qualification'),
     finalUsedForSelection=False,threshold=.5,
     sizeMeaning='COCO-style bbox area in original pixels, not segmentation area; bins are diagnostic, no retuning',
     reasonMeaning='Output-based diagnostics, not a proven physical cause; low-threshold proposals are limited to top100')
 (root/'final-errors.json').write_text(json.dumps(diagnostic,indent=2),encoding='utf-8')
 print(json.dumps(dict(gained=diagnostic['matchedGainsVsTiny'],lost=diagnostic['matchedLossesVsTiny'],
-    bootstrap=diagnostic['pairedSceneBootstrap'],v2=models['objects-basira-v2'])))
+    bootstrap=diagnostic['pairedSceneBootstrap'],selected=models[selected_name])))

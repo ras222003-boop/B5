@@ -10,12 +10,16 @@ const origin = process.argv[2] ?? "http://127.0.0.1:4350",
     process.argv[3] ?? "../.vision-test-fixtures/object-quality-002"
   ),
   stage = process.argv[4] ?? "validation",
-  fineTuneV2 = process.argv[5] === "finetune-v2",
+  fineTuneV3 = process.argv[5] === "finetune-v3",
+  fineTuneV2 = fineTuneV3 || process.argv[5] === "finetune-v2",
   fineTune = fineTuneV2 || process.argv[5] === "finetune";
 const digest = x => createHash("sha256").update(x).digest("hex"),
   json = async p => JSON.parse(await readFile(p, "utf8"));
 const manifest = await json(resolve(root, "manifest.json")),
   cohortLock = await json(resolve(root, "cohort-lock.json"));
+const v3Selection = fineTuneV3
+  ? (await json(resolve(root,"training/selection-lock.json"))).selected
+  : null;
 if (
   digest(await readFile(resolve(root, "manifest.json"))) !==
   cohortLock.manifestSha256
@@ -43,6 +47,7 @@ const configs = fineTune
       { id: "yolox-tiny", model: "yolox-tiny" },
       { id: "objects-basira-v1", model: "yolox-tiny" },
       ...(fineTuneV2 ? [{ id: "objects-basira-v2", model: "yolox-tiny" }] : []),
+      ...(fineTuneV3 ? [{ id:"objects-basira-v3",model:"yolox-tiny",inputSize:v3Selection.inputSize,threshold:v3Selection.selectedThreshold }] : []),
     ]
   : [
       { id: "lite0-cap12", model: "lite0", cap: 12 },
@@ -74,8 +79,10 @@ for (const config of configs) {
     continue;
   } catch {}
   const modelPath =
-    config.id === "objects-basira-v2"
-      ? resolve(root, "training/basira_objects_v2.onnx")
+    config.id === "objects-basira-v3"
+      ? resolve(root,"training/basira_objects_v3.onnx")
+      : config.id === "objects-basira-v2"
+      ? resolve(root, fineTuneV3 ? "../object-finetune-v2-001/training/basira_objects_v2.onnx" : "training/basira_objects_v2.onnx")
       : config.id === "objects-basira-v1"
         ? resolve(
             root,
@@ -132,7 +139,7 @@ for (const config of configs) {
         const bytes = Uint8Array.from(atob(base64), c => c.charCodeAt(0)),
           started = performance.now();
         window.__qualityProvider = config.model.startsWith("yolox")
-          ? await YoloXProvider.open(bytes, 0.01)
+          ? await YoloXProvider.open(bytes, 0.01, config.inputSize ?? 416)
           : await MediaPipeVisionProvider.open(
               { ...DEFAULT_VISION_CONFIG, detectionThreshold: 0.01 },
               bytes,
@@ -149,7 +156,7 @@ for (const config of configs) {
       { base64: bytes.toString("base64"), config }
     );
     const loadedMemory = await memory(server.process().pid);
-    if (loadedMemory.rssMiB > 2048)
+    if (loadedMemory.rssMiB > (fineTuneV3 ? 3072 : 2048))
       throw new Error("Browser memory budget exceeded");
     const predictions = [];
     for (const row of rows) {

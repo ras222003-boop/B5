@@ -72,6 +72,32 @@ async function request(
   return result;
 }
 describe("local research model boundary", () => {
+  it("rejects a renamed restricted V3 lineage and keeps Tiny available", async () => {
+    const root = await fixture(), handler = objectQualityHandler({enabled:true,root});
+    const baseProfile = JSON.parse(await readFile(resolve(root,"manifest.json"),"utf8"));
+    const folder = resolve(root,"finetuned-v3"); await mkdir(resolve(folder,"yolox"),{recursive:true});
+    const lineage = {modelSha256:baseProfile.modelSha256,initialTinySha256:"9de513de589ac98bb92d3bca53b5af7b9acfa9b0bacb831f7999d0f7afaee8f0",
+      usedRestrictedSources:false,usedV1OrV2WeightsOrTeacher:false,commercialTrainingAllowed:true};
+    const bytes = Buffer.from(JSON.stringify(lineage));
+    const profile = {...baseProfile,id:"objects-basira-v3",inputSize:640,threshold:.65,
+      commercialTrainingAllowed:true,knowledgeSha256:"b".repeat(64),
+      lineageEvidenceSha256:createHash("sha256").update(bytes).digest("hex"),
+      trainingEvidence:{checkpointSha256:"c".repeat(64),optimizerSteps:1,epochs:1,onnxValidationSha256:"d".repeat(64),testEvaluationSha256:"e".repeat(64),finalUsedForSelection:false}};
+    expect(validObjectQualityProfile(profile)).toBe(true);
+    expect(validObjectQualityProfile({...profile,researchOnlyData:true})).toBe(false);
+    expect(validObjectQualityProfile({...profile,maskForStills:true,maskQualification:"QUALIFIED_STILLS_ONLY"})).toBe(false);
+    await writeFile(resolve(folder,"manifest.json"),JSON.stringify(profile));
+    let result=JSON.parse((await request(handler,"/api/vision/object-quality/manifest")).body);
+    expect(result.profiles.map((p:{id:string})=>p.id)).toEqual(["objects-yolox-tiny"]);
+    await writeFile(resolve(folder,"yolox/LINEAGE.json"),bytes);
+    result=JSON.parse((await request(handler,"/api/vision/object-quality/manifest")).body);
+    expect(result.profiles.map((p:{id:string})=>p.id)).toContain("objects-basira-v3");
+    const restricted=Buffer.from(JSON.stringify({...lineage,usedV1OrV2WeightsOrTeacher:true}));
+    await writeFile(resolve(folder,"yolox/LINEAGE.json"),restricted);
+    await writeFile(resolve(folder,"manifest.json"),JSON.stringify({...profile,lineageEvidenceSha256:createHash("sha256").update(restricted).digest("hex")}));
+    result=JSON.parse((await request(handler,"/api/vision/object-quality/manifest")).body);
+    expect(result.profiles.map((p:{id:string})=>p.id)).toEqual(["objects-yolox-tiny"]);
+  });
   it("serves hash-bound Basira knowledge and rejects V2 without its research/knowledge evidence", async () => {
     const root = await fixture(),
       handler = objectQualityHandler({ enabled: true, root });
