@@ -1,5 +1,6 @@
 /** Preview build only: prefix absolute model/API literals, including worker modules. Production sources are unchanged. */
 import ts from "typescript";
+import { resolve } from "node:path";
 export function validBase(base) {
   if (!/^\/[a-zA-Z0-9-]+\/$/.test(base))
     throw Error("Explicit single-project preview base required");
@@ -43,6 +44,17 @@ export function previewPathPlugin(base) {
     transform(code, id) {
       if (!/[\\/]client[\\/]src[\\/].*\.[cm]?[jt]sx?(?:\?|$)/.test(id))
         return null;
+      if (id.replaceAll("\\", "/").split("?")[0].endsWith("/objectWorker.ts"))
+        code =
+          "import " +
+          JSON.stringify(
+            resolve(import.meta.dirname, "install-ranged.ts").replaceAll(
+              "\\",
+              "/"
+            )
+          ) +
+          ";\n" +
+          code;
       if (id.replaceAll("\\", "/").split("?")[0].endsWith("/BrandLogo.tsx"))
         code = code.replace(
           /"https:\/\/files\.manuscdn\.com\/[^"\n]+"/,

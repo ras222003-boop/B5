@@ -1,3 +1,4 @@
+import "./install-ranged";
 import { previewReadUrl } from "./network-policy.mjs";
 const base = import.meta.env.BASE_URL,
   origin = location.origin,

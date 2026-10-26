@@ -1,8 +1,14 @@
 /** Prepare a NEW deployment repository from a verified clean static build; no upload occurs here. */
-import { mkdir, readFile, writeFile, copyFile } from "node:fs/promises";
+import {
+  mkdir,
+  readFile,
+  writeFile,
+  copyFile,
+  appendFile,
+} from "node:fs/promises";
 import { resolve, dirname, relative, isAbsolute } from "node:path";
 import { createHash } from "node:crypto";
-const [rootArg, destinationArg] = process.argv.slice(2),
+const [rootArg, destinationArg, noticesArg] = process.argv.slice(2),
   root = resolve(rootArg),
   destination = resolve(destinationArg),
   receipt = JSON.parse(
@@ -16,6 +22,34 @@ if (
   receipt.restrictedModelsIncluded !== false
 )
   throw Error("Only a qualified clean build may be packaged");
+if (!noticesArg)
+  throw Error("Explicit reviewed third-party notice directory required");
+const noticesRoot = resolve(noticesArg),
+  notices = JSON.parse(
+    await readFile(resolve(noticesRoot, "catalog.json"), "utf8")
+  );
+const requiredNotices = [
+  "onnxruntime-MIT.txt",
+  "mediapipe-Apache-2.0.txt",
+  "tensorflow-models-Apache-2.0.txt",
+  "react-LICENSE",
+  "react-dom-LICENSE",
+];
+if (
+  !Array.isArray(notices.entries) ||
+  requiredNotices.some(name => !notices.entries.some(r => r.file === name))
+)
+  throw Error("Missing core runtime licence notice");
+for (const row of notices.entries) {
+  if (!/^[a-zA-Z0-9_.-]+$/.test(row.file) || row.file === "catalog.json")
+    throw Error("Invalid licence path");
+  const b = await readFile(resolve(noticesRoot, row.file));
+  if (
+    b.length !== row.bytes ||
+    createHash("sha256").update(b).digest("hex") !== row.sha256
+  )
+    throw Error("Changed licence notice");
+}
 const checked = [];
 for (const row of receipt.files) {
   const file = resolve(root, "site", row.path),
@@ -31,6 +65,16 @@ for (const row of receipt.files) {
   checked.push(row.path);
 }
 await mkdir(destination);
+await mkdir(resolve(destination, "third-party-notices"));
+for (const row of notices.entries)
+  await copyFile(
+    resolve(noticesRoot, row.file),
+    resolve(destination, "third-party-notices", row.file)
+  );
+await copyFile(
+  resolve(noticesRoot, "catalog.json"),
+  resolve(destination, "third-party-notices/catalog.json")
+);
 for (const path of checked) {
   await mkdir(dirname(resolve(destination, path)), { recursive: true });
   await copyFile(resolve(root, "site", path), resolve(destination, path));
@@ -58,6 +102,10 @@ await writeFile(
   resolve(destination, "verify-preview.mjs"),
   `import {readFile} from 'node:fs/promises';import {createHash} from 'node:crypto';import {resolve} from 'node:path';\nconst p=JSON.parse(await readFile('SOURCE.json'));if(!p.publishable||p.developmentBuild||!p.sourceWasClean||p.privateMediaIncluded!==false||p.restrictedModelsIncluded!==false)throw Error('Unqualified preview');\nfor(const r of p.files){if(r.path.includes('..')||r.path.startsWith('/')||/\\\\|\\.env|\\.pem$|\\.key$|\\.pth$|\\.pt$|Xenova|onnx-community|slimsam/i.test(r.path))throw Error('Unqualified path');const b=await readFile(resolve(r.path));if(b.length!==r.bytes||createHash('sha256').update(b).digest('hex')!==r.sha256)throw Error('Changed preview file');}\nconsole.log(JSON.stringify({verifiedFiles:p.files.length,sourceCommit:p.sourceCommit,privateMediaIncluded:false,iphoneTested:false}));\n`,
   { flag: "wx" }
+);
+await appendFile(
+  resolve(destination, "verify-preview.mjs"),
+  `const notices=JSON.parse(await readFile('third-party-notices/catalog.json'));for(const r of notices.entries){if(!/^[a-zA-Z0-9_.-]+$/.test(r.file))throw Error('Invalid licence path');const b=await readFile('third-party-notices/'+r.file);if(b.length!==r.bytes||createHash('sha256').update(b).digest('hex')!==r.sha256)throw Error('Changed licence notice');}\n`
 );
 console.log(
   JSON.stringify({
