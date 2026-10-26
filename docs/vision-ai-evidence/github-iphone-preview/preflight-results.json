@@ -1,0 +1,491 @@
+{
+  "schemaVersion": 1,
+  "originalOrigin": "https://basira-m7myneuo.manus.space",
+  "publicLandingStatus": 200,
+  "publicAuditScope": "GET_ONLY_PUBLIC_RESOURCES_NO_LOGIN_OR_MUTATION",
+  "originalVisionChunk": ["/assets/Vision-BAimjXDZ.js"],
+  "originalFeatureStringFindings": {
+    "objectModelV3": false,
+    "localTrial": false,
+    "objectColour": false,
+    "previewSourceCommit": false
+  },
+  "originalModelApiStatus": {
+    "/api/health": 200,
+    "/api/readiness": 200,
+    "/api/vision/object-quality/manifest": 404,
+    "/api/vision/experimental-models": 404,
+    "/api/speech/capabilities": 404
+  },
+  "originalLite0Identity": "NOT_VERIFIED_PUBLIC_FETCH_TIMED_OUT",
+  "fullSourceCompared": false,
+  "configurationOrDatabaseSecretsCompared": false,
+  "deployedCommitVerified": false,
+  "originalModified": false,
+  "limitations": [
+    "Absence of bundle strings is not a full runtime or source comparison.",
+    "Public status endpoints do not disclose or verify the complete Manus configuration.",
+    "Read-only exported source/configuration names or a deployed Git SHA are required for full reconciliation."
+  ],
+  "studioUnitTests": {
+    "passed": 89,
+    "failed": 0
+  },
+  "driveBackupUnitTests": {
+    "passed": 4,
+    "failed": 0,
+    "skippedMissingVerifiedAgeTools": 2
+  },
+  "segformerLocalSmoke": {
+    "syntheticPixelsOnly": true,
+    "offlineLoaded": true,
+    "outputLabels": 3,
+    "trainingPerformed": false,
+    "notIncludedInHostedPreview": true
+  },
+  "vitest": {
+    "numTotalTests": 514,
+    "numPassedTests": 514,
+    "numFailedTests": 0,
+    "success": true
+  },
+  "previewDevelopmentSmoke": {
+    "scope": "STATIC_EXISTING_VISION_PAGE_REAL_MODELS_WITH_SOFTWARE_CAMERA_MICROPHONE_NOT_DEVICE_ACCURACY",
+    "sourceCommit": "c06f056ef56c181b77d952cb050e52eeafe9f152",
+    "developmentBuild": true,
+    "base": "/basira-iphone-research-preview/",
+    "results": [
+      {
+        "id": "original",
+        "photoDetections": 4,
+        "wallPhotoMs": 1278,
+        "referenceAccuracy": null
+      },
+      {
+        "id": "objects-yolox-tiny",
+        "photoDetections": 9,
+        "wallPhotoMs": 2923,
+        "referenceAccuracy": null
+      },
+      {
+        "id": "objects-basira-v3",
+        "photoDetections": 9,
+        "wallPhotoMs": 2414,
+        "referenceAccuracy": null
+      }
+    ],
+    "softwareCameraPipelineStarted": true,
+    "softwareMicrophonePermissionAndTeardown": true,
+    "allTracksEnded": true,
+    "blockedPostBeforeNetwork": true,
+    "beaconDisabled": true,
+    "nativeTranscriptionDisabled": true,
+    "rollbackToLite0": true,
+    "experimentalDefault": false,
+    "pageErrors": [],
+    "mediaWritesObserved": 0,
+    "outsidePreviewRequests": 0,
+    "manusOriginalModified": false,
+    "hostedHttpsTested": false,
+    "iphoneTested": false,
+    "voiceOverTested": false
+  },
+  "hostingScope": "Independent browser vision research preview only; Express/MySQL/account/exam backend not hosted by Pages",
+  "iphoneTested": false,
+  "voiceOverTested": false,
+  "productionEligible": false,
+  "completedAtUtc": "2026-10-26T20:29:52.661Z",
+  "previewBranch": "codex/basira-iphone-preview-handoff",
+  "draftPr": "https://github.com/ras222003-boop/B5/pull/52",
+  "previewRuntimeSourceCommit": "0b6cc62e43f243a967bfc97b7afd589d7780a05d",
+  "previewDeploymentCommit": "78af15cc3e3a8f6487a3e2da9e2101353b762bc6",
+  "previewUrl": "https://ras222003-boop.github.io/basira-iphone-research-preview/#/navigation/vision",
+  "previewHostingRepository": "https://github.com/ras222003-boop/basira-iphone-research-preview",
+  "previewDeploymentRun": "https://github.com/ras222003-boop/basira-iphone-research-preview/actions/runs/40395271804",
+  "sourceCiRun": "https://github.com/ras222003-boop/B5/actions/runs/40394852917",
+  "sourceCiConclusion": "success",
+  "previewPolicyTests": {
+    "passed": 5,
+    "failed": 0
+  },
+  "hostedAssets": {
+    "status": "VERIFIED_PUBLIC_HTTPS_STATIC_ASSETS",
+    "url": "https://ras222003-boop.github.io/basira-iphone-research-preview/#/navigation/vision",
+    "sourceCommit": "0b6cc62e43f243a967bfc97b7afd589d7780a05d",
+    "verifiedFiles": 40,
+    "bytes": 142243705,
+    "strictTlsVerification": true,
+    "models": [
+      {
+        "id": "objects-yolox-tiny",
+        "sha256": "427cc366d34e27ff7a03e2899b5e3671425c262ea2291f88bb942bc1cc70b0f7"
+      },
+      {
+        "id": "objects-basira-v3",
+        "sha256": "1f0e088797c8792329c0270151fc375193158f5406a94c9c214cfb3d72e54a38"
+      }
+    ],
+    "cameraHardwareTested": false,
+    "microphoneHardwareTested": false,
+    "arabicAudibleQualityTested": false,
+    "iphoneTested": false,
+    "voiceOverTested": false,
+    "originalManusModified": false
+  },
+  "hostedBrowserSmoke": {
+    "scope": "STATIC_EXISTING_VISION_PAGE_REAL_MODELS_WITH_SOFTWARE_CAMERA_MICROPHONE_NOT_DEVICE_ACCURACY",
+    "sourceCommit": "0b6cc62e43f243a967bfc97b7afd589d7780a05d",
+    "developmentBuild": false,
+    "base": "/basira-iphone-research-preview/",
+    "results": [
+      {
+        "id": "original",
+        "photoDetections": 4,
+        "wallPhotoMs": 8143,
+        "referenceAccuracy": null
+      },
+      {
+        "id": "objects-yolox-tiny",
+        "photoDetections": 9,
+        "wallPhotoMs": 22469,
+        "referenceAccuracy": null
+      },
+      {
+        "id": "objects-basira-v3",
+        "photoDetections": 9,
+        "wallPhotoMs": 22017,
+        "referenceAccuracy": null
+      }
+    ],
+    "softwareCameraPipelineStarted": true,
+    "softwareMicrophonePermissionAndTeardown": true,
+    "allTracksEnded": true,
+    "localColourDiagnosticExportVerified": true,
+    "blockedPostBeforeNetwork": true,
+    "beaconDisabled": true,
+    "nativeTranscriptionDisabled": true,
+    "rollbackToLite0": true,
+    "experimentalDefault": false,
+    "pageErrors": [],
+    "mediaWritesObserved": 0,
+    "outsidePreviewRequests": 0,
+    "manusOriginalModified": false,
+    "hostedHttpsTested": true,
+    "iphoneTested": false,
+    "voiceOverTested": false
+  },
+  "hostedArabicVoice": {
+    "status": "LOCAL_ARABIC_API_STARTED_AND_COMPLETED",
+    "completed": true,
+    "events": [
+      {
+        "event": "start",
+        "atMs": 4921.4000000059605,
+        "lang": "ar-SA",
+        "local": true,
+        "error": null
+      },
+      {
+        "event": "end",
+        "atMs": 12458.20000000298,
+        "lang": "ar-SA",
+        "local": true,
+        "error": null
+      }
+    ],
+    "localArabicVoices": [
+      {
+        "lang": "ar-SA",
+        "local": true
+      }
+    ],
+    "scope": "ACTUAL_VISIBLE_DESKTOP_BROWSER_LOCAL_SPEECH_EVENTS_NOT_HUMAN_LISTENING_OR_IPHONE",
+    "hostedHttpsTested": true,
+    "microphoneUsed": false,
+    "audioRecorded": false,
+    "networkWrites": 0,
+    "outsidePreviewRequests": 0,
+    "audibleQualityVerified": false,
+    "iphoneTested": false
+  },
+  "hostedMobileViewport": {
+    "status": "PASSED_DESKTOP_MOBILE_VIEWPORT_CHECKS",
+    "scope": "DESKTOP_CHROME_390PX_AXE_NOT_SAFARI_OR_VOICEOVER",
+    "pages": [
+      {
+        "route": "navigation/vision",
+        "width": 390,
+        "scrollWidth": 390,
+        "secureContext": true,
+        "cameraApi": true,
+        "webAssembly": true,
+        "violations": [],
+        "checks": 29
+      },
+      {
+        "route": "settings/voice",
+        "width": 390,
+        "scrollWidth": 390,
+        "secureContext": true,
+        "cameraApi": true,
+        "webAssembly": true,
+        "violations": [],
+        "checks": 26
+      }
+    ],
+    "pageErrors": [],
+    "networkWrites": 0,
+    "outsidePreviewRequests": 0,
+    "cameraStarted": false,
+    "microphoneStarted": false,
+    "iphoneTested": false,
+    "voiceOverTested": false
+  },
+  "mainRefConfirmedUnchanged": "2456a4604d7dbe0c40e76d100b81aeacf048f69e",
+  "manusImportPerformed": false,
+  "fullManusBackendPreviewDeployed": false,
+  "hardwareCameraTestedThisRound": false,
+  "hardwareMicrophoneQualityTestedThisRound": false,
+  "remainingAccessibilityNotes": [
+    "Voice settings retains a nested main landmark from the existing application. It is outside this WCAG-tag subset; physical VoiceOver review remains required."
+  ],
+  "ownerReportedIphoneTrial": {
+    "status": "INITIAL_USER_REPORTED_TRIAL_INCOMPLETE_QUALITY_CONCERNS",
+    "device": "iPhone 14 Pro",
+    "receivedAtUtc": "2026-10-26T20:12:34.061Z",
+    "modelId": "original",
+    "iosVersion": null,
+    "browserExplicitlyConfirmed": false,
+    "reportedDetectedClasses": ["car", "person"],
+    "reportedOtherObjectsMissed": true,
+    "missedObjectClasses": ["tree", "chair", "car"],
+    "reportedColoursUnavailable": true,
+    "speechSucceeded": null,
+    "cameraStopConfirmed": null,
+    "frameVariationMeasured": false,
+    "inferenceTimingMeasured": false,
+    "memoryMeasured": false,
+    "batteryMeasured": false,
+    "mediaReceived": false,
+    "independentReferenceLabels": false,
+    "accuracy": null,
+    "fullValidationPassed": false,
+    "modelName": "EfficientDet-Lite0",
+    "reportedMissedExamples": [
+      {
+        "name": "tree",
+        "modelVocabularySupported": false
+      },
+      {
+        "name": "chair",
+        "modelVocabularySupported": true
+      },
+      {
+        "name": "car",
+        "colour": "black",
+        "modelVocabularySupported": true,
+        "failureOfDetectionVersusColourNotYetDisambiguated": true
+      }
+    ],
+    "referenceMeaning": "Unannotated owner text report; not independently verified reference boxes or an accuracy calculation",
+    "priorIndependentEvaluationContext": [
+      {
+        "model": "lite0",
+        "class": "car",
+        "additionalTrainingImages": 0,
+        "referenceCount": 0,
+        "tp": 0,
+        "fp": 0,
+        "recall": null,
+        "precision": null,
+        "evaluationStatus": "KNOWN_NEGATIVE_SCOPE_ONLY",
+        "scope": "PREVIOUS_INDEPENDENT_SAMPLE_NOT_THIS_PHONE_TRIAL"
+      },
+      {
+        "model": "lite0",
+        "class": "chair",
+        "additionalTrainingImages": 0,
+        "referenceCount": 6,
+        "tp": 0,
+        "fp": 0,
+        "recall": 0,
+        "precision": null,
+        "evaluationStatus": "MEASURED_ON_THIS_SPLIT",
+        "scope": "PREVIOUS_INDEPENDENT_SAMPLE_NOT_THIS_PHONE_TRIAL"
+      },
+      {
+        "model": "lite0",
+        "class": "potted plant",
+        "additionalTrainingImages": 0,
+        "referenceCount": 1,
+        "tp": 0,
+        "fp": 0,
+        "recall": 0,
+        "precision": null,
+        "evaluationStatus": "MEASURED_ON_THIS_SPLIT",
+        "scope": "PREVIOUS_INDEPENDENT_SAMPLE_NOT_THIS_PHONE_TRIAL"
+      },
+      {
+        "model": "yolox-tiny",
+        "class": "car",
+        "additionalTrainingImages": 0,
+        "referenceCount": 0,
+        "tp": 0,
+        "fp": 0,
+        "recall": null,
+        "precision": null,
+        "evaluationStatus": "KNOWN_NEGATIVE_SCOPE_ONLY",
+        "scope": "PREVIOUS_INDEPENDENT_SAMPLE_NOT_THIS_PHONE_TRIAL"
+      },
+      {
+        "model": "yolox-tiny",
+        "class": "chair",
+        "additionalTrainingImages": 0,
+        "referenceCount": 6,
+        "tp": 0,
+        "fp": 0,
+        "recall": 0,
+        "precision": null,
+        "evaluationStatus": "MEASURED_ON_THIS_SPLIT",
+        "scope": "PREVIOUS_INDEPENDENT_SAMPLE_NOT_THIS_PHONE_TRIAL"
+      },
+      {
+        "model": "yolox-tiny",
+        "class": "potted plant",
+        "additionalTrainingImages": 0,
+        "referenceCount": 1,
+        "tp": 0,
+        "fp": 0,
+        "recall": 0,
+        "precision": null,
+        "evaluationStatus": "MEASURED_ON_THIS_SPLIT",
+        "scope": "PREVIOUS_INDEPENDENT_SAMPLE_NOT_THIS_PHONE_TRIAL"
+      },
+      {
+        "model": "objects-basira-v3",
+        "class": "car",
+        "additionalTrainingImages": 4,
+        "referenceCount": 0,
+        "tp": 0,
+        "fp": 0,
+        "recall": null,
+        "precision": null,
+        "evaluationStatus": "KNOWN_NEGATIVE_SCOPE_ONLY",
+        "scope": "PREVIOUS_INDEPENDENT_SAMPLE_NOT_THIS_PHONE_TRIAL"
+      },
+      {
+        "model": "objects-basira-v3",
+        "class": "chair",
+        "additionalTrainingImages": 6,
+        "referenceCount": 6,
+        "tp": 0,
+        "fp": 1,
+        "recall": 0,
+        "precision": 0,
+        "evaluationStatus": "MEASURED_ON_THIS_SPLIT",
+        "scope": "PREVIOUS_INDEPENDENT_SAMPLE_NOT_THIS_PHONE_TRIAL"
+      },
+      {
+        "model": "objects-basira-v3",
+        "class": "potted plant",
+        "additionalTrainingImages": 2,
+        "referenceCount": 1,
+        "tp": 0,
+        "fp": 0,
+        "recall": 0,
+        "precision": null,
+        "evaluationStatus": "MEASURED_ON_THIS_SPLIT",
+        "scope": "PREVIOUS_INDEPENDENT_SAMPLE_NOT_THIS_PHONE_TRIAL"
+      }
+    ],
+    "colourFollowup": {
+      "requestedModel": "objects-basira-v3",
+      "reply": "Colour is unclear",
+      "modelSelectionSeparatelyConfirmed": false,
+      "detectedObjectClassesConfirmed": null,
+      "abstentionReasonMeasured": null,
+      "colourAccuracy": null
+    }
+  },
+  "iphoneTrialPerformed": true,
+  "iphoneFullValidationPassed": false,
+  "iphoneTestedMeaning": "Complete structured device validation is not completed. Initial owner-reported trial is recorded separately; automated nested reports are desktop-only.",
+  "previousHostedVerification": {
+    "sourceCommit": "8aa29a83d5820a4adee8f34fc224878c12489a7a",
+    "hostedAssets": {
+      "status": "VERIFIED_PUBLIC_HTTPS_STATIC_ASSETS",
+      "url": "https://ras222003-boop.github.io/basira-iphone-research-preview/#/navigation/vision",
+      "sourceCommit": "8aa29a83d5820a4adee8f34fc224878c12489a7a",
+      "verifiedFiles": 40,
+      "bytes": 142242982,
+      "strictTlsVerification": true,
+      "models": [
+        {
+          "id": "objects-yolox-tiny",
+          "sha256": "427cc366d34e27ff7a03e2899b5e3671425c262ea2291f88bb942bc1cc70b0f7"
+        },
+        {
+          "id": "objects-basira-v3",
+          "sha256": "1f0e088797c8792329c0270151fc375193158f5406a94c9c214cfb3d72e54a38"
+        }
+      ],
+      "cameraHardwareTested": false,
+      "microphoneHardwareTested": false,
+      "arabicAudibleQualityTested": false,
+      "iphoneTested": false,
+      "voiceOverTested": false,
+      "originalManusModified": false
+    },
+    "hostedBrowserSmoke": {
+      "scope": "STATIC_EXISTING_VISION_PAGE_REAL_MODELS_WITH_SOFTWARE_CAMERA_MICROPHONE_NOT_DEVICE_ACCURACY",
+      "sourceCommit": "8aa29a83d5820a4adee8f34fc224878c12489a7a",
+      "developmentBuild": false,
+      "base": "/basira-iphone-research-preview/",
+      "results": [
+        {
+          "id": "original",
+          "photoDetections": 4,
+          "wallPhotoMs": 9652,
+          "referenceAccuracy": null
+        },
+        {
+          "id": "objects-yolox-tiny",
+          "photoDetections": 9,
+          "wallPhotoMs": 13867,
+          "referenceAccuracy": null
+        },
+        {
+          "id": "objects-basira-v3",
+          "photoDetections": 9,
+          "wallPhotoMs": 26146,
+          "referenceAccuracy": null
+        }
+      ],
+      "softwareCameraPipelineStarted": true,
+      "softwareMicrophonePermissionAndTeardown": true,
+      "allTracksEnded": true,
+      "blockedPostBeforeNetwork": true,
+      "beaconDisabled": true,
+      "nativeTranscriptionDisabled": true,
+      "rollbackToLite0": true,
+      "experimentalDefault": false,
+      "pageErrors": [],
+      "mediaWritesObserved": 0,
+      "outsidePreviewRequests": 0,
+      "manusOriginalModified": false,
+      "hostedHttpsTested": true,
+      "iphoneTested": false,
+      "voiceOverTested": false
+    }
+  },
+  "colourDiagnosticExport": {
+    "fields": ["frames[].objects[].colourReason", "colourUnclearReasonCounts"],
+    "allowlistOnly": true,
+    "pixelsSaved": false,
+    "masksSaved": false,
+    "hostedDownloadVerified": true,
+    "changesColourDecisions": false,
+    "sourceUnitTestsPassed": 4,
+    "sourceUnitTestsFailed": 0
+  }
+}

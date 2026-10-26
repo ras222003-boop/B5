@@ -1,0 +1,10 @@
+{
+  "url": "http://127.0.0.1:4318/",
+  "status": "passed",
+  "chromeActualBrowser": true,
+  "realCredentialsUsed": false,
+  "consoleErrors": 0,
+  "networkErrors": 0,
+  "externalRequests": 0,
+  "scope": "Actual server login page and JavaScript modules; authenticated saves verified using isolated synthetic fixture after restart."
+}

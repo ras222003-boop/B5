@@ -1,0 +1,44 @@
+{
+  "date": "2026-10-16",
+  "branch": "codex/basira-smart-prereview",
+  "baselineReproduction": {
+    "badRequest": {
+      "status": 400,
+      "body": {
+        "error": "Decision reason required"
+      }
+    },
+    "conflict": {
+      "status": 409,
+      "body": {
+        "error": "Revision conflict; refresh before saving"
+      }
+    },
+    "localDraftX": "0.22",
+    "modalOpen": true,
+    "noticeInsideModal": 0
+  },
+  "verifiedFix": {
+    "targetedNodeTests": 65,
+    "allPassed": true,
+    "chromeSaveTest": "passed",
+    "validSaveConsoleErrors": 0,
+    "validSaveNetworkErrors": 0,
+    "syntheticOnly": true,
+    "realAccountPasswordsUsed": false,
+    "privateOriginalsAccountsHistoryModelUnchanged": true,
+    "liveServer": {
+      "origin": "http://127.0.0.1:4318/",
+      "pid": 6752,
+      "loopbackOnly": true
+    },
+    "actualRolesVerified": {
+      "annotator": true,
+      "ownerReviewRoles": true,
+      "ownerIndependentOfCurrentContributors": true
+    }
+  },
+  "trainingStarted": false,
+  "published": false,
+  "merged": false
+}

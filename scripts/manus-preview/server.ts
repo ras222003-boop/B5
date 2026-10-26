@@ -6,6 +6,7 @@ import { timingSafeEqual, createHash } from "node:crypto";
 import { pathToFileURL } from "node:url";
 import { objectQualityHandler } from "../../server/objectQuality";
 import { PINNED } from "./pins.mjs";
+import { PROTECTED_HOSTS } from "./protected-origins.mjs";
 const hash = (b: Buffer) => createHash("sha256").update(b).digest("hex");
 const same = (a: string, b: string) => {
   const x = Buffer.from(a),
@@ -33,7 +34,7 @@ export async function createPreviewApp({
     url.origin !== origin ||
     url.username ||
     url.password ||
-    url.hostname === "basira-ve3h8rof.manus.space" ||
+    PROTECTED_HOSTS.has(url.hostname) ||
     !username ||
     username.includes(":") ||
     password.length < 24

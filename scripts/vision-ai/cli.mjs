@@ -11,8 +11,16 @@ import { initStorage, importBundle, transferPlan, bundleDraft } from './storage.
 import { spatialDraft, rankAlerts } from './spatial.mjs';
 import { evaluateProximity } from './proximity-evaluation.mjs';
 import { dataNeeds } from './data-needs.mjs';
+import { initDriveBackup, backupInventory, makeBackupFixture, planDriveBackup, prepareDriveBackup, copyDriveBackup, restoreDriveBackup } from './drive-backup.mjs';
 
-const help = `Basira Vision AI — offline preparation tools (no upload or production activation)
+const help = `Basira Vision AI — offline preparation and explicitly approved Drive-desktop backup; no production activation
+  drive-backup-init <private-backup-root> <target-email> <verified-age-tools.json>
+  drive-backup-inventory <data-root> <new-local-report.json>
+  drive-backup-fixture <new-synthetic-source-root> <new-selection.json>
+  drive-backup-plan <backup-root> <source-root> <selection.json>
+  drive-backup-prepare <backup-root> <relative-plan.json>
+  drive-backup-copy <backup-root> <relative-package.json> <confirmed-target.json> <owner-approval.json>
+  drive-backup-restore <backup-root> <vault-root> <relative-manifest.age> <sha256> <new-restore-root>
   storage-init <new-directory-outside-git>
   import-bundle <bundle.json> <incoming-root> <storage-root>
   bundle-draft <bundle-inventory.json> <incoming-root> <new-bundle.json>
@@ -45,6 +53,13 @@ const sameRoot = (input, output) => check(dirname(resolve(input)) === dirname(re
 try {
   let result;
   switch (command) {
+    case 'drive-backup-init': required(3); result = await initDriveBackup(args[0], args[1], await readJson(args[2])); break;
+    case 'drive-backup-inventory': required(2); result = await backupInventory(args[0]); await writeJson(args[1], result); result = { files: result.files.length, bytes: result.bytes, excluded: result.excluded.length, cloudFilesCreated: 0 }; break;
+    case 'drive-backup-fixture': required(2); result = await makeBackupFixture(args[0]); await writeJson(args[1], result); result = { syntheticFiles: result.files.length, sourceRoot: resolve(args[0]), cloudFilesCreated: 0 }; break;
+    case 'drive-backup-plan': required(3); { const r = await planDriveBackup(args[0], args[1], await readJson(args[2])); result = { planPath: 'plans/' + r.plan.id + '.json', planSha256: r.planSha256, eligible: r.plan.files.length, blocked: r.plan.blocked.length, bytes: r.plan.plainBytes, approvedForCloudTransfer: false }; } break;
+    case 'drive-backup-prepare': required(2); result = await prepareDriveBackup(args[0], args[1]); break;
+    case 'drive-backup-copy': required(4); result = await copyDriveBackup(args[0], args[1], await readJson(args[2]), await readJson(args[3])); break;
+    case 'drive-backup-restore': required(5); result = await restoreDriveBackup(args[0], args[2], args[3], args[1], args[4]); break;
     case undefined: case 'help': console.log(help); break;
     case 'storage-init': required(1); result = await initStorage(args[0]); break;
     case 'import-bundle': required(3); result = await importBundle(await readJson(args[0]), resolve(args[1]), resolve(args[2])); break;

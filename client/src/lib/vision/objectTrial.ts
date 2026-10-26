@@ -8,11 +8,14 @@ export function sourcePixelSignature(frame:ColorPixels){
   return hash;
 }
 export type BatterySample={level:number;charging:boolean};
+const colourReasons=new Set(['BOX_ESTIMATE','ALIGNED_INSTANCE_MASK','LOW_LIGHT','CLIPPED_OR_REFLECTIVE','BACKGROUND_AMBIGUOUS','MIXED_OR_OCCLUDED','TOO_SMALL','WARMING_UP','CHANGING']);
+const diagnosticColourReason=(value:unknown)=>typeof value==='string'&&colourReasons.has(value)?value:'UNAVAILABLE';
 /** Explicit, bounded metadata allowlist. Never serialise the surrounding perception/ground/location object. */
 export class ObjectTrialRecorder {
   readonly sceneId=crypto.randomUUID();
   readonly startedAtUtc=new Date().toISOString();
-  private frames:{frameId:string;inferenceMs:number;tracking:string;objects:{class:string;score:number;trackId:string|null;box:{x:number;y:number;width:number;height:number};colour:string|null;colourStatus:string}[]}[]=[];
+  private frames:{frameId:string;inferenceMs:number;tracking:string;objects:{class:string;score:number;trackId:string|null;box:{x:number;y:number;width:number;height:number};colour:string|null;colourStatus:string;colourReason:string}[]}[]=[];
+  private colourUnclearReasonCounts:Record<string,number>={};
   private processed=0;private lastFrame='';private timings:number[]=[];private ended:number|null=null;
   private speechRequests=0;private initialBattery:BatterySample|null=null;
   private cameraSize:{width:number;height:number}|null=null;
@@ -28,9 +31,10 @@ export class ObjectTrialRecorder {
     if(!snapshot||snapshot.frameId===this.lastFrame||this.ended!==null)return;
     this.lastFrame=snapshot.frameId;this.processed++;
     const ms=snapshot.performance.inferenceMs;if(Number.isFinite(ms)&&ms>=0){this.timings.push(ms);if(this.timings.length>600)this.timings.shift();}
+    for(const {detection:d} of snapshot.observations.slice(0,30))if(!d.color?.name){const reason=diagnosticColourReason(d.color?.reason);this.colourUnclearReasonCounts[reason]=(this.colourUnclearReasonCounts[reason]??0)+1;}
     this.frames.push({frameId:snapshot.frameId,inferenceMs:ms,tracking:snapshot.tracking,
       objects:snapshot.observations.slice(0,30).map(({detection:d})=>({class:d.cocoClass??'unknown',score:d.confidence,trackId:d.trackId??null,
-        box:{x:d.boundingBox.x,y:d.boundingBox.y,width:d.boundingBox.width,height:d.boundingBox.height},colour:d.color?.name??null,colourStatus:d.color?.status??'UNCLEAR'}))});
+        box:{x:d.boundingBox.x,y:d.boundingBox.y,width:d.boundingBox.width,height:d.boundingBox.height},colour:d.color?.name??null,colourStatus:d.color?.status??'UNCLEAR',colourReason:diagnosticColourReason(d.color?.reason)}))});
     if(this.frames.length>300)this.frames.shift();
   }
   finish(at:number,tracksEnded?:boolean){if(this.ended===null){this.ended=at;this.tracksEnded=tracksEnded??null;}}
@@ -42,6 +46,7 @@ export class ObjectTrialRecorder {
       inferenceMedianMs:sorted.length?sorted[Math.floor((sorted.length-1)/2)]:null,p95InferenceMs:sorted.length?sorted[Math.ceil(.95*sorted.length)-1]:null,
       timingWindowSamples:sorted.length,savedFrameSummaries:this.frames.length,truncatedFrameSummaries:Math.max(0,this.processed-this.frames.length),
       timingWindowMeaning:'Accepted perception snapshots only; discarded inference durations are not measured here',discardedInferenceCount:null,
+      colourUnclearReasonCounts:{...this.colourUnclearReasonCounts},colourDiagnosticMeaning:'Allowlisted reasons in accepted observation snapshots only; repeated observations are counted, not unique objects or independent accuracy. No pixels or masks are exported.',
       analysisStateEvents:this.states,cameraTracksEnded:this.tracksEnded,
       sourcePixelVariation:this.sourceSamples<2?'INSUFFICIENT_SAMPLES':this.sourceChanges?'OBSERVED':'NOT_OBSERVED',sourceSignatureSamples:this.sourceSamples,sourcePixelChanges:this.sourceChanges,
       sourceVariationMeaning:'Local sampled-pixel changes only; does not attest hardware, multiple objects or accurate detections',playback:measurements.playback??null,camera:measurements.camera??this.cameraSize,

@@ -2,6 +2,7 @@ import { assistantUI } from "./assistant-ui.mjs";
 import { prereviewUI } from "./prereview-ui.mjs";
 import { reconcileLabels } from "./label-draft.mjs";
 import { batchReviewUI } from "./batch-review-ui.mjs";
+import { selfTrainingUI } from "./self-training-ui.mjs";
 const $ = id => document.getElementById(id),
   esc = v =>
     String(v ?? "").replace(
@@ -874,6 +875,7 @@ document.querySelectorAll("[data-tab]").forEach(
         await prereview.open();
       }
       if (b.dataset.tab === "experiments" && actor) {
+        await selfTraining.open();
         const r = await api("/api/experiments");
         $("experiment-list").innerHTML = r.results.length
           ? r.results
@@ -886,6 +888,7 @@ document.querySelectorAll("[data-tab]").forEach(
       }
     })
 );
+const selfTraining = selfTrainingUI({ api, getCatalog: () => catalog, notify });
 const assistant = assistantUI({
   api,
   getCatalog: () => catalog,

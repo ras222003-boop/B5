@@ -226,10 +226,54 @@ try {
   );
   await page.locator("[data-tab=experiments]").click();
   await screenshot("experiments-synthetic.png");
+  const officialPanel = page
+    .getByRole("heading", { name: "مسار الاعتماد الرسمي", exact: true })
+    .locator("..");
+  assert.equal(await officialPanel.locator("button").count(), 0);
   assert.ok(
-    await page.getByText("بدء التدريب معطّل", { exact: true }).isVisible()
+    await officialPanel
+      .getByText(
+        "يبقى مستقلًا ويتطلب اعتماد البيانات والأوزان والخطة وتجميد الاختبار.",
+        { exact: true }
+      )
+      .isVisible()
   );
-  checks.push("experiment area has no training trigger");
+  const researchStarts = [];
+  const watchResearch = r => {
+    if (r.method() === "POST" && r.url().includes("/api/self-training/"))
+      researchStarts.push(r.url());
+  };
+  page.on("request", watchResearch);
+  assert.equal(await page.locator("#self-authorize").isChecked(), false);
+  await page.locator("#self-start").click();
+  await page
+    .getByText("حدد التفويض المحلي المحدود أولًا.", { exact: true })
+    .first()
+    .waitFor();
+  assert.deepEqual(
+    researchStarts,
+    [],
+    "No research start may be sent without explicit bounded authorization"
+  );
+  page.off("request", watchResearch);
+  const unconfiguredAgents = await page
+    .locator("#self-provider option")
+    .evaluateAll(options =>
+      options
+        .filter(o => ["codex", "claude"].includes(o.value))
+        .map(o => ({
+          value: o.value,
+          disabled: o.disabled,
+          disabledAttribute: o.hasAttribute("disabled"),
+        }))
+    );
+  assert.deepEqual(unconfiguredAgents, [
+    { value: "codex", disabled: true, disabledAttribute: true },
+    { value: "claude", disabled: true, disabledAttribute: true },
+  ]);
+  checks.push(
+    "official panel has no training trigger; separate research mode cannot start without bounded authorization; unconfigured cloud agents remain disabled"
+  );
   await page.locator("[data-tab=gallery]").click();
   await page.setViewportSize({ width: 390, height: 844 });
   await screenshot("mobile-synthetic.png");

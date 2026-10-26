@@ -1,0 +1,79 @@
+{
+  "schemaVersion": 1,
+  "scope": "local_machine_preparation_not_accuracy_evaluation",
+  "realImages": 54,
+  "syntheticImages": 10,
+  "realWithCurrentReport": 54,
+  "approved": 0,
+  "rejected": 0,
+  "pending": 54,
+  "correctionCandidateImages": 30,
+  "proposedPrivacyMaskImages": 29,
+  "proposedDrafts": 54,
+  "missingSceneEvidence": 54,
+  "privacyToolCompleted": 54,
+  "modelOrOCRFailures": 0,
+  "sourceEvidenceGaps": 0,
+  "issueCounts": {
+    "incomplete_labels": 54,
+    "privacy_region_review": 50,
+    "unlabeled_candidate": 55,
+    "original_unmatched": 91,
+    "box_disagreement": 18,
+    "sensitive_text_candidate": 3,
+    "class_disagreement": 10,
+    "exposure": 1,
+    "unsupported_baseline_class": 21,
+    "metadata_privacy": 2
+  },
+  "automaticHumanApprovals": 0,
+  "trainingStarted": false,
+  "cloudUpload": false,
+  "limitations": [
+    "Model candidates and heuristic masks are not verified labels or privacy clearance.",
+    "Saved license evidence hashes do not establish commercial AI-training entitlement.",
+    "Scene, session provenance and motion require evidence. No metric distances inferred.",
+    "All actual final approvals require independent human decisions."
+  ],
+  "proposedRegionCountsUnverified": {
+    "face_candidate": 88,
+    "plate_candidate_region_limited": 8,
+    "potential_sensitive_text": 3
+  },
+  "declaredLicenseRecordsNotApproval": {
+    "CC-BY-4.0": 53,
+    "CC0-1.0": 1,
+    "CC-BY-2.0": 38
+  },
+  "unreviewedClassImageCoverage": {
+    "stairs_visible": 3,
+    "table": 14,
+    "person": 10,
+    "chair": 10,
+    "car": 10,
+    "pothole_visible": 3,
+    "surface_crack": 8
+  },
+  "realIncomplete": 2,
+  "syntheticVideos": 4,
+  "similarity": {
+    "candidatePairs": 2,
+    "unresolved": 2,
+    "crossSplit": 0
+  },
+  "verification": {
+    "originalsActiveVersionsAccountsAndDecisionsUnchanged": true,
+    "metadataFreeDraftsSHA256Verified": 54,
+    "productionModelSHA256": "0720bf247bd76e6594ea28fa9c6f7c5242be774818997dbbeffc4da460c723bb"
+  },
+  "tests": {
+    "nodeTests": 105,
+    "nodePassed": 105,
+    "chromeSyntheticWorkflow": "passed",
+    "existingStudioBrowserRegression": "passed",
+    "externalRequestsInSyntheticWorkflow": 0
+  },
+  "frozenSplitsInCurrentLibrary": 0,
+  "independentFinalTest": "New real licensed held-out cohort required before final performance claims.",
+  "reportRevision": 3
+}

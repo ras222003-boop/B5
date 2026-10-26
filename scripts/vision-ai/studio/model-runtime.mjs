@@ -8,6 +8,7 @@ export async function modelRuntime() {
   const assets = new Map(),
     manifest = {
       objectDetector: { status: "unavailable" },
+      semanticSegmenter: { status: "unavailable" },
       ocr: { status: "unavailable" },
       faceDetector: { status: "not-configured" },
       plateDetector: { status: "not-configured" },
@@ -17,6 +18,8 @@ export async function modelRuntime() {
     "vision/efficientdet_lite0_int8.tflite",
     "vision/mediapipe",
     "vision/tesseract",
+    "vision/onnx",
+    "vision/models/Xenova/segformer-b0-finetuned-ade-512-512",
   ];
   const add = async rel => {
     const path = resolve(repo, "client/public", rel);
@@ -25,7 +28,7 @@ export async function modelRuntime() {
       if (stat.isSymbolicLink()) return;
       if (stat.isDirectory()) {
         for (const n of await readdir(path)) await add(rel + "/" + n);
-      } else if (/\.(?:tflite|wasm|js|gz)$/.test(rel))
+      } else if (/\.(?:tflite|wasm|js|mjs|gz|onnx|json)$/.test(rel))
         assets.set("/" + rel, { path, sha256: await fileHash(path) });
     } catch (e) {
       if (e.code !== "ENOENT") throw e;
@@ -58,6 +61,15 @@ export async function modelRuntime() {
       scope:
         "OCR + potential sensitive-text patterns; not exhaustive PII detection",
     };
+  const segmenter = "/vision/models/Xenova/segformer-b0-finetuned-ade-512-512/onnx/model_quantized.onnx";
+  if (assets.get(segmenter)?.sha256 === "9a98d6daf3d926869ab8cc4c2ed7374a2bc23b889bb7ca3b0915d15e3c4756bb" &&
+      assets.has("/vision/onnx/ort-wasm-simd-threaded.wasm"))
+    manifest.semanticSegmenter = {
+      status: "available",
+      name: "existing-local-segformer-ade20k",
+      sha256: assets.get(segmenter).sha256,
+      scope: "noncommercial research; stairs region only, direction uncertain; heuristic score",
+    };
   const bundle = await build({
     entryPoints: [resolve(repo, "scripts/vision-ai/studio/ui/model-entry.mjs")],
     bundle: true,
@@ -71,10 +83,12 @@ export async function modelRuntime() {
   return { assets, manifest, script: bundle.outputFiles[0].contents };
 }
 export const assetMime = path =>
-  path.endsWith(".wasm")
-    ? "application/wasm"
-    : path.endsWith(".js")
+  path.endsWith(".json")
+    ? "application/json"
+    : path.endsWith(".mjs") || path.endsWith(".js")
       ? "text/javascript"
+      : path.endsWith(".wasm")
+    ? "application/wasm"
       : path.endsWith(".gz")
         ? "application/gzip"
         : "application/octet-stream";

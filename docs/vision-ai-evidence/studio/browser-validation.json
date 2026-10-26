@@ -1,5 +1,5 @@
 {
-  "at": "2026-10-15T02:53:52.822Z",
+  "at": "2026-10-26T18:29:05.461Z",
   "contentKind": "synthetic-ui-only",
   "checks": [
     "12 synthetic images decode and display bounding boxes",
@@ -7,14 +7,14 @@
     "UI saves versioned boxes; contributor cannot approve",
     "existing importBundle adds new synthetic batch automatically without HTML regeneration",
     "synthetic reference video decodes through authenticated ranged endpoint",
-    "experiment area has no training trigger",
+    "official panel has no training trigger; separate research mode cannot start without bounded authorization; unconfigured cloud agents remain disabled",
     "390px RTL viewport has no horizontal overflow",
     "axe accessibility scan passes on library"
   ],
   "autoUpdate": {
     "before": 12,
     "after": 13,
-    "observedMs": 490,
+    "observedMs": 1919,
     "timeoutMs": 10000,
     "importStatus": "IMPORTED_PENDING_PRIVACY_AND_INDEPENDENT_LABEL_REVIEW",
     "recreatedHtml": false
@@ -25,22 +25,22 @@
   "screenshots": [
     {
       "path": "docs/vision-ai-evidence/studio/desktop-synthetic.png",
-      "sha256": "bf76a7cd31bf0ff6631ecd99bc199c3ace2bf5d1fa64d0dd8beea135f6002c0f",
+      "sha256": "56ac7b223ea4a27d7db0ea72e03f05c676ac2fd3974b0eab3d27e2a8ce488c71",
       "contentKind": "synthetic-ui-only"
     },
     {
       "path": "docs/vision-ai-evidence/studio/editor-synthetic.png",
-      "sha256": "9fb9422e8139166e0496ca8c6d60743850929cfb8c20b51e3cbbabeeaf4b79c0",
+      "sha256": "b9559b2f8c7c729044522f93856e7badd31bc9fcd7bceb35cc76bad6ece024f2",
       "contentKind": "synthetic-ui-only"
     },
     {
       "path": "docs/vision-ai-evidence/studio/experiments-synthetic.png",
-      "sha256": "62ae33072fb6e7cc6bfe14cb8522240e7f40492363e92971d9fdc503587510c2",
+      "sha256": "6c927d3f8ce5bd752ef34cb65dae512e550e797cc11eb5cd11c6477ac3fc5a6f",
       "contentKind": "synthetic-ui-only"
     },
     {
       "path": "docs/vision-ai-evidence/studio/mobile-synthetic.png",
-      "sha256": "fdedaf7015870df427f56f456210318c4aa84c5e7437bd8f42c006bab563de37",
+      "sha256": "de3c5bf542ba3a2ae07ac47d4c640951220f11df86066f98da7a1e643ff1c294",
       "contentKind": "synthetic-ui-only"
     }
   ],

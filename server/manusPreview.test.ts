@@ -94,6 +94,7 @@ describe("isolated Manus preview boundary", () => {
     for (const origin of [
       "http://preview.example",
       "https://basira-ve3h8rof.manus.space",
+      "https://basira-m7myneuo.manus.space",
       "https://preview.example/",
     ])
       await expect(createPreviewApp({ ...c, origin })).rejects.toThrow();
