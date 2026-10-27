@@ -546,9 +546,11 @@ export class VisionPipeline {
       }
       const completedAt=performance.now();
       if(!freshTimestamp(detectorTimestamp,completedAt)){this.invalidate('STALE');this.schedule(100);return;}
+      const timings=this.telemetry.record(detectorTimestamp,completedAt);
+      const tracking=timings.processedFrames<3?'WARMING_UP':timings.effectiveFps<1.5||this.cameraLight==='LOW_LIGHT'?'LIMITED':'TRACKING';
       this.latestObjects=enriched;
-      const motionUsable=this.approachEnabled&&this.cameraLight==='NOT_LOW_LIGHT';
-      if(!motionUsable){this.flow.reset();this.approach.reset();}
+      const motionUsable=this.approachEnabled&&tracking==='TRACKING'&&this.cameraLight==='NOT_LOW_LIGHT';
+      if(!motionUsable){this.flow.reset();this.approach.reset();this.approachRisk.reset();}
       const motion=motionUsable&&gray?this.flow.update({frameId,capturedAt:detectorTimestamp,width:96,height:72,pixels:gray},detections):[];
       const settings=(this.options.video.srcObject as MediaStream|null)?.getVideoTracks?.()[0]?.getSettings?.() as (MediaTrackSettings&{zoom?:number})|undefined;
       const approach=motionUsable?this.approach.update(enriched,{frameId,capturedAt:detectorTimestamp,now:performance.now(),motion,zoom:settings?.zoom}):[];
@@ -579,12 +581,10 @@ export class VisionPipeline {
       const finishedAt=performance.now();
       if(!freshTimestamp(detectorTimestamp,finishedAt)){this.invalidate('STALE');this.schedule(100);return;}
       this.options.callbacks.approachRisk?.({level,capturedAt:detectorTimestamp,trackId:top?.trackId,text});
-      const timings=this.telemetry.record(detectorTimestamp,finishedAt);
       this.slowFrames=timings.inferenceMs>600?Math.min(10,this.slowFrames+1):Math.max(0,this.slowFrames-1);
       this.perception={frameId,capturedAt:detectorTimestamp,completedAt:finishedAt,observations:enriched.map(d=>{
         const observation=observationFor(d);return this.cameraLight==='LOW_LIGHT'?{...observation,validity:'UNCERTAIN' as const,uncertainty:[...observation.uncertainty,'LOW_LIGHT']}:observation;
-      }),ground,approach,performance:timings,
-        tracking:timings.processedFrames<3?'WARMING_UP':timings.effectiveFps<1.5||this.cameraLight==='LOW_LIGHT'?'LIMITED':'TRACKING'};
+      }),ground,approach,performance:timings,tracking};
       this.options.callbacks.perception?.(this.perception);
       this.reportAnalysis(this.perception.tracking==='LIMITED'?'SLOW':'LIVE');
       this.publish(finishedAt,true);

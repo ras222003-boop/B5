@@ -157,6 +157,7 @@ export default function Vision() {
   const [hapticCapabilities,setHapticCapabilities]=useState<HapticCapabilities>({supported:false,intensityControl:false,source:'NONE'});
   const [hapticTestNotice,setHapticTestNotice]=useState('');
   const [approachSignal,setApproachSignal]=useState<ApproachRiskSignal|null>(null);
+  const approachSignalRef=useRef<ApproachRiskSignal|null>(null);
   const [metricThresholdDraft,setMetricThresholdDraft]=useState(()=>({
     caution:String(approachPreferences.metricThresholdsMeters.caution),
     high:String(approachPreferences.metricThresholdsMeters.high),
@@ -178,7 +179,7 @@ export default function Vision() {
       const now=performance.now();setObservationClock(now);
       if(perceptionRef.current&&!currentPerception(perceptionRef.current,now)){
         perceptionRef.current=null;setPerception(null);setOverlayFrame(null);setScene(null);setLastObjectText('');setLastAlert('');setRisk(null);
-        hapticsRef.current.stop();setApproachSignal(null);
+        hapticsRef.current.stop();approachAudioRef.current.reset();approachSignalRef.current=null;setApproachSignal(null);
         setAnalysisNotice('توقّف وصول إطارات حديثة؛ لا تتوفر قراءة مباشرة.');
         speechEngine.stop();
         if(!getSpeechPreferences().screenReaderMode)void enqueueInformation('توقف وصول إطارات حديثة؛ لا تتوفر قراءة مباشرة.',now+1500);
@@ -210,7 +211,7 @@ export default function Vision() {
     objectTrialRef.current?.finish(performance.now(),!cameraRef.current.active);
     setVideoPaused(false);
     stopSpeaking();
-    hapticsRef.current.stop();approachAudioRef.current.reset();setApproachSignal(null);
+    hapticsRef.current.stop();approachAudioRef.current.reset();approachSignalRef.current=null;setApproachSignal(null);
     perceptionRef.current=null;lastAskedPerceptionRef.current=null;setPerception(null);setLastObjectText('');setLastOutput('');setAnalysisNotice('توقف تحليل الكاميرا.');
     setState('STOPPED');setMetricInfo({status:'UNAVAILABLE',source:null});setMeterDiagnostic('OFF');setMeterSnapshot(null);setOverlayFrame(null);setPinnedFrame(null);setMeterRequestBusy(false);setMeterSpokenStatus('');setMetricTiming({load:null,inference:null});speechPacerRef.current.reset();setScene(null);setCandidates([]);setRecognized(null);setDescriptionImage(null);setDescriptionSentFrame(null);setDescriptionText('');setDescriptionDiagnostics('');setCameraSize(null);setDescriptionBusy(false);
     localizationRef.current=new BasiraLocalizationEngine();setLocationEstimate(null);graphNodesRef.current=[];
@@ -271,7 +272,7 @@ export default function Vision() {
         callbacks:{
           objectSourceSignature:signature=>{if(run===generation.current)objectTrialRef.current?.source(signature);},
           perception:snapshot=>{if(run===generation.current){objectTrialRef.current?.record(snapshot);perceptionRef.current=snapshot;setPerception(snapshot);setObservationClock(performance.now());}},
-          analysisState:status=>{if(run===generation.current){objectTrialRef.current?.state(status);setAnalysisNotice(status==='PAUSED'?'الكاميرا متوقفة أو مفقودة؛ توقفت الملاحظات المباشرة.':status==='STALE'?'لا تتوفر إطارات حديثة؛ توقفت الملاحظات المباشرة.':status==='SLOW'?'موثوقية التتبع منخفضة؛ التحليل بطيء أو الإضاءة ضعيفة.':'');if(status==='PAUSED'||status==='STALE'){hapticsRef.current.stop();setApproachSignal(null);setOverlayFrame(null);setScene(null);setLastObjectText('');setLastAlert('');setRisk(null);speechEngine.stop();if(!getSpeechPreferences().screenReaderMode)void enqueueInformation('توقف تحليل الكاميرا؛ لا تتوفر قراءة مباشرة.',performance.now()+1500);}}},
+          analysisState:status=>{if(run===generation.current){objectTrialRef.current?.state(status);setAnalysisNotice(status==='PAUSED'?'الكاميرا متوقفة أو مفقودة؛ توقفت الملاحظات المباشرة.':status==='STALE'?'لا تتوفر إطارات حديثة؛ توقفت الملاحظات المباشرة.':status==='SLOW'?'موثوقية التتبع منخفضة؛ توقفت مؤشرات الاقتراب.':'');if(status==='PAUSED'||status==='STALE'||status==='SLOW'){const hadApproachAlert=approachSignalRef.current&&['CAUTION','HIGH','CRITICAL'].includes(approachSignalRef.current.level);hapticsRef.current.stop();approachAudioRef.current.reset();approachSignalRef.current=null;setApproachSignal(null);if(hadApproachAlert)speechEngine.stop();if(status!=='SLOW'){setOverlayFrame(null);setScene(null);setLastObjectText('');setLastAlert('');setRisk(null);speechEngine.stop();if(!getSpeechPreferences().screenReaderMode)void enqueueInformation('توقف تحليل الكاميرا؛ لا تتوفر قراءة مباشرة.',performance.now()+1500);}}}},
           scene:description=>{if(run===generation.current){setScene(description);setState('ANALYZING');}},
           detectionFrame:frame=>{if(run===generation.current)setOverlayFrame(frame);},
           approachSpeech:text=>{
@@ -284,13 +285,23 @@ export default function Vision() {
             const now=performance.now();
             const fresh=freshApproachSignal(signal,now);
             const currentRisk=fresh?signal:{level:'UNAVAILABLE' as const,capturedAt:now};
+            const previousRisk=approachSignalRef.current;
+            if(currentRisk.level==='UNAVAILABLE'||currentRisk.level==='NONE'){
+              approachAudioRef.current.reset();
+              if(previousRisk&&['CAUTION','HIGH','CRITICAL'].includes(previousRisk.level))speechEngine.stop();
+            }
+            approachSignalRef.current=currentRisk;
             setApproachSignal(currentRisk);
             hapticsRef.current.update(currentRisk);
             if(!fresh||!approachPreferencesRef.current.audioEnabled||!signal.text||
               !approachAudioRef.current.shouldAnnounce(signal,now))return;
             if(!getSpeechPreferences().screenReaderMode){
-              const priority=signal.level==='CRITICAL'?'CRITICAL_SAFETY':signal.level==='HIGH'?'HIGH_SAFETY':'INFORMATION';
-              void speechEngine.enqueue(speechInput(signal.text,lang,'ENVIRONMENT'),priority,0,undefined,false,signal.capturedAt+APPROACH_TTL_MS);
+              if(activeObjectProfile){
+                void speechEngine.enqueueLocal(speechInput(signal.text,lang,'ENVIRONMENT'),signal.capturedAt+APPROACH_TTL_MS);
+              }else{
+                const priority=signal.level==='CRITICAL'?'CRITICAL_SAFETY':signal.level==='HIGH'?'HIGH_SAFETY':'INFORMATION';
+                void speechEngine.enqueue(speechInput(signal.text,lang,'ENVIRONMENT'),priority,0,undefined,false,signal.capturedAt+APPROACH_TTL_MS);
+              }
             }
           },
           alert:(text,level)=>{if(run===generation.current){setLastAlert(text);setRisk(level);}},
@@ -342,7 +353,11 @@ export default function Vision() {
             setMeterSnapshot(null);
             setPinnedFrame(null);
           }},
-          fatal:()=>{if(run===generation.current){setError(t.providerFailure);void stop();}},
+          fatal:()=>{if(run===generation.current){const experimental=Boolean(activeObjectProfile);void stop().then(()=>{
+            if(generation.current!==run+1)return;
+            if(experimental)setSelectedModel('original');
+            setError(experimental?'توقف النموذج التجريبي؛ عادت الواجهة إلى Lite0. أعد تشغيل الكاميرا إذا أردت المتابعة.':t.providerFailure);
+          });}},
         },
       });
       pipelineRef.current=pipeline;
@@ -359,7 +374,8 @@ export default function Vision() {
       const key=caught instanceof CameraServiceError?caught.code:'MODEL';
       console.warn('Basira vision startup failed',{code:key});
       const nativePermission=caught instanceof Error&&caught.message.includes('camera_permission_required');
-      setError(activeObjectProfile&&key==='MODEL'?`تعذر النموذج التجريبي: ${caught instanceof Error?caught.message:'object_quality_unavailable'}؛ يمكنك الرجوع فورًا إلى Lite0.`:nativePermission?t.nativePermissionRetry:key==='NO_CAMERA'?t.noCamera:key==='DENIED'?t.denied:key==='DEVICE_SETTINGS'?t.settings:key==='UNAVAILABLE'?t.unavailable:key==='IN_USE'?t.inUse:key==='MODEL'?t.modelFailure:t.cameraFailure);
+      setError(activeObjectProfile&&key==='MODEL'?`تعذر النموذج التجريبي: ${caught instanceof Error?caught.message:'object_quality_unavailable'}؛ عادت الواجهة إلى Lite0. أعد تشغيل الكاميرا إذا أردت المتابعة.`:nativePermission?t.nativePermissionRetry:key==='NO_CAMERA'?t.noCamera:key==='DENIED'?t.denied:key==='DEVICE_SETTINGS'?t.settings:key==='UNAVAILABLE'?t.unavailable:key==='IN_USE'?t.inUse:key==='MODEL'?t.modelFailure:t.cameraFailure);
+      if(activeObjectProfile&&key==='MODEL')setSelectedModel('original');
       setState('STOPPED');
       permissionService.status('camera').then(setCameraPermission).catch(()=>{});
     }
@@ -378,8 +394,8 @@ export default function Vision() {
     approachPreferencesRef.current=saved;setApproachPreferencesState(saved);
     hapticsRef.current.setPreferences(saved);
     if(!saved.audioEnabled)approachAudioRef.current.reset();
-    const pipeline=pipelineRef.current;
-    if(pipeline instanceof VisionPipeline)pipeline.setApproachPreferences(saved);
+    pipelineRef.current?.setApproachPreferences(saved);
+    if(saved.hapticsEnabled)void hapticsRef.current.refreshCapabilities().then(setHapticCapabilities);
   };
   const restoreApproachPreferences=()=>{
     const defaults=resetApproachPreferences();
@@ -547,15 +563,17 @@ export default function Vision() {
   };
   const cameraState=state==='STOPPED'?t.stopped:state==='STARTING'?t.starting:state==='WORKING'?t.working:t.analyzing;
   const hasNativeFrames=!activeObjectProfile&&typeof window!=='undefined'&&Boolean(window.BasiraNativeFrames);
+  const approachRequested=experimentalAlerts||approachPreferences.audioEnabled||approachPreferences.hapticsEnabled;
   const approachLevel:ApproachAlertLevel=state==='STOPPED'||!approachSignal||!freshApproachSignal(approachSignal,observationClock)
     ?'UNAVAILABLE':approachSignal.level;
-  const approachStatusText={
+  const approachStatusText=!approachRequested?'تحليل الاقتراب متوقف. شغّل المؤشرات أو الصوت أو الاهتزاز لبدء التقدير.':
+    activeObjectProfile&&approachPreferences.mode==='TRUSTED_METRIC'?'الحدود المترية غير مدعومة مع نموذج الأجسام التجريبي؛ اختر الاقتراب النسبي أو ارجع إلى Lite0.':({
     UNAVAILABLE:'تقدير الاقتراب غير متاح حاليًا.',
     NONE:'لا توجد مؤشرات اقتراب تستدعي التنبيه في الإطارات الحالية؛ هذا لا يثبت خلو الطريق.',
     CAUTION:'مؤشرات اقتراب تستحق الانتباه؛ تحقق من محيطك.',
     HIGH:'مؤشرات اقتراب مرتفعة؛ تحقق من محيطك فورًا.',
     CRITICAL:'مؤشرات اقتراب شديدة بأدلة متعددة؛ توقف وتحقق من محيطك.',
-  }[approachLevel];
+  }[approachLevel]);
   const currentMeterSnapshot=meterSnapshot&&Date.now()-meterSnapshot.capturedAt<6000?meterSnapshot:null;
   const currentPinnedFrame=pinnedFrame&&currentMeterSnapshot&&pinnedFrame.frame.frameId===currentMeterSnapshot.frameId&&
     pinnedFrame.frame.capturedAt===currentMeterSnapshot.capturedAt?pinnedFrame:null;
@@ -579,7 +597,7 @@ export default function Vision() {
   };
   return <Layout><div className="container max-w-4xl space-y-4 py-6 text-stone-100" data-testid="vision-page" data-vision-mode={selectedModel} data-state={state}>
     <Link href="/navigation" className="text-amber-300 underline">{nav.title}</Link>
-    <header><h1 className="text-3xl font-black">{t.title}</h1><p className="mt-3 text-lg text-stone-300">{researchModel?'تعرف تجريبي محلي على السلالم داخل بصيرة، دون توجيه أو تحذير سقوط.':activeObjectProfile?'تعرف محلي تجريبي على الأشياء وألوانها، دون توجيه أو قياس مسافة أو تحذيرات ملاحية.':t.description}</p></header>
+    <header><h1 className="text-3xl font-black">{t.title}</h1><p className="mt-3 text-lg text-stone-300">{researchModel?'تعرف تجريبي محلي على السلالم داخل بصيرة، دون توجيه أو تحذير سقوط.':activeObjectProfile?'تعرف محلي تجريبي على الأشياء وألوانها مع مؤشرات اقتراب بصرية نسبية اختيارية؛ دون توجيه أو قياس مسافة أو تحذيرات ملاحية معتمدة.':t.description}</p></header>
     <section className="space-y-2 rounded-xl border border-amber-300/40 p-4" aria-label="اختيار نموذج بصيرة">
       <label htmlFor="basira-vision-model">نموذج الرؤية</label>
       <select id="basira-vision-model" aria-describedby="vision-model-source" className="mx-3 min-h-12 max-w-full rounded-xl bg-stone-900 px-3" value={selectedModel} onChange={event=>chooseModel(event.target.value)}>
@@ -588,7 +606,7 @@ export default function Vision() {
       <p id="vision-model-source" role="status" aria-live="polite" className="text-sm text-stone-300">مصدر النتائج: {activeObjectProfile?.name??researchModel?.name??'EfficientDet-Lite0 الأصلي'}؛ الاستدلال محلي ودرجات الكشف غير معايرة.</p>
     </section>
     {researchModel?<ExperimentalVision key={researchModel.id} model={researchModel} onOriginal={()=>chooseModel('original')}/>:<>
-    {activeObjectProfile&&<div role="status" className="rounded-xl border border-amber-300 p-4"><p>تعرف تجريبي على الأشياء فقط؛ دون قياس مسافة أو توجيه أو تحذير سقوط. الألوان غير مثبتة بشريًا. {activeObjectProfile.maskForStills?'التقسيم المحلي للصور الثابتة فقط وقد يستغرق عدة ثوانٍ.':'أوقف التقسيم الآلي بسبب إخفاق فحص الجودة النهائي؛ اللون تقدير محافظ من الصندوق أو غير واضح.'} لم يختبر هذا النموذج على iPhone.</p>{activeObjectProfile.commercialTrainingAllowed&&<p>مصادر التدريب الإضافي مرخصة للاستخدام المستهدف؛ النموذج تجريبي ولم يعتمد للإنتاج. <a href='/api/vision/object-quality/models/objects-basira-v3/knowledge' target='_blank' rel='noreferrer'>معرفة بصيرة — سجل النماذج</a></p>}{activeObjectProfile.researchOnlyData&&<p>بيانات هذا الإصدار مرخصة للبحث فقط؛ لا تمنح أهلية الاستخدام التجاري. <a href='/api/vision/object-quality/knowledge' target='_blank' rel='noreferrer'>معرفة بصيرة — سجل النماذج</a></p>}{activeObjectProfile.id!=='objects-yolox-tiny'&&<button className={secondary} onClick={()=>chooseModel('objects-yolox-tiny')}>الرجوع فورًا إلى Tiny السابق</button>}<button className={secondary} onClick={()=>chooseModel('original')}>الرجوع فورًا إلى Lite0</button></div>}
+    {activeObjectProfile&&<div role="status" className="rounded-xl border border-amber-300 p-4"><p>تعرف تجريبي على الأشياء فقط؛ مؤشرات الاقتراب النسبية اختبارية ولا تقيس المسافة أو توجه المشي أو تحذر من السقوط. الألوان غير مثبتة بشريًا. {activeObjectProfile.maskForStills?'التقسيم المحلي للصور الثابتة فقط وقد يستغرق عدة ثوانٍ.':'أوقف التقسيم الآلي بسبب إخفاق فحص الجودة النهائي؛ اللون تقدير محافظ من الصندوق أو غير واضح.'} لم يختبر هذا النموذج على iPhone.</p>{activeObjectProfile.commercialTrainingAllowed&&<p>مصادر التدريب الإضافي مرخصة للاستخدام المستهدف؛ النموذج تجريبي ولم يعتمد للإنتاج. <a href='/api/vision/object-quality/models/objects-basira-v3/knowledge' target='_blank' rel='noreferrer'>معرفة بصيرة — سجل النماذج</a></p>}{activeObjectProfile.researchOnlyData&&<p>بيانات هذا الإصدار مرخصة للبحث فقط؛ لا تمنح أهلية الاستخدام التجاري. <a href='/api/vision/object-quality/knowledge' target='_blank' rel='noreferrer'>معرفة بصيرة — سجل النماذج</a></p>}{activeObjectProfile.id!=='objects-yolox-tiny'&&<button className={secondary} onClick={()=>chooseModel('objects-yolox-tiny')}>الرجوع فورًا إلى Tiny السابق</button>}<button className={secondary} onClick={()=>chooseModel('original')}>الرجوع فورًا إلى Lite0</button></div>}
     {!activeObjectProfile&&<p className="rounded-xl border border-amber-300/40 bg-amber-300/10 p-4 text-amber-100">{t.advisory}</p>}
     {activeObjectProfile&&error&&<p role="alert" className="rounded-xl border border-red-400/50 p-4 text-red-200">{error}</p>}
     <div className="flex flex-wrap gap-3">{state==='STOPPED'?<button type="button" className={button} onClick={start}>{t.start}</button>:<button type="button" className={button} onClick={()=>void stop()}>{t.stop}</button>}</div>
@@ -603,13 +621,15 @@ export default function Vision() {
     {videoPaused&&<div role="alert" className="rounded-xl border border-amber-300 bg-stone-900 p-4"><p>{assistant.cameraPaused}</p><button type="button" className={`${secondary} mt-2`} onClick={()=>void resumeCamera()}>{assistant.resumeCamera}</button></div>}
     <p role="status" aria-live="polite" className="text-amber-200">{analysisNotice}</p>
     <VisualRadar snapshot={current} copy={t} visible={radarVisible} onToggle={()=>setRadarVisible(value=>!value)} onDescribe={()=>report(false)}/>
-    {!activeObjectProfile&&<section className="rounded-2xl border border-amber-300/50 bg-stone-900 p-5" aria-labelledby="approach-settings-title">
+    <section className="rounded-2xl border border-amber-300/50 bg-stone-900 p-5" aria-labelledby="approach-settings-title">
       <h2 id="approach-settings-title" className="text-xl font-bold">المسافات وتنبيهات الاقتراب</h2>
-      <p className="mt-2 text-stone-300">التنبيهات تجريبية وتعتمد على أدلة اقتراب حديثة وثابتة. الكاميرا لا تثبت مسار مشيك أو خلو الطريق، والحدود المترية لا تعمل إلا مع عمق مستشعر موثوق ومتزامن.</p>
+      <p className="mt-2 text-stone-300">{activeObjectProfile?'مع هذا النموذج التجريبي يتوفر تقدير بصري نسبي فقط. لا توجد أمتار أو بيانات LiDAR في هذه الجلسة؛ المؤشرات للبحث والعرض وليست دليل ملاحة.':'التنبيهات تجريبية وتعتمد على أدلة اقتراب حديثة وثابتة. الكاميرا لا تثبت مسار مشيك أو خلو الطريق، والحدود المترية لا تعمل إلا مع عمق مستشعر موثوق ومتزامن.'}</p>
       <p className="mt-3 font-semibold" role="status" aria-live="polite" data-testid="approach-risk-status">{approachStatusText}</p>
+      <button type="button" className={`${secondary} mt-3`} data-testid="approach-visual-toggle" aria-pressed={experimentalAlerts} onClick={()=>setAlerts(!experimentalAlerts)}>{experimentalAlerts?'إيقاف مؤشرات الاقتراب المرئية':'تشغيل مؤشرات الاقتراب المرئية'}</button>
+      <p className="mt-2 text-sm text-stone-300">تشغيل الصوت أو الاهتزاز يبدأ تحليل الاقتراب أثناء عمل الكاميرا حتى إذا كانت المؤشرات المرئية متوقفة. إيقاف الخيارات الثلاثة يوقفه.</p>
       <div className="mt-4 grid gap-3 sm:grid-cols-2">
-        <label className="flex min-h-12 items-center gap-3"><input type="checkbox" className="size-5" checked={approachPreferences.hapticsEnabled} onChange={event=>changeApproachPreferences({...approachPreferencesRef.current,hapticsEnabled:event.target.checked})}/>تشغيل اهتزازات الاقتراب</label>
-        <label className="flex min-h-12 items-center gap-3"><input type="checkbox" className="size-5" checked={approachPreferences.audioEnabled} onChange={event=>changeApproachPreferences({...approachPreferencesRef.current,audioEnabled:event.target.checked})}/>تشغيل تنبيهات الاقتراب الصوتية</label>
+        <label className="flex min-h-12 items-center gap-3"><input type="checkbox" data-testid="approach-haptics-toggle" className="size-5" checked={approachPreferences.hapticsEnabled} onChange={event=>changeApproachPreferences({...approachPreferencesRef.current,hapticsEnabled:event.target.checked})}/>تشغيل اهتزازات الاقتراب</label>
+        <label className="flex min-h-12 items-center gap-3"><input type="checkbox" data-testid="approach-audio-toggle" className="size-5" checked={approachPreferences.audioEnabled} onChange={event=>changeApproachPreferences({...approachPreferencesRef.current,audioEnabled:event.target.checked})}/>تشغيل تنبيهات الاقتراب الصوتية</label>
         <label className="block">الحساسية
           <select className="mt-1 min-h-12 w-full rounded-lg bg-stone-950 px-3" value={approachPreferences.sensitivity} onChange={event=>changeApproachPreferences({...approachPreferencesRef.current,sensitivity:event.target.value as ApproachPreferences['sensitivity']})}>
             <option value="LOW">منخفضة</option><option value="BALANCED">متوازنة</option><option value="HIGH">عالية</option>
@@ -617,7 +637,7 @@ export default function Vision() {
         </label>
         <label className="block">طريقة التنبيه
           <select className="mt-1 min-h-12 w-full rounded-lg bg-stone-950 px-3" value={approachPreferences.mode} onChange={event=>changeApproachPreferences({...approachPreferencesRef.current,mode:event.target.value as ApproachPreferences['mode']})}>
-            <option value="RELATIVE">اقتراب نسبي ذكي</option><option value="TRUSTED_METRIC">حدود مسافات مترية موثوقة</option>
+            <option value="RELATIVE">اقتراب نسبي ذكي</option><option value="TRUSTED_METRIC" disabled={Boolean(activeObjectProfile)}>حدود مسافات مترية موثوقة{activeObjectProfile?' — غير متاحة مع V3':''}</option>
           </select>
         </label>
         <label className="block">نمط الاهتزاز
@@ -632,7 +652,7 @@ export default function Vision() {
         </label>}
       </div>
       <p className="mt-3 text-sm text-stone-300">الحساسية تضبط قرار التنبيه فقط؛ لا تغيّر قراءة المستشعر أو تزيد الثقة بها.</p>
-      {approachPreferences.mode==='TRUSTED_METRIC'&&<fieldset className="mt-4 rounded-xl border border-amber-200/30 p-4">
+      {approachPreferences.mode==='TRUSTED_METRIC'&&!activeObjectProfile&&<fieldset className="mt-4 rounded-xl border border-amber-200/30 p-4">
         <legend className="px-2 font-bold">حدود التنبيه المترية</legend>
         <p className="mb-3 text-sm text-stone-300">تتطلب عمق ARKit أو ARCore متزامنًا مع صورة الجسم. لا تستخدم أمتار نموذج العمق الأحادي غير المعاير.</p>
         <div className="grid gap-3 sm:grid-cols-3">
@@ -647,8 +667,8 @@ export default function Vision() {
         <button type="button" className={secondary} disabled={!hapticCapabilities.supported} onClick={()=>void testApproachHaptics()}>اختبار الاهتزاز</button>
         <button type="button" className={secondary} onClick={restoreApproachPreferences}>إعادة الإعدادات الافتراضية</button>
       </div>
-      <p role="status" aria-live="polite" className="mt-2 text-sm">{hapticTestNotice||(!hapticCapabilities.supported?'الاهتزاز غير مدعوم على هذا الجهاز أو المتصفح؛ يمكنك تشغيل التنبيهات الصوتية بديلاً.':'')}</p>
-    </section>}
+      <p role="status" aria-live="polite" className="mt-2 text-sm" data-testid="approach-haptic-support">{hapticTestNotice||(!hapticCapabilities.supported?'الاهتزاز غير مدعوم على هذا الجهاز أو المتصفح. Safari على iPhone لا يدعم الاهتزاز الأصلي في صفحة الويب؛ يمكنك تشغيل الصوت بديلاً.':hapticCapabilities.source==='NATIVE'?'الاهتزاز الأصلي متاح في التطبيق على هذا الجهاز.':'واجهة اهتزاز المتصفح متاحة على هذا الجهاز.')}</p>
+    </section>
     <section className="rounded-2xl border border-amber-300/50 bg-stone-900 p-5" aria-label={assistant.objectSpeech}>
       <button type="button" className={secondary} aria-pressed={screenReaderMode} onClick={()=>{speechEngine.stop();saveSpeechPreferences({...getSpeechPreferences(),screenReaderMode:!screenReaderMode});}}>وضع قارئ الشاشة: {screenReaderMode?'تشغيل؛ الوصف عبر قارئ الشاشة':'إيقاف؛ الوصف عبر صوت بصيرة'}</button>
       {activeObjectProfile&&<button type="button" className={`${secondary} mx-2`} disabled={!objectTrialRef.current} onClick={()=>void exportObjectTrial()}>حفظ سجل اختبار الكاميرا محليًا دون صور</button>}
@@ -656,7 +676,7 @@ export default function Vision() {
       <button type="button" className={`${secondary} mx-2`} aria-describedby="colour-speech-qualification" aria-pressed={colorSpeechEnabled} onClick={()=>{const enabled=!colorSpeechEnabled;colorSpeechRef.current=enabled;setColorSpeechEnabled(saveColorSpeechEnabled(enabled));pipelineRef.current?.setColorSpeechEnabled(enabled);if(!enabled)speechEngine.replaceAtPriority('INFORMATION');}}>وصف الألوان صوتيًا: {colorSpeechEnabled?'مطلوب عند التأهل':'إيقاف'}</button>
       <p id="colour-speech-qualification" data-testid="colour-speech-qualification" className="mt-2 text-sm text-stone-300">{COLOUR_SPEECH_QUALIFICATION.status==='UNQUALIFIED'?'تقديرات اللون تشخيصية وغير معايرة. يستمر نطق اسم الجسم دون لونه حتى اجتياز اختبار ألوان مستقل؛ تكرار التقدير لا يثبت صحته.':'إعلان الألوان يخضع لسياسة التحقق المستقلة.'}</p>
       <p className="mt-2 text-stone-300">درجات الكاشف غير معايرة وليست نسب صحة مثبتة. الألوان تقديرية من بكسلات الإطار نفسه؛ عند غياب قناع جسم موثوق قد يمتنع النظام. يمين الصورة ويسارها مواضع بصرية وليسا تعليمات للمشي.</p>
-      <div className="mt-3 flex flex-wrap gap-3">{!activeObjectProfile&&<button type="button" className={secondary} aria-pressed={experimentalAlerts} onClick={()=>setAlerts(!experimentalAlerts)}>{experimentalAlerts?'إيقاف مؤشرات الاقتراب التجريبية':'تشغيل مؤشرات الاقتراب التجريبية'}</button>}<button type="button" className={secondary} onClick={repeatLast}>إعادة آخر وصف</button></div>
+      <div className="mt-3 flex flex-wrap gap-3"><button type="button" className={secondary} onClick={repeatLast}>إعادة آخر وصف</button></div>
       <p className="mt-2 text-stone-300">مؤشرات الاقتراب تتطلب تتبعًا مستقرًا وأدلة حركة متعددة. قد تتوقف عند بطء الجهاز أو دوران الكاميرا أو التكبير؛ لا تثبت احتمال اصطدام أو سلامة المشي.</p>
       <p className="mt-3 min-h-6" role={screenReaderMode?'status':undefined} aria-live={screenReaderMode?'polite':'off'}>{lastObjectText}</p>
       <p className="mt-2" role="status" aria-live="off">{assistant.speechStatus}: {screenReaderMode?assistant.speechMuted:speechError==='PLAYBACK_BLOCKED'?assistant.speechBlocked:speechError==='NO_VOICE'?assistant.speechNoVoice:speechMode==='PREMIUM'?assistant.speechPremium:assistant.speechLocal}</p>

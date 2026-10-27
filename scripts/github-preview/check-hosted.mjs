@@ -96,7 +96,10 @@ try {
   if (
     status.sourceCommit !== receipt.sourceCommit ||
     status.databaseConnected !== false ||
-    status.cloudInferenceEnabled !== false
+    status.cloudInferenceEnabled !== false ||
+    status.nativeLidarBridgeAvailable !== false ||
+    status.nativeHapticsAvailable !== false ||
+    status.safariVibrationAvailable !== false
   )
     throw Error("Unexpected hosted preview identity");
   const result = {
@@ -112,6 +115,9 @@ try {
     arabicAudibleQualityTested: false,
     iphoneTested: false,
     voiceOverTested: false,
+    nativeLidarBridgeAvailable: false,
+    nativeHapticsAvailable: false,
+    safariVibrationAvailable: false,
     originalManusModified: false,
   };
   journal.complete = true;

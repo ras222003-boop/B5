@@ -17,17 +17,31 @@ import {
 import { assessFrameLight } from "./frameQuality";
 import { COCO_LABELS } from "./cocoLabels";
 import {sourcePixelSignature} from './objectTrial';
+import { grayscalePixels } from './groundHazards';
+import { SparseOpticalFlow } from './opticalFlow';
+import { VisualApproachEstimator } from './visualApproach';
+import { SmartApproachRiskEngine } from './approachRisk';
+import {
+  DEFAULT_APPROACH_PREFERENCES,
+  type ApproachPreferences,
+} from './approachPreferences';
 
-/** Existing Basira camera UI, object-only inference. No fusion, depth, OCR, hazards or navigation calls. */
+/** Existing Basira camera UI, object-only inference and optional experimental image-motion cues. No fusion, depth, OCR, hazards or navigation calls. */
 export class ObjectOnlyPipeline {
   private running = false;
   private generation = 0;
   private timer: number | null = null;
   private lastVideoTime = -1;
+  private analysisState: 'WAITING'|'LIVE'|'STALE'|'PAUSED'|'SLOW' = 'WAITING';
   private readonly tracker: ObjectTracker;
   private readonly colors = new ObjectColorTracker();
   private readonly speech: ObjectSpeechTracker;
   private readonly telemetry = new PerceptionTelemetry();
+  private readonly flow = new SparseOpticalFlow();
+  private readonly approach = new VisualApproachEstimator();
+  private readonly approachRisk = new SmartApproachRiskEngine();
+  private manualApproachEnabled: boolean;
+  private approachPreferences: ApproachPreferences;
   private objectSpeechEnabled: boolean;
   private colorSpeechEnabled: boolean;
   private _snapshot: PerceptionSnapshot | null = null;
@@ -52,6 +66,8 @@ export class ObjectOnlyPipeline {
     );
     this.objectSpeechEnabled = options.objectSpeechEnabled !== false;
     this.colorSpeechEnabled = options.colorSpeechEnabled === true;
+    this.manualApproachEnabled = options.experimentalApproachEnabled === true;
+    this.approachPreferences = options.approachPreferences ?? DEFAULT_APPROACH_PREFERENCES;
   }
   get snapshot() {
     return null;
@@ -67,8 +83,30 @@ export class ObjectOnlyPipeline {
     this.colorSpeechEnabled = value;
     this.speech.reset();
   }
-  setExperimentalApproachEnabled(_value: boolean) {
-    /* This session has no approach or safety path. */
+  private get relativeApproachEnabled() {
+    return (
+      this.manualApproachEnabled ||
+      this.approachPreferences.audioEnabled ||
+      this.approachPreferences.hapticsEnabled
+    ) && this.approachPreferences.mode === 'RELATIVE';
+  }
+  private resetApproach() {
+    this.flow.reset();
+    this.approach.reset();
+    this.approachRisk.reset();
+    if (this._snapshot?.approach.length) {
+      this._snapshot = { ...this._snapshot, approach: [] };
+      this.options.callbacks.perception?.(this._snapshot);
+    }
+    this.options.callbacks.approachRisk?.({level:'UNAVAILABLE',capturedAt:performance.now()});
+  }
+  setExperimentalApproachEnabled(value: boolean) {
+    this.manualApproachEnabled = value;
+    this.resetApproach();
+  }
+  setApproachPreferences(preferences: ApproachPreferences) {
+    this.approachPreferences = preferences;
+    this.resetApproach();
   }
   async setAutoMeterEnabled(_value: boolean) {
     return false;
@@ -93,18 +131,31 @@ export class ObjectOnlyPipeline {
     this.tracker.reset();
     this.colors.reset();
     this.speech.reset();
+    this.resetApproach();
     this._snapshot = null;
     this.options.callbacks.perception?.(null);
     this.options.callbacks.detectionFrame?.(null);
+  }
+  private cameraUnavailable() {
+    const video = this.options.video;
+    const tracks = (video.srcObject as MediaStream | null)?.getVideoTracks?.();
+    return video.paused || video.ended || video.readyState < 2 ||
+      Boolean(tracks && (!tracks.length || tracks[0].readyState === 'ended'));
+  }
+  private reportAnalysis(state:'WAITING'|'LIVE'|'STALE'|'PAUSED'|'SLOW') {
+    if (state !== this.analysisState) {
+      this.analysisState = state;
+      this.options.callbacks.analysisState?.(state);
+    }
   }
   private async tick() {
     if (!this.running) return;
     const run = this.generation,
       started = performance.now(),
       video = this.options.video;
-    if (video.paused || video.ended || video.readyState < 2) {
+    if (this.cameraUnavailable()) {
       this.clear();
-      this.options.callbacks.analysisState?.("PAUSED");
+      this.reportAnalysis('PAUSED');
       this.schedule(200);
       return;
     }
@@ -114,7 +165,7 @@ export class ObjectOnlyPipeline {
         !freshTimestamp(this._snapshot.capturedAt, started)
       ) {
         this.clear();
-        this.options.callbacks.analysisState?.("STALE");
+        this.reportAnalysis('STALE');
       }
       this.schedule(100);
       return;
@@ -135,15 +186,31 @@ export class ObjectOnlyPipeline {
         light = pixels ? assessFrameLight(pixels.data) : "UNKNOWN";
       const colourPixelSamplingMs=performance.now()-at;
       if(pixels&&this.options.callbacks.objectSourceSignature)this.options.callbacks.objectSourceSignature(sourcePixelSignature(pixels));
+      let gray: Uint8Array | null = null;
+      if (this.relativeApproachEnabled && light === 'NOT_LOW_LIGHT') {
+        try {
+          const grayCanvas = document.createElement('canvas');
+          grayCanvas.width = 96;
+          grayCanvas.height = 72;
+          const context = grayCanvas.getContext('2d', {willReadFrequently:true});
+          if (context) {
+            context.drawImage(canvas, 0, 0, 96, 72);
+            gray = grayscalePixels(context.getImageData(0, 0, 96, 72).data);
+          }
+          grayCanvas.width = grayCanvas.height = 0;
+        } catch { gray = null; }
+      }
       const raw = await this.options.vision.detect(canvas, at);
       if (!this.running || run !== this.generation) return;
-      if (
-        video.paused ||
-        video.ended ||
-        !freshTimestamp(at, performance.now())
-      ) {
+      if (this.cameraUnavailable()) {
         this.clear();
-        this.options.callbacks.analysisState?.("STALE");
+        this.reportAnalysis('PAUSED');
+        this.schedule(100);
+        return;
+      }
+      if (!freshTimestamp(at, performance.now())) {
+        this.clear();
+        this.reportAnalysis('STALE');
         this.schedule(100);
         return;
       }
@@ -152,6 +219,7 @@ export class ObjectOnlyPipeline {
         raw.some(
           d =>
             d.experimental ||
+            d.source !== 'OBJECT_DETECTOR' ||
             !d.cocoClass ||
             !COCO_LABELS[d.cocoClass] ||
             d.type.startsWith("STAIRS") ||
@@ -159,13 +227,16 @@ export class ObjectOnlyPipeline {
         )
       )
         throw new Error("object_only_detection_contract");
-      const tracked = this.tracker.update(raw, {
+      // V3 has no aligned depth input. Even a provider-supplied distance cannot
+      // become a measured metre or enter the ordinary scene/safety path.
+      const tracked = this.tracker.update(raw.map(d => ({...d, approximateDistance:null})), {
         frameId,
         capturedAt: at,
         now: performance.now(),
       });
       if (tracked.rejectedFrame) {
         this.clear();
+        this.reportAnalysis('STALE');
         this.schedule(100);
         return;
       }
@@ -181,6 +252,42 @@ export class ObjectOnlyPipeline {
       }));
       const colourAnalysisMs=performance.now()-colourStarted;
       const timings = {...this.telemetry.record(at, performance.now()),colourAnalysisMs,colourPixelSamplingMs};
+      const tracking = timings.processedFrames < 3 ? 'WARMING_UP'
+        : timings.effectiveFps < 1.5 || light === 'LOW_LIGHT' ? 'LIMITED' : 'TRACKING';
+      const motionUsable = this.relativeApproachEnabled && tracking === 'TRACKING' &&
+        light === 'NOT_LOW_LIGHT' && gray !== null;
+      let approach: ReturnType<VisualApproachEstimator['update']> = [];
+      let riskResult: ReturnType<SmartApproachRiskEngine['update']> | null = null;
+      if (motionUsable) {
+        try {
+          const motion = this.flow.update({frameId,capturedAt:at,width:96,height:72,pixels:gray!},detections);
+          const settings = (video.srcObject as MediaStream | null)?.getVideoTracks?.()[0]?.getSettings?.() as
+            (MediaTrackSettings & {zoom?:number}) | undefined;
+          approach = this.approach.update(detections,{frameId,capturedAt:at,now:performance.now(),motion,zoom:settings?.zoom});
+          riskResult = this.approachRisk.update(detections,approach,{
+            frameId,capturedAt:at,now:performance.now(),metricDepth:null,
+            mode:'RELATIVE',sensitivity:this.approachPreferences.sensitivity,
+          });
+        } catch {
+          // An optional image-motion failure must preserve ordinary V3 objects.
+          this.flow.reset();this.approach.reset();this.approachRisk.reset();
+          approach = [];
+        }
+      } else {
+        this.flow.reset();this.approach.reset();this.approachRisk.reset();
+      }
+      const rank = {UNAVAILABLE:-1,NONE:0,ATTENTION:1,HIGH:2,URGENT:3};
+      const top = riskResult?.risks.filter(item => rank[item.level] > 0)
+        .sort((a,b) => rank[b.level]-rank[a.level] ||
+          (a.approximateTtcSeconds??Infinity)-(b.approximateTtcSeconds??Infinity))[0];
+      const level = top?.level === 'ATTENTION' ? 'CAUTION' : top?.level === 'URGENT' ? 'CRITICAL' :
+        top?.level ?? (riskResult?.status === 'NO_APPROACH_EVIDENCE' ? 'NONE' : 'UNAVAILABLE');
+      const alert = riskResult?.alert;
+      const alertDetection = alert && detections.find(item => item.trackId === alert.trackId);
+      const text = alert && top?.trackId === alert.trackId && alertDetection
+        ? (alert.level === 'ATTENTION' ? this.options.copy.approachPossible : this.options.copy.approachStrong)(
+            this.options.copy.object[alert.type],this.options.copy.direction[alertDetection.horizontalDirection])
+        : undefined;
       this._snapshot = {
         frameId,
         capturedAt: at,
@@ -194,16 +301,12 @@ export class ObjectOnlyPipeline {
           status: "CURRENT",
           observations: [],
         },
-        approach: [],
+        approach,
         performance: timings,
-        tracking:
-          timings.processedFrames < 3
-            ? "WARMING_UP"
-            : timings.effectiveFps < 1.5 || light === "LOW_LIGHT"
-              ? "LIMITED"
-              : "TRACKING",
+        tracking,
       };
       this.options.callbacks.quality?.(light);
+      this.options.callbacks.approachRisk?.({level,capturedAt:at,trackId:top?.trackId,text});
       this.options.callbacks.perception?.(this._snapshot);
       this.options.callbacks.detectionFrame?.({
         frameId,
@@ -212,7 +315,7 @@ export class ObjectOnlyPipeline {
         height: canvas.height,
         detections,
       });
-      this.options.callbacks.analysisState?.(
+      this.reportAnalysis(
         this._snapshot.tracking === "LIMITED" ? "SLOW" : "LIVE"
       );
       if (this.options.callbacks.objectSpeech)
@@ -225,7 +328,8 @@ export class ObjectOnlyPipeline {
           () => false,
           this.colorSpeechEnabled
         );
-      this.schedule(Math.max(0, 500 - (performance.now() - started)));
+      const interval = this.relativeApproachEnabled ? Math.min(250,1000/Math.max(4,this.options.config.frameAnalysisRate)) : 500;
+      this.schedule(Math.max(0, interval - (performance.now() - started)));
     } catch (error) {
       if (this.running && run === this.generation) {
         this.options.callbacks.fatal(error);

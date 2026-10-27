@@ -89,11 +89,21 @@ const readmePath = resolve(cwd, "README.md"),
     /^Source: https:\/\/github\.com\/ras222003-boop\/B5\/tree\/[a-f0-9]{40}$/m;
 if (!sourceLine.test(readme))
   throw Error("Review changed preview README source identity");
+const priorSafetyText =
+  "An iPhone/VoiceOver test must be performed by the device owner and is NOT claimed by the desktop software-media test.",
+  currentSafetyText =
+    "The browser preview has no native iPhone LiDAR bridge or native haptics. Safari does not support the Web Vibration API, so vibration behaviour must be tested in the signed iOS app on a real device. " +
+    priorSafetyText;
+if (!readme.includes(priorSafetyText))
+  throw Error("Review changed preview README safety text");
 await writeFile(
   readmePath,
   readme.replace(
     sourceLine,
     "Source: https://github.com/ras222003-boop/B5/tree/" + receipt.sourceCommit
+  ).replace(
+    readme.includes(currentSafetyText) ? currentSafetyText : priorSafetyText,
+    currentSafetyText
   )
 );
 await add("README.md");

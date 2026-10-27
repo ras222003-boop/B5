@@ -92,6 +92,18 @@ try {
       JSON.stringify({ phase: "photo-start", id, hosted: Boolean(hosted) })
     );
     await select.selectOption(id);
+    assert.equal(
+      await page
+        .getByRole("heading", { name: "المسافات وتنبيهات الاقتراب" })
+        .isVisible(),
+      true,
+      `Approach controls disappeared for ${id}`
+    );
+    assert.equal(
+      await page.getByTestId("approach-risk-status").isVisible(),
+      true,
+      `Approach status disappeared for ${id}`
+    );
     const panel = page.getByTestId("object-photo-input");
     await panel.getByRole("checkbox").check();
     const at = Date.now();
@@ -205,6 +217,7 @@ try {
     nativeTranscriptionDisabled: true,
     rollbackToLite0: true,
     experimentalDefault: false,
+    approachControlsPresentForAllModels: true,
     pageErrors: errors,
     mediaWritesObserved: writes.length,
     outsidePreviewRequests: escaped.length,

@@ -24,6 +24,11 @@ if (
   "https://github.com/ras222003-boop/basira-iphone-research-preview.git"
 )
   throw Error("Only the independent preview repository may be uploaded");
+await run(process.execPath, ["assemble-preview.mjs"], {
+  cwd,
+  encoding: "utf8",
+  windowsHide: true,
+});
 await run(process.execPath, ["verify-preview.mjs"], {
   cwd,
   encoding: "utf8",

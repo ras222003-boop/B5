@@ -52,10 +52,17 @@ try {
   await page.getByRole('button', { name: 'تشغيل رؤية بصيرة', exact: true }).click();
   await page.getByTestId('perception-objects').getByText(/كرسي/).waitFor({ timeout: 60_000 });
   report.camera.objectObserved = true;
+  report.camera.approachInitiallyOff = (await page.getByTestId('approach-risk-status').innerText()).includes('متوقف');
+  await audio.check();
+  report.camera.audioStartsAnalysis = !(await page.getByTestId('approach-risk-status').innerText()).includes('متوقف');
+  await audio.uncheck();
+  await haptics.check();
+  report.camera.hapticsStartsAnalysis = !(await page.getByTestId('approach-risk-status').innerText()).includes('متوقف');
   await page.getByRole('button', { name: 'إيقاف الرؤية', exact: true }).click();
   await page.getByRole('button', { name: 'تشغيل رؤية بصيرة', exact: true }).waitFor({ timeout: 15_000 });
   report.camera.stopped = true;
   report.camera.approachStatus = await page.getByTestId('approach-risk-status').innerText();
+  report.camera.noActiveApproachAfterStop = report.camera.approachStatus.includes('غير متاح');
   await context.close();
 } finally {
   await browser.close();
@@ -65,5 +72,7 @@ try {
 if (!report.settings.defaultsQuiet || !report.settings.testDisabled || !report.settings.unsupportedMessage ||
     !report.settings.persisted || !report.settings.metricUnavailable || !report.settings.reset ||
     report.settings.seriousAxeViolations.length || !report.camera.objectObserved ||
-    !report.camera.stopped || report.errors.length)
+    !report.camera.approachInitiallyOff || !report.camera.audioStartsAnalysis ||
+    !report.camera.hapticsStartsAnalysis || !report.camera.stopped ||
+    !report.camera.noActiveApproachAfterStop || report.errors.length)
   throw new Error('approach browser smoke assertions failed');
