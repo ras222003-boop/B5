@@ -86,7 +86,7 @@ export async function freezeReviewedV4({manifestPath,protectedIndexPath,dataRoot
   const policy=JSON.parse(policyBytes);
   const metadata=assessV4Intake(manifest,protectedIndex,policy,input);
   const images=await inspectV4Images(manifest,input);
-  if (!metadata.intakeReady || !images.imageContentVerified)
+  if (!metadata.metadataReady || !images.imageContentVerified)
     throw Error('independent image, rights, label, split or historical-final intake gate failed');
   const realCheckpoint = realpathSync(resolve(originalTinyCheckpoint));
   if (isInside(project,realCheckpoint)) throw Error('model weights must stay outside the repository');
