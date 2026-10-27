@@ -13,11 +13,22 @@ const page = await context.newPage();
 page.setDefaultTimeout(15000);
 let sentRequest: { body:any; key:string } | null = null;
 let polls = 0;
+let savedContacts: Array<{ id:string; name:string; email:string; course:string; organization:string }> = [];
 await page.route('**/api/exam-delivery/**', route => {
   const request = route.request(), path = new URL(request.url()).pathname;
   const reply = (body:unknown, status=200) => route.fulfill({ status, contentType:'application/json', body:JSON.stringify(body) });
   if (path.endsWith('/submissions') && request.method() === 'GET') return reply({ submissions:[{ submissionId, course:'Calculus', examTitle:'Final exam', status:'FAILED', approvedAt:new Date().toISOString(), latestDeliveryId:oldDeliveryId }] });
-  if (path.endsWith('/contacts')) return reply({ contacts:[] });
+  if (path.endsWith('/contacts') && request.method() === 'GET') return reply({ contacts:savedContacts });
+  if (path.endsWith('/contacts') && request.method() === 'POST') {
+    const value=request.postDataJSON();
+    if (value.consent !== true) return reply({error:'consent_required'},400);
+    const saved={id:'44444444-4444-4444-8444-444444444444',name:value.name,email:value.email,course:value.course,organization:value.organization};
+    savedContacts=[saved,...savedContacts]; return reply(saved,201);
+  }
+  if (path.includes('/contacts/') && request.method() === 'DELETE') {
+    savedContacts=savedContacts.filter(item=>!path.endsWith(item.id));
+    return route.fulfill({status:204,body:''});
+  }
   if (path.endsWith('/settings')) return reply({ emailDeliveryConfigured:true });
   if (path.endsWith(`/operations/${oldDeliveryId}`)) return reply({ deliveryId:oldDeliveryId, status:'FAILED', recipients:[{ ...recipient, deliveryStatus:'UNCERTAIN', sentAt:null, failureReasonCode:'delivery_interrupted' }] });
   if (path.endsWith(`/operations/${newDeliveryId}`)) { polls++; return reply({ deliveryId:newDeliveryId, status:polls >= 1 ? 'SENT' : 'SENDING', recipients:[{ ...recipient, deliveryStatus:'SENT', sentAt:new Date().toISOString(), failureReasonCode:null }] }); }
@@ -32,6 +43,20 @@ try {
   await page.goto(`${base}/exam-demo`);
   const skip = page.locator('[data-testid="welcome-skip"]'); if (await skip.count()) await skip.click();
   await page.getByRole('heading', { name:'الاختبارات النهائية المحفوظة' }).waitFor();
+  // Teacher directory must be reachable BEFORE scanning any exam.
+  await page.getByRole('heading', { name:'دليل المعلمين وإيميلاتهم' }).waitFor();
+  await page.getByLabel('اسم المعلم').fill('Professor Saved');
+  await page.getByLabel('البريد الإلكتروني للمعلم').fill('saved@example.com');
+  await page.getByLabel('المقرر الدراسي').fill('Calculus');
+  await page.getByRole('checkbox', {name:/أوافق على حفظ بيانات التواصل/}).check();
+  await page.getByRole('button', {name:'حفظ المعلم'}).click();
+  await page.getByText('saved@example.com').waitFor();
+  assert.equal(savedContacts.length,1);
+  page.once('dialog', dialog => void dialog.accept());
+  await page.getByRole('button', {name:'حذف: Professor Saved'}).click();
+  await page.getByText('لم تحفظ أي معلم بعد.').waitFor();
+  assert.equal(savedContacts.length,0);
+
   assert.equal(await page.getByRole('link', { name:'تحميل النسخة النهائية' }).first().getAttribute('href'), `/api/exam-delivery/submissions/${submissionId}/pdf`);
   await page.getByRole('button', { name:'فتح الإرسال' }).click();
   await page.getByRole('heading', { name:'إرسال الاختبار إلى' }).waitFor();
