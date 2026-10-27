@@ -22,9 +22,9 @@ const req = (body:Record<string,unknown>, user = owner, key = 'request-key-123')
 const res = () => { const response={ statusCode:200, body:null as any, status:vi.fn((code:number)=>{response.statusCode=code;return response;}), json:vi.fn((body:any)=>{response.body=body;return response;}), set:vi.fn(()=>response), type:vi.fn(()=>response), send:vi.fn(()=>response), end:vi.fn(()=>response) }; return response as unknown as Response & {statusCode:number;body:any}; };
 
 describe('approved exam delivery', () => {
-  let submission:any, operation:any, targets:any[], failTargetInsert:boolean;
+  let submission:any, operation:any, targets:any[], contacts:any[], failTargetInsert:boolean;
   beforeEach(async () => {
-    vi.resetModules(); routes.clear(); submission=null; operation=null; targets=[]; failTargetInsert=false;
+    vi.resetModules(); routes.clear(); submission=null; operation=null; targets=[]; contacts=[]; failTargetInsert=false;
     vi.stubEnv('SUPPORT_SMTP_HOST','smtp.test'); vi.stubEnv('SUPPORT_SMTP_USER','user'); vi.stubEnv('SUPPORT_SMTP_PASSWORD','secret'); vi.stubEnv('SUPPORT_EMAIL_FROM','sender@example.com');
     mocks.sendMail.mockReset().mockImplementation(async (message:{to:string})=>({accepted:[message.to]}));
     mocks.close.mockReset(); mocks.createTransport.mockReset().mockImplementation(()=>({sendMail:mocks.sendMail,close:mocks.close}));
@@ -47,11 +47,36 @@ describe('approved exam delivery', () => {
       if (sql.startsWith('UPDATE basira_exam_delivery_targets')) { const target=targets.find(value=>value.operation_id===args[3]&&value.recipient_email===args[4]); Object.assign(target,{delivery_status:args[0],sent_at:args[1],failure_reason_code:args[2]}); return [{affectedRows:1}]; }
       if (sql.startsWith('SELECT delivery_status FROM basira_exam_delivery_targets')) return [targets.filter(value=>value.operation_id===args[0]).map(value=>({delivery_status:value.delivery_status}))];
       if (sql.startsWith('SELECT recipient_name,recipient_email')) return [targets.filter(value=>value.operation_id===args[0])];
+      if (sql.startsWith('SELECT id FROM basira_exam_recipient_contacts')) return [contacts.filter(row=>row.user_id===args[0] && row.recipient_email===args[1] && row.course_name.toLowerCase()===args[2].toLowerCase()).slice(0,1).map(row=>({id:row.id}))];
+      if (sql.startsWith('SELECT COUNT(*) AS total FROM basira_exam_recipient_contacts')) return [[{total:contacts.filter(row=>row.user_id===args[0]).length}]];
+      if (sql.startsWith('INSERT INTO basira_exam_recipient_contacts')) { contacts.push({id:args[0],user_id:args[1],recipient_name:args[2],recipient_email:args[3],course_name:args[4],organization:args[5]}); return [{affectedRows:1}]; }
+      if (sql.startsWith('SELECT id,recipient_name,recipient_email,course_name,organization FROM basira_exam_recipient_contacts')) return [contacts.filter(row=>row.user_id===args[0]).slice(0,20)];
+      if (sql.startsWith('DELETE FROM basira_exam_recipient_contacts')) { const before=contacts.length; contacts=contacts.filter(row=>!(row.id===args[0]&&row.user_id===args[1])); return [{affectedRows:before-contacts.length}]; }
       throw new Error(`Unmocked SQL: ${sql}`);
     });
     const {registerExamSubmissionRoutes}=await import('./examSubmissions'); registerExamSubmissionRoutes(app);
   });
   const prepare = async () => { const response=res(); await routes.get('POST /api/exam-delivery/submissions')!(req({approved:true,course:'Calculus',examTitle:'Private exam',questions:[{id:1,text:'Question'}],answers:{1:'Answer'}}),response); return response; };
+  it('saves a teacher contact before any exam and lists only the owner\'s contacts', async () => {
+    const payload={...recipient('teacher@example.com'),consent:true};
+    const anonymous=res(); await routes.get('POST /api/exam-delivery/contacts')!(req(payload,null as any),anonymous); expect(anonymous.statusCode).toBe(401);
+    const missingConsent=res(); await routes.get('POST /api/exam-delivery/contacts')!(req({...payload,consent:false}),missingConsent); expect(missingConsent.statusCode).toBe(400);
+    const created=res(); await routes.get('POST /api/exam-delivery/contacts')!(req(payload),created); expect(created.statusCode).toBe(201);
+    const mine=res(); await routes.get('GET /api/exam-delivery/contacts')!(req({}),mine);
+    expect(mine.body.contacts).toHaveLength(1); expect(mine.body.contacts[0].email).toBe(payload.email);
+    const stranger=res(); await routes.get('GET /api/exam-delivery/contacts')!(req({},outsider),stranger); expect(stranger.body.contacts).toHaveLength(0);
+    const duplicate=res(); await routes.get('POST /api/exam-delivery/contacts')!(req(payload),duplicate); expect(duplicate.statusCode).toBe(409);
+    const anotherCourse=res(); await routes.get('POST /api/exam-delivery/contacts')!(req({...payload,course:'Physics'}),anotherCourse); expect(anotherCourse.statusCode).toBe(201);
+  });
+  it('enforces 20 saved contacts and owner-only deletion', async () => {
+    for(let i=0;i<20;i++) contacts.push({id:`00000000-0000-4000-8000-${String(i).padStart(12,'0')}`,user_id:owner.id,recipient_name:'Teacher',recipient_email:`t${i}@example.com`,course_name:'Calculus',organization:null});
+    const full=res(); await routes.get('POST /api/exam-delivery/contacts')!(req({...recipient('extra@example.com'),consent:true}),full); expect(full.statusCode).toBe(429);
+    const contactId=contacts[0].id;
+    const stranger=res(); const theirs=req({},outsider); theirs.params.id=contactId;
+    await routes.get('DELETE /api/exam-delivery/contacts/:id')!(theirs,stranger); expect(stranger.statusCode).toBe(204); expect(contacts).toHaveLength(20);
+    const own=res(); const ownReq=req({}); ownReq.params.id=contactId;
+    await routes.get('DELETE /api/exam-delivery/contacts/:id')!(ownReq,own); expect(own.statusCode).toBe(204); expect(contacts).toHaveLength(19);
+  });
   it('requires explicit final approval and stores an owner-bound PDF', async () => {
     const rejected=res(); await routes.get('POST /api/exam-delivery/submissions')!(req({course:'Calculus',questions:[{id:1}]}),rejected); expect(rejected.statusCode).toBe(400);
     const accepted=await prepare(); expect(accepted.statusCode).toBe(201); expect(submission.user_id).toBe(owner.id); expect(submission.pdf_data.toString()).toBe('final-pdf'); expect(submission.status).toBe('READY_TO_SEND');

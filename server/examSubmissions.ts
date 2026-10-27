@@ -109,8 +109,30 @@ export function registerExamSubmissionRoutes(app: Express) {
   });
   app.post('/api/exam-delivery/contacts', async (req, res) => {
     res.set('Cache-Control', 'no-store');
-    try { const session = await sessionFor(req, res); if (!session) return; if (req.body?.consent !== true) return res.status(400).json({ error: 'consent_required' }); const recipient = parseRecipient(req.body, ''); if (!recipient) return res.status(400).json({ error: 'invalid_recipient' }); const id = randomUUID(); await pool.execute('INSERT INTO basira_exam_recipient_contacts (id,user_id,recipient_name,recipient_email,course_name,organization) VALUES (?,?,?,?,?,?)', [id, session.user.id, recipient.name, recipient.email, recipient.course, recipient.organization]); return res.status(201).json({ id, ...recipient }); }
-    catch { return res.status(503).json({ error: 'contacts_unavailable' }); }
+    if (!req.is('application/json')) return res.status(415).json({ error: 'json_required' });
+    try {
+      const session = await sessionFor(req, res);
+      if (!session) return;
+      if (req.body?.consent !== true) return res.status(400).json({ error: 'consent_required' });
+      const recipient = parseRecipient(req.body, '');
+      if (!recipient) return res.status(400).json({ error: 'invalid_recipient' });
+      const [existing] = await pool.execute<RowDataPacket[]>(
+        'SELECT id FROM basira_exam_recipient_contacts WHERE user_id=? AND recipient_email=? AND LOWER(course_name)=LOWER(?) LIMIT 1',
+        [session.user.id, recipient.email, recipient.course],
+      );
+      if (existing.length) return res.status(409).json({ error: 'teacher_contact_exists' });
+      const [count] = await pool.execute<RowDataPacket[]>(
+        'SELECT COUNT(*) AS total FROM basira_exam_recipient_contacts WHERE user_id=?',
+        [session.user.id],
+      );
+      if (Number(count[0]?.total ?? 0) >= 20) return res.status(429).json({ error: 'teacher_contact_limit' });
+      const id = randomUUID();
+      await pool.execute(
+        'INSERT INTO basira_exam_recipient_contacts (id,user_id,recipient_name,recipient_email,course_name,organization) VALUES (?,?,?,?,?,?)',
+        [id, session.user.id, recipient.name, recipient.email, recipient.course, recipient.organization],
+      );
+      return res.status(201).json({ id, ...recipient });
+    } catch { return res.status(503).json({ error: 'contacts_unavailable' }); }
   });
   app.delete('/api/exam-delivery/contacts/:id', async (req, res) => {
     res.set('Cache-Control', 'no-store');
