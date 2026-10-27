@@ -81,6 +81,9 @@ export function assessV4Intake(manifest, protectedIndex, policy, dataRoot) {
     totals[split].images += 1;
     if (!str(record.id) || usedIds.has(record.id)) err(errors, prefix + 'duplicate_or_empty_id');
     else usedIds.add(record.id);
+    if (!str(record.sourceDatasetId) ||
+        policy.deniedDatasetIds.includes(String(record.sourceDatasetId).toLowerCase()))
+      err(errors, prefix + 'restricted_or_unknown_dataset');
     if (!HEX.test(record.sha256 ?? '') || seenImages.has(record.sha256))
       err(errors, prefix + 'invalid_or_reused_image_hash');
     seenImages.add(record.sha256);
