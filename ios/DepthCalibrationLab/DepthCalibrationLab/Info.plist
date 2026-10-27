@@ -12,7 +12,7 @@
   <key>CFBundleShortVersionString</key><string>1.0</string>
   <key>CFBundleVersion</key><string>1</string>
   <key>LSRequiresIPhoneOS</key><true/>
-  <key>NSCameraUsageDescription</key><string>تستخدم بصيرة الكاميرا للتعرف على الأشياء، وLiDAR عند تفعيل القياس التلقائي فقط.</string>
+  <key>NSCameraUsageDescription</key><string>تستخدم بصيرة الكاميرا وLiDAR لقياس عمق سطح أمام الهاتف أثناء اختبار ثابت.</string>
   <key>UIRequiredDeviceCapabilities</key>
   <array><string>arkit</string></array>
   <key>UISupportedInterfaceOrientations</key>

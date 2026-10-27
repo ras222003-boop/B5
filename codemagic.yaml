@@ -1,9 +1,41 @@
-# Cloud-only signing and internal beta distribution (no local Mac required).
-# Manual start in Codemagic. Apple credentials live in Codemagic Developer Portal integration
-# "basira_apple", NEVER in this repository.
+# Native iOS prototype. Run validation first; the separate signed workflow must
+# only be started after explicit approval for TestFlight submission.
 workflows:
+  basira-native-ios-validation:
+    name: Basira native iOS — simulator build and unit tests
+    max_build_duration: 45
+    instance_type: mac_mini_m2
+    environment:
+      xcode: latest
+    scripts:
+      - name: Generate unsigned native project
+        script: |
+          #!/bin/bash
+          set -euo pipefail
+          command -v xcodegen >/dev/null || brew install xcodegen
+          python3 ios/DepthCalibrationLab/scripts/generate-lab-icon.py
+          cd ios/DepthCalibrationLab
+          xcodegen generate
+      - name: Build and test on iPhone simulator
+        script: |
+          #!/bin/bash
+          set -euo pipefail
+          SIMULATOR_UDID="$(xcrun simctl list devices available -j | python3 -c 'import json,sys; devices=json.load(sys.stdin)["devices"]; print(next(d["udid"] for group in devices.values() for d in group if d["name"].startswith("iPhone") and d.get("isAvailable", True)))')"
+          xcodebuild test \
+            -project ios/DepthCalibrationLab/BasiraDepthCalibrationLab.xcodeproj \
+            -scheme BasiraDepthCalibrationLab \
+            -configuration Debug \
+            -destination "platform=iOS Simulator,id=$SIMULATOR_UDID" \
+            -resultBundlePath "$CM_BUILD_DIR/ios-native-tests.xcresult" \
+            CODE_SIGNING_ALLOWED=NO
+    artifacts:
+      - ios-native-tests.xcresult
+      - /tmp/xcodebuild_logs/*.log
+
+  # Apple credentials are held only in the Codemagic integration "basira_apple".
+  # This workflow publishes to TestFlight and is never started automatically.
   basira-iphone14pro-testflight:
-    name: Basira LiDAR (iPhone 14 Pro) — TestFlight
+    name: Basira native LiDAR (iPhone 14 Pro) — approved TestFlight only
     max_build_duration: 60
     instance_type: mac_mini_m2
     integrations:
@@ -11,7 +43,7 @@ workflows:
     environment:
       ios_signing:
         distribution_type: app_store
-        bundle_identifier: sa.basira.depthcalibration
+        bundle_identifier: sa.basira.nativeprototype
       vars:
         XCODE_SCHEME: "BasiraDepthCalibrationLab"
       xcode: latest
@@ -22,13 +54,6 @@ workflows:
           set -euo pipefail
           command -v xcodegen >/dev/null || brew install xcodegen
           python3 ios/DepthCalibrationLab/scripts/generate-lab-icon.py
-          # Required for the cloud-distributed app: use a deployed, trusted HTTPS Basira domain.
-          : "${BASIRA_VISION_URL:?Configure BASIRA_VISION_URL in Codemagic before signing}"
-          if ! [[ "$BASIRA_VISION_URL" =~ ^https://[a-zA-Z0-9.-]+/navigation/vision$ ]] || [[ "$BASIRA_VISION_URL" == *".example"* ]]; then
-            echo "Invalid BASIRA_VISION_URL; expected https://trusted-host/navigation/vision" >&2
-            exit 1
-          fi
-          /usr/libexec/PlistBuddy -c "Set :BasiraVisionURL $BASIRA_VISION_URL" ios/DepthCalibrationLab/DepthCalibrationLab/Info.plist
           /usr/libexec/PlistBuddy -c "Set :CFBundleVersion ${PROJECT_BUILD_NUMBER:?}" ios/DepthCalibrationLab/DepthCalibrationLab/Info.plist
           cd ios/DepthCalibrationLab
           xcodegen generate

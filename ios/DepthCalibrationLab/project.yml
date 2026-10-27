@@ -11,12 +11,27 @@ targets:
     platform: iOS
     sources:
       - path: DepthCalibrationLab
+    scheme:
+      testTargets:
+        - BasiraDepthCalibrationLabTests
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: sa.basira.depthcalibration
+        PRODUCT_BUNDLE_IDENTIFIER: sa.basira.nativeprototype
         INFOPLIST_FILE: DepthCalibrationLab/Info.plist
         GENERATE_INFOPLIST_FILE: NO
         CODE_SIGN_STYLE: Automatic
         ASSETCATALOG_COMPILER_APPICON_NAME: "AppIcon"
         TARGETED_DEVICE_FAMILY: "1"
         SWIFT_STRICT_CONCURRENCY: minimal
+  BasiraDepthCalibrationLabTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: Tests
+    dependencies:
+      - target: BasiraDepthCalibrationLab
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: sa.basira.depthcalibration.tests
+        GENERATE_INFOPLIST_FILE: YES
+        CODE_SIGNING_ALLOWED: NO
