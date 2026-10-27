@@ -68,7 +68,9 @@ test('clean independent chair intake meets minimum metadata readiness but never 
   withSamples(['chair'], ({dir, manifest, historical}) => {
     const report = assessV4Intake(manifest, historical, policy, dir);
     assert.deepEqual(report.errors, []);
-    assert.equal(report.intakeReady, true);
+    assert.equal(report.metadataReady, true);
+    assert.equal(report.intakeReady, false);
+    assert.equal(report.imageContentVerified, false);
     assert.equal(report.trainingStarted, false);
     assert.equal(report.promotionEligible, false);
     assert.equal(report.totals.test.images, 20);
