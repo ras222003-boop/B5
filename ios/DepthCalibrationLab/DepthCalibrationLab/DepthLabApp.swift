@@ -1,13 +1,24 @@
 import SwiftUI
 
-/// The signed app opens Basira's existing vision page. The offline depth lab is
-/// retained as a fallback for local builds without a configured HTTPS host.
+/// Native iPhone shell. Vision continues to use the existing native ARKit/WKWebView
+/// bridge. Teacher preparation is a separate SwiftUI screen with local-only data.
 @main
 struct BasiraDepthLabApp: App {
     var body: some Scene {
         WindowGroup {
-            BasiraHomeScreen()
-                .ignoresSafeArea()
+            TabView {
+                BasiraHomeScreen()
+                    .tabItem {
+                        Label("الرؤية", systemImage: "eye")
+                    }
+
+                BasiraNativeExamsView()
+                    .tabItem {
+                        Label("الاختبارات", systemImage: "doc.text")
+                    }
+            }
+            .tint(.orange)
+            .environment(\.layoutDirection, .rightToLeft)
         }
     }
 }
