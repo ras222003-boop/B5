@@ -69,3 +69,17 @@ node scripts/vision-object-finetune-v4/prepare-captures.mjs --input "D:\BasiraPr
 لجمع جلسة جديدة استخدم `--capture-group` مختلفًا، ولا توزع إطارات المشهد نفسه بين التدريب والاختبار. بعد التوسيم والمراجعة المستقلة وتدقيق الحقوق، تُدمج السجلات في ملف Manifest خاص مع تقسيم train/validation/test على مستوى المشاهد، ويُنشأ `protected-index.json` يشمل كامل مجموعات الاختبار السابقة. بعدها يُشغل مدقق `intake.mjs` لاختبار الملفات الفعلية والخصوصية والحقوق والتسرب البصري. الصور الجديدة لا تُرسل تلقائيًا إلى أي خادم.
 
 الفحص لا يثبت أن المشاهد متباعدة جغرافيًا ولا أن الأوسمة البشرية صحيحة؛ ذلك يتطلب مراجعة أصحاب الاختصاص. إزالة EXIF لا تعني موافقة الأشخاص الظاهرين أو تعمية الوجوه واللوحات.
+
+## تجميد مجموعة جاهزة لتجربة تدريب مضبوطة (بعد المراجعة فقط)
+
+أضفنا `scripts/vision-object-finetune-v4/freeze-reviewed.mjs` الذي لا يعمل إلا بعد اجتياز كل من تدقيق الحقوق والوسوم والمجموعات التاريخية و**فك الصورة الحقيقي**. يجب توفير ملف أوزان YOLOX-Tiny الأصلي المرخّص، خارج GitHub، والتحقق من بصمته المطابقة قبل اعتماد خطة التدريب.
+
+مثال من PowerShell على Windows بعد اكتمال الملفات والمراجعات:
+
+```powershell
+node scripts/vision-object-finetune-v4/freeze-reviewed.mjs --manifest "D:\BasiraPrivate\curated\manifest.json" --protected-index "D:\BasiraPrivate\curated\protected-index.json" --data-root "D:\BasiraPrivate\curated" --original-tiny-checkpoint "D:\BasiraPrivate\models\yolox_tiny_original.pth" --output "D:\BasiraPrivate\frozen\objects-v4-trial-01"
+```
+
+هذه العملية تخرج `train.json` و`validation.json` من الفئات المؤهلة فقط، وتُبقي **وسوم الاختبار النهائي خارج ملفات التدريب**، وتحفظ `lineage-lock.json` ببصمات المدخلات والوزن وترتيب مخرجات COCO80. لا تخلط تسميات الأشجار والأبواب داخل الرأس القديم ذي 80 فئة؛ يلزم مسار تدريب/رأس مستقل.
+
+**النتيجة ليست نموذجًا مدرّبًا:** `readyForControlledTrainingExperiment=true` تعني أن تجميد بيانات التجربة اجتاز الفحوص فقط، و`trainingStarted=false`، و`promotionEligible=false` حتى بعد نجاح الفحص. تدريب YOLOX الفعلي يحتاج أوزان نقطة البداية والوسائط والتجهيز الحاسوبي والبيانات البشرية المعتمدة.
