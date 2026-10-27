@@ -1,0 +1,8 @@
+{
+  "schemaVersion": 1,
+  "coverageConfirmed": false,
+  "reviewedBy": "",
+  "consumedSha256": [],
+  "consumedCaptureGroups": [],
+  "warning": "Do not set coverageConfirmed true until a human checks complete V1/V2/V3 historical frozen finals, derivatives, source-scene groups, and all other protected cohorts."
+}
