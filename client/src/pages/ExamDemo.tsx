@@ -19,6 +19,7 @@ import { beginVoiceAnswer, classifyOcrFailure, consumeVoiceAnswer, countAnswers,
 import { useI18n, useMessages } from "@/i18n";
 import { examDemoMessages } from "@/i18n/locales/examDemo";
 import ExamDeliveryPanel, { RecentExamSubmissions } from "@/components/exam/ExamDeliveryPanel";
+import ExamTeacherDirectory from "@/components/exam/ExamTeacherDirectory";
 import type { ExamLanguage, OcrQuestion, OcrResult } from "@shared/ocr";
 
 type Question = OcrQuestion;
@@ -427,6 +428,7 @@ export default function ExamDemo() {
                   )}
                   <input ref={fileInputRef} type="file" accept="image/jpeg,image/png,image/webp,image/jpg" onChange={handleFileUpload} className="hidden" aria-hidden="true" />
                 </div>
+                <ExamTeacherDirectory uiLanguage={lang} />
                 <RecentExamSubmissions uiLanguage={lang} />
               </motion.div>
             )}
