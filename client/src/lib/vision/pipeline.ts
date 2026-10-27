@@ -10,12 +10,14 @@ import { hazardRank } from '@/lib/guidance/safety';
 import { assessFrameLight,sampleFrameLight, type FrameLightStatus } from './frameQuality';
 import { SAFE_DEFAULT_FLAGS, type SafetyFlags } from '@shared/safetyFlags';
 import { metricDiagnostic, type MetricDiagnostic } from './metricEngine';
-import { checkAtomicFrame, checkAtomicRgbFrame, rotateNativeDepthClockwise } from './nativeFramePair';
+import { checkAtomicFrame, checkAtomicRgbFrame, nativeApproachCapturedAt, rotateNativeDepthClockwise } from './nativeFramePair';
 import { measureAutoMeterObjects, measureEstimatedObjects, type AutoMeterSnapshot } from './autoMeter';
 import {meterErrorCode,type MeterDiagnostic} from './meterDiagnostics';
 import {ObjectSpeechTracker} from './objectSpeech';
 import {ObjectTracker} from './objectTracking';
 import {VisualApproachEstimator} from './visualApproach';
+import {SmartApproachRiskEngine} from './approachRisk';
+import {DEFAULT_APPROACH_PREFERENCES, type ApproachPreferences} from './approachPreferences';
 import {SparseOpticalFlow} from './opticalFlow';
 import {GroundHazardEngine,grayscalePixels,type GroundHazardSnapshot} from './groundHazards';
 import {freshTimestamp,observationFor,PerceptionTelemetry,type PerceptionSnapshot} from './perception';
@@ -30,6 +32,8 @@ interface Callbacks {
   alert:(text:string,risk:SceneDescription['riskLevel'])=>void;
   objectSpeech?:(text:string)=>boolean|Promise<boolean>;
   approachSpeech?:(text:string)=>boolean;
+  /** Every fresh frame updates the cue; text appears only for a new stabilized alert. */
+  approachRisk?:(risk:{level:'UNAVAILABLE'|'NONE'|'CAUTION'|'HIGH'|'CRITICAL';capturedAt:number;trackId?:string;text?:string})=>void;
   candidate:(candidate:PlaceCandidate)=>void;
   recognized:(place:RecognizedPlace,capturedAt:number)=>void;
   OCRFailure:()=>void;
@@ -72,6 +76,7 @@ export interface VisionPipelineOptions {
   objectColorsEnabled?:boolean;
   colorSpeechEnabled?:boolean;
   experimentalApproachEnabled?:boolean;
+  approachPreferences?:ApproachPreferences;
   approachPhrase?:(name:string,direction:string)=>string;
   estimatedMetricModel?:(signal?:AbortSignal)=>Promise<EstimatedMetricDepthProvider>;
   segmentation?:SceneSegmentationProvider;relativeDepth?:RelativeDepthProvider;metricDepth?:MetricDepthProvider;
@@ -100,12 +105,15 @@ export class VisionPipeline {
   private readonly tracker=new ObjectTracker();
   private readonly flow=new SparseOpticalFlow();
   private readonly approach=new VisualApproachEstimator();
+  private readonly approachRisk=new SmartApproachRiskEngine();
   private readonly ground=new GroundHazardEngine();
   private readonly semanticGroundEngine=new GroundHazardEngine();
   private semanticGround:GroundHazardSnapshot|null=null;
   private readonly telemetry=new PerceptionTelemetry();
   private perception:PerceptionSnapshot|null=null;
   private approachEnabled=false;
+  private manualApproachEnabled=false;
+  private approachPreferences:ApproachPreferences;
   private lastVideoTime=-1;
   private lastCapturedAt=0;
   private lastCaptureWallTime=0;
@@ -161,7 +169,9 @@ export class VisionPipeline {
   private detections=0;
   constructor(private readonly options:VisionPipelineOptions) {
     if(options.vision.usagePolicy)throw new Error('Research providers cannot enter guidance/safety pipeline');
-    this.approachEnabled=options.experimentalApproachEnabled===true;
+    this.manualApproachEnabled=options.experimentalApproachEnabled===true;
+    this.approachPreferences=options.approachPreferences??DEFAULT_APPROACH_PREFERENCES;
+    this.approachEnabled=this.manualApproachEnabled||this.approachPreferences.audioEnabled||this.approachPreferences.hapticsEnabled;
     this.autoMeterEnabled=options.autoMeterEnabled===true;
     this.objectSpeechEnabled=options.objectSpeechEnabled!==false;
     this.colorSpeechEnabled=options.colorSpeechEnabled===true&&options.mode==='EXPLORATION';
@@ -173,7 +183,30 @@ export class VisionPipeline {
   }
   get snapshot(){return this.latest;}
   get active(){return this.running;}
-  setExperimentalApproachEnabled(enabled:boolean){this.approachEnabled=enabled;this.approach.reset();this.flow.reset();}
+  setExperimentalApproachEnabled(enabled:boolean){
+    const previousDepth=this.nativeDepthRequired();
+    this.manualApproachEnabled=enabled;
+    this.approachEnabled=enabled||this.approachPreferences.audioEnabled||this.approachPreferences.hapticsEnabled;
+    this.approach.reset();this.approachRisk.reset();this.flow.reset();
+    this.options.callbacks.approachRisk?.({level:'UNAVAILABLE',capturedAt:performance.now()});
+    if(this.running&&this.options.nativeFrames&&previousDepth!==this.nativeDepthRequired())
+      void this.options.nativeFrames.setMeterEnabled(this.nativeDepthRequired()).catch(()=>{
+        this.approachRisk.reset();this.options.callbacks.approachRisk?.({level:'UNAVAILABLE',capturedAt:performance.now()});
+      });
+  }
+  setApproachPreferences(preferences:ApproachPreferences){
+    const previousDepth=this.nativeDepthRequired();
+    this.approachPreferences=preferences;
+    this.approachEnabled=this.manualApproachEnabled||preferences.audioEnabled||preferences.hapticsEnabled;
+    this.approach.reset();this.approachRisk.reset();this.flow.reset();
+    this.options.callbacks.approachRisk?.({level:'UNAVAILABLE',capturedAt:performance.now()});
+    if(this.running&&this.options.nativeFrames&&previousDepth!==this.nativeDepthRequired())
+      void this.options.nativeFrames.setMeterEnabled(this.nativeDepthRequired()).catch(()=>{
+        this.approachRisk.reset();this.options.callbacks.approachRisk?.({level:'UNAVAILABLE',capturedAt:performance.now()});
+      });
+  }
+  private nativeDepthRequired(){return this.autoMeterEnabled||
+    this.approachEnabled&&this.approachPreferences.mode==='TRUSTED_METRIC';}
   private reportAnalysis(state:'WAITING'|'LIVE'|'STALE'|'PAUSED'|'SLOW'){
     if(state!==this.analysisState){this.analysisState=state;this.options.callbacks.analysisState?.(state);}
   }
@@ -183,7 +216,8 @@ export class VisionPipeline {
     this.latestObjects=[];this.latest=null;this.perception=null;
     this.segmentation=null;this.relativeDepth=null;this.metricDepth=null;this.signDetections=[];
     this.recognizedPlace=null;this.recognizedPlaceCapturedAt=Number.NEGATIVE_INFINITY;this.depthCache.clear();
-    this.tracker.reset();this.flow.reset();this.approach.reset();this.ground.reset();this.semanticGroundEngine.reset();this.semanticGround=null;this.objectSpeech.reset();
+    this.tracker.reset();this.flow.reset();this.approach.reset();this.approachRisk.reset();this.ground.reset();this.semanticGroundEngine.reset();this.semanticGround=null;this.objectSpeech.reset();
+    this.options.callbacks.approachRisk?.({level:'UNAVAILABLE',capturedAt:performance.now()});
     this.options.callbacks.perception?.(null);this.reportAnalysis(state);
   }
   private cameraUnavailable(){
@@ -254,7 +288,7 @@ export class VisionPipeline {
       if(!enabled&&this.estimatedModel){const model=this.estimatedModel;this.estimatedModel=null;void model.close();}
     }
     if(this.running&&this.options.nativeFrames){
-      try{await this.options.nativeFrames.setMeterEnabled(enabled);}
+      try{await this.options.nativeFrames.setMeterEnabled(this.nativeDepthRequired());}
       catch{
         this.autoMeterEnabled=false;this.autoMeterGeneration++;
         this.cancelMeterRequests('OFF');
@@ -273,6 +307,7 @@ export class VisionPipeline {
       try{await this.options.nativeFrames.start();}
       catch(error){await this.stop();throw error;}
       if(this.autoMeterEnabled)await this.setAutoMeterEnabled(true);
+      else if(this.nativeDepthRequired())await this.options.nativeFrames.setMeterEnabled(true);
     }
     console.info('Basira vision session started',{mode:this.options.mode});
     this.watchBattery();
@@ -380,7 +415,13 @@ export class VisionPipeline {
           this.options.callbacks.metricStatus?.({status:this.autoMeterEnabled?'WAITING':'UNAVAILABLE',source:null});
           this.schedule(500);return;
         }
+        const receivedAt=performance.now();
+        const approachCapturedAt=nativeApproachCapturedAt(sample,receivedAt);
+        if(approachCapturedAt===null){
+          this.invalidate('STALE');this.schedule(100);return;
+        }
         this.lastNativeFrameId=sample.frameId;
+        const boundedAge=receivedAt-approachCapturedAt;
         const image=new Image();
         image.src='data:image/jpeg;base64,'+sample.imageBase64;
         await image.decode();
@@ -392,11 +433,11 @@ export class VisionPipeline {
         context.clearRect(0,0,480,640);
         context.save();context.translate(480,0);context.rotate(Math.PI/2);
         context.drawImage(image,0,0,640,480);context.restore();
-        detectorTimestamp=performance.now();
-        frameCapturedAt=Date.now();
+        detectorTimestamp=receivedAt-boundedAge;
+        frameCapturedAt=Date.now()-(performance.now()-receivedAt)-boundedAge;
         detectionFrame=canvas;
         nativeFrameId=sample.frameId;
-        if(this.autoMeterEnabled&&meterGeneration===this.autoMeterGeneration&&checkAtomicFrame(sample)===null){
+        if(this.nativeDepthRequired()&&meterGeneration===this.autoMeterGeneration&&checkAtomicFrame(sample)===null){
           nativeMap=rotateNativeDepthClockwise(sample,detectorTimestamp);
         }
         this.options.callbacks.metricStatus?.(nativeMap?{status:'LIVE',source:nativeMap.source}:{status:this.autoMeterEnabled?'WAITING':'UNAVAILABLE',source:null});
@@ -511,12 +552,33 @@ export class VisionPipeline {
       const motion=motionUsable&&gray?this.flow.update({frameId,capturedAt:detectorTimestamp,width:96,height:72,pixels:gray},detections):[];
       const settings=(this.options.video.srcObject as MediaStream|null)?.getVideoTracks?.()[0]?.getSettings?.() as (MediaTrackSettings&{zoom?:number})|undefined;
       const approach=motionUsable?this.approach.update(enriched,{frameId,capturedAt:detectorTimestamp,now:performance.now(),motion,zoom:settings?.zoom}):[];
+      const riskResult=motionUsable?this.approachRisk.update(enriched,approach,{
+        frameId,capturedAt:detectorTimestamp,now:performance.now(),
+        metricDepth:nativeMap??this.metricDepth,
+        mode:this.approachPreferences.mode,
+        sensitivity:this.approachPreferences.sensitivity,
+        metricThresholdsMeters:this.approachPreferences.metricThresholdsMeters,
+      }):null;
+      if(!riskResult)this.approachRisk.reset();
+      const rank={UNAVAILABLE:-1,NONE:0,ATTENTION:1,HIGH:2,URGENT:3};
+      const top=riskResult?.risks.filter(item=>rank[item.level]>0)
+        .sort((a,b)=>rank[b.level]-rank[a.level]||
+          (a.approximateTtcSeconds??Infinity)-(b.approximateTtcSeconds??Infinity))[0];
+      const level=top?.level==='ATTENTION'?'CAUTION':top?.level==='URGENT'?'CRITICAL':top?.level??
+        (riskResult?.status==='NO_APPROACH_EVIDENCE'?'NONE':'UNAVAILABLE');
+      const alert=riskResult?.alert;
+      const alertDetection=alert&&enriched.find(item=>item.trackId===alert.trackId);
+      const text=alert&&top?.trackId===alert.trackId&&alertDetection
+        ?(alert.level==='ATTENTION'?this.options.copy.approachPossible:this.options.copy.approachStrong)(
+          this.options.copy.object[alert.type],this.options.copy.direction[alertDetection.horizontalDirection])
+        :undefined;
       const ground=this.ground.observe({frameId,capturedAt:detectorTimestamp,width:96,height:72,gray,
         detections:enriched,lowLight:this.cameraLight==='LOW_LIGHT',segmentation:this.segmentation},completedAt);
       if(this.semanticGround?.status==='CURRENT'&&freshTimestamp(this.semanticGround.capturedAt,completedAt)&&Math.abs(this.semanticGround.capturedAt-detectorTimestamp)<=250)
         ground.observations.push(...this.semanticGround.observations);
       const finishedAt=performance.now();
       if(!freshTimestamp(detectorTimestamp,finishedAt)){this.invalidate('STALE');this.schedule(100);return;}
+      this.options.callbacks.approachRisk?.({level,capturedAt:detectorTimestamp,trackId:top?.trackId,text});
       const timings=this.telemetry.record(detectorTimestamp,finishedAt);
       this.slowFrames=timings.inferenceMs>600?Math.min(10,this.slowFrames+1):Math.max(0,this.slowFrames-1);
       this.perception={frameId,capturedAt:detectorTimestamp,completedAt:finishedAt,observations:enriched.map(d=>{
@@ -562,17 +624,23 @@ export class VisionPipeline {
       ? [...allowed].sort((a,b)=>hazardRank(b)-hazardRank(a)).filter(event=>hazardRank(event)>=3)
       : allowed;
     const recognized=freshTimestamp(this.recognizedPlaceCapturedAt,now)?this.recognizedPlace:null;
-    this.latest=this.scene.summarize(events,recognized,this.lastCaptureWallTime||Date.now()-(now-(objects[0]?.timestamp??now)),walkableAreaForLight(this.cameraLight,frame.walkableArea),frame.surfaceAnalysis);
+    // Ordinary scene descriptions are observations, not automatic risk claims.
+    const displayEvents=this.options.mode==='EXPLORATION'?events.map(event=>
+      ['DROP_OFF','DROP_OFF_UNCERTAIN','STAIRS_DOWN','STAIRS_UNCERTAIN','STAIRS_UP'].includes(event.type)
+        ?event:{...event,riskLevel:'INFORMATION' as const}):events;
+    this.latest=this.scene.summarize(displayEvents,recognized,this.lastCaptureWallTime||Date.now()-(now-(objects[0]?.timestamp??now)),walkableAreaForLight(this.cameraLight,frame.walkableArea),frame.surfaceAnalysis);
     this.latest.cameraLight=this.cameraLight;
     this.options.callbacks.scene(this.latest);
     // Safety announcements keep priority. Ordinary object speech uses detector
     // frames and remains available when metric and segmentation engines fail.
-    const safetyOnlyEvents=events.map(event=>this.safety.classify({...event,approximateDistance:null}))
+    const safetyOnlyEvents=events.filter(event=>
+      ['DROP_OFF','DROP_OFF_UNCERTAIN','STAIRS_DOWN','STAIRS_UNCERTAIN','STAIRS_UP'].includes(event.type))
+      .map(event=>this.safety.classify({...event,approximateDistance:null}))
       .filter(event=>event.riskLevel==='HIGH'||event.riskLevel==='CRITICAL');
     const alert=this.options.announcement.announce(safetyOnlyEvents,Date.now());
     if(alert)this.options.callbacks.alert(alert.text,alert.event.riskLevel);
     if(fromDetection&&(this.cameraLight!=='LOW_LIGHT'||this.colorSpeechEnabled)&&(this.objectSpeechEnabled||this.colorSpeechEnabled||this.approachEnabled)&&!alert&&this.options.callbacks.objectSpeech)
-      this.objectSpeech.observe(objects,now,this.options.callbacks.objectSpeech,this.approachEnabled?this.perception?.approach:undefined,this.objectSpeechEnabled&&this.cameraLight!=='LOW_LIGHT',this.options.callbacks.approachSpeech,this.colorSpeechEnabled);
+      this.objectSpeech.observe(objects,now,this.options.callbacks.objectSpeech,[],this.objectSpeechEnabled&&this.cameraLight!=='LOW_LIGHT',undefined,this.colorSpeechEnabled);
   }
   private async processGeometry(generation:number,timestamp:number){
     this.geometryBusy=true;

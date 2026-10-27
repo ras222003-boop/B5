@@ -12,8 +12,13 @@ import android.opengl.GLES11Ext;
 import android.opengl.GLES20;
 import android.opengl.GLSurfaceView;
 import android.os.Bundle;
+import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
+import android.os.SystemClock;
+import android.os.VibrationEffect;
+import android.os.Vibrator;
+import android.os.VibratorManager;
 import android.util.Base64;
 import android.view.View;
 import android.webkit.SslErrorHandler;
@@ -73,18 +78,28 @@ public final class NativeVisionActivity extends Activity implements GLSurfaceVie
             if (response.ok) request.resolve(response.frame ?? null);
             else request.reject(new Error(response.error || 'native_depth_unavailable'));
           };
-          const invoke = (action, enabled) => new Promise((resolve, reject) => {
+          const invoke = (action, extra = {}) => new Promise((resolve, reject) => {
             const id = ++sequence;
             pending.set(id, {resolve, reject});
-            try { native.postMessage(JSON.stringify({id, action, enabled})); }
+            try { native.postMessage(JSON.stringify({id, action, ...extra})); }
             catch (error) { pending.delete(id); reject(error); }
           });
           Object.defineProperty(window, 'BasiraNativeFrames', {
             value: Object.freeze({
               start: () => invoke('start'),
-              setMeterEnabled: enabled => invoke('setMeterEnabled', Boolean(enabled)),
+              setMeterEnabled: enabled => invoke('setMeterEnabled', {enabled: Boolean(enabled)}),
               stop: () => invoke('stop'),
               nextFrame: () => invoke('nextFrame')
+            }), configurable: false
+          });
+          Object.defineProperty(window, 'BasiraNativeHaptics', {
+            value: Object.freeze({
+              capabilities: () => invoke('hapticCapabilities'),
+              pulse: options => invoke('hapticPulse', {
+                intensity: options?.intensity, durationMs: options?.durationMs
+              }).then(result => result?.played === true),
+              test: () => invoke('hapticTest').then(result => result?.played === true),
+              stop: () => invoke('hapticStop')
             }), configurable: false
           });
         })();
@@ -113,6 +128,9 @@ public final class NativeVisionActivity extends Activity implements GLSurfaceVie
     private long previousFrameTimestampNs;
     private volatile int cameraTexture;
     private boolean installingArCore;
+    private boolean appForeground;
+    private Vibrator vibrator;
+    private long lastHapticAtMs;
 
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
@@ -125,6 +143,12 @@ public final class NativeVisionActivity extends Activity implements GLSurfaceVie
             return;
         }
         allowedOrigin = "https://" + pageUri.getHost().toLowerCase();
+        if (Build.VERSION.SDK_INT >= 31) {
+            VibratorManager manager = getSystemService(VibratorManager.class);
+            vibrator = manager == null ? null : manager.getDefaultVibrator();
+        } else {
+            vibrator = (Vibrator) getSystemService(VIBRATOR_SERVICE);
+        }
         if (!WebViewFeature.isFeatureSupported(WebViewFeature.WEB_MESSAGE_LISTENER) ||
                 !WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT)) {
             showFatal("يلزم تحديث Android System WebView لدعم جسر الكاميرا الآمن.");
@@ -214,8 +238,29 @@ public final class NativeVisionActivity extends Activity implements GLSurfaceVie
                     return;
                 case "nextFrame":
                     JSONObject frame = latestFrame;
-                    if (!running || System.nanoTime() - latestFrameAtNs > FRAME_MAX_AGE_NS) frame = null;
+                    long ageNs = System.nanoTime() - latestFrameAtNs;
+                    if (!running || frame == null || latestFrameAtNs == 0 || ageNs < 0 || ageNs > FRAME_MAX_AGE_NS) frame = null;
+                    else frame = new JSONObject(frame.toString()).put("bridgeAgeMs", ageNs / 1_000_000.0);
                     respond(reply, id, true, frame, null);
+                    return;
+                case "hapticCapabilities":
+                    JSONObject capabilities = new JSONObject()
+                            .put("supported", hapticsSupported())
+                            .put("intensityControl", hapticsSupported() && vibrator.hasAmplitudeControl());
+                    respond(reply, id, true, capabilities, null);
+                    return;
+                case "hapticPulse":
+                    boolean played = playHaptic(request.optDouble("intensity", Double.NaN),
+                            request.optDouble("durationMs", Double.NaN), false);
+                    respond(reply, id, true, new JSONObject().put("played", played), null);
+                    return;
+                case "hapticTest":
+                    boolean tested = playHaptic(0.5, 70, true);
+                    respond(reply, id, true, new JSONObject().put("played", tested), null);
+                    return;
+                case "hapticStop":
+                    stopHaptics();
+                    respond(reply, id, true, null, null);
                     return;
                 default:
                     respond(reply, id, false, null, "unknown_action");
@@ -229,6 +274,34 @@ public final class NativeVisionActivity extends Activity implements GLSurfaceVie
         return origin != null && "https".equalsIgnoreCase(origin.getScheme()) &&
                 pageUri.getHost().equalsIgnoreCase(origin.getHost()) &&
                 (origin.getPort() == -1 || origin.getPort() == 443);
+    }
+
+    private boolean hapticsSupported() {
+        return vibrator != null && vibrator.hasVibrator() &&
+                checkSelfPermission(Manifest.permission.VIBRATE) == PackageManager.PERMISSION_GRANTED;
+    }
+
+    private boolean playHaptic(double intensity, double durationMs, boolean allowWithoutCamera) {
+        if (!appForeground || !hapticsSupported() || !Double.isFinite(intensity) || !Double.isFinite(durationMs) ||
+                intensity < 0 || intensity > 1 || durationMs < 1 || durationMs > 150 ||
+                (!allowWithoutCamera && (!running || latestFrameAtNs == 0 ||
+                        System.nanoTime() - latestFrameAtNs > FRAME_MAX_AGE_NS))) return false;
+        long now = SystemClock.elapsedRealtime();
+        if (lastHapticAtMs != 0 && now - lastHapticAtMs < 250) return false;
+        int amplitude = vibrator.hasAmplitudeControl()
+                ? Math.max(1, Math.min(255, (int) Math.round(Math.max(0.1, intensity) * 255)))
+                : VibrationEffect.DEFAULT_AMPLITUDE;
+        long boundedMs = Math.max(35, Math.min(120, Math.round(durationMs)));
+        try {
+            // One-shot, non-repeating vibration with hard native duration and rate limits.
+            vibrator.vibrate(VibrationEffect.createOneShot(boundedMs, amplitude));
+            lastHapticAtMs = now;
+            return true;
+        } catch (RuntimeException error) { return false; }
+    }
+
+    private void stopHaptics() {
+        if (vibrator != null) vibrator.cancel();
     }
 
     private boolean isVisionPage(String rawUrl) {
@@ -338,6 +411,7 @@ public final class NativeVisionActivity extends Activity implements GLSurfaceVie
         meterEnabled = false;
         latestFrame = null;
         latestFrameAtNs = 0;
+        stopHaptics();
         mainHandler.removeCallbacks(ticker);
         synchronized (sessionLock) {
             if (session != null) {
@@ -359,10 +433,12 @@ public final class NativeVisionActivity extends Activity implements GLSurfaceVie
 
     @Override protected void onResume() {
         super.onResume();
+        appForeground = true;
         if (glView != null) glView.onResume();
     }
 
     @Override protected void onPause() {
+        appForeground = false;
         stopSensor();
         if (glView != null) glView.onPause();
         super.onPause();
@@ -401,6 +477,7 @@ public final class NativeVisionActivity extends Activity implements GLSurfaceVie
                 session.setDisplayGeometry(getWindowManager().getDefaultDisplay().getRotation(),
                         Math.max(1, glView.getWidth()), Math.max(1, glView.getHeight()));
                 Frame frame = session.update();
+                long frameArrivedAtNs = System.nanoTime();
                 long stamp = frame.getTimestamp();
                 if (stamp <= 0 || stamp == previousFrameTimestampNs) return;
                 previousFrameTimestampNs = stamp;
@@ -436,7 +513,7 @@ public final class NativeVisionActivity extends Activity implements GLSurfaceVie
                     }
                     if (running && generation == meterGeneration) {
                         latestFrame = payload;
-                        latestFrameAtNs = System.nanoTime();
+                        latestFrameAtNs = frameArrivedAtNs;
                     }
                 }
             } catch (Exception error) {

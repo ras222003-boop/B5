@@ -14,6 +14,7 @@
     "test:perception-metrics": "node --test scripts/perception-evaluation.test.mjs",
     "preview:perception": "node scripts/perception-preview.mjs",
     "test:perception-browser": "node scripts/perception-browser-e2e.mjs",
+    "test:approach-browser": "node scripts/approach-browser-smoke.mjs",
     "vision-ai": "node scripts/vision-ai/cli.mjs",
     "test:vision-ai": "node --test scripts/vision-ai/vision-ai.test.mjs scripts/vision-ai/stairs-task.test.mjs",
     "test:vision-backup": "node --test scripts/vision-ai/drive-backup.test.mjs",

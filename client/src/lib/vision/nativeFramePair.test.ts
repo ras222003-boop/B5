@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { checkAtomicFrame, checkAtomicRgbFrame, rotateNativeDepthClockwise, type AtomicNativeFrame } from './nativeFramePair';
+import { checkAtomicFrame, checkAtomicRgbFrame, nativeApproachCapturedAt, rotateNativeDepthClockwise, type AtomicNativeFrame } from './nativeFramePair';
 
 const fixture = (): AtomicNativeFrame => ({
   frameId:'arkit-123.123456',nativeTimestampMs:123123.456,source:'ARKIT_DEPTH',
@@ -34,6 +34,12 @@ describe('single-frame ARKit RGB+depth bridge',()=>{
     expect(checkAtomicFrame({...fixture(),values:[1,2,3]})).toBe('invalid_depth_geometry');
     expect(checkAtomicFrame({...fixture(),validCoverage:.4})).toBe('low_depth_coverage');
     expect(checkAtomicFrame({...fixture(),values:[...Array(64*48-1).fill(1.5),Infinity]})).toBe('invalid_depth_values');
+  });
+  it('withholds approach alerts when the native bridge cannot prove fresh RGB age',()=>{
+    expect(nativeApproachCapturedAt(fixture(),2000)).toBeNull();
+    expect(nativeApproachCapturedAt({...fixture(),bridgeAgeMs:501},2000)).toBeNull();
+    expect(nativeApproachCapturedAt({...fixture(),bridgeAgeMs:-1},2000)).toBeNull();
+    expect(nativeApproachCapturedAt({...fixture(),bridgeAgeMs:230},2000)).toBe(1770);
   });
   it('rejects implausible claimed map confidence vs actual valid pixel coverage',()=>{
     expect(checkAtomicFrame({...fixture(),values:Array(64*48).fill(0)})).toBe('unverified_depth_coverage');

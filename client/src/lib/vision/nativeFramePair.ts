@@ -3,6 +3,8 @@ import type { MetricDepthMap } from '@shared/vision';
 export interface AtomicNativeFrame {
   frameId: string;
   nativeTimestampMs: number;
+  /** Age at native bridge handoff, measured against the native frame arrival clock. */
+  bridgeAgeMs?: number;
   source: 'ARKIT_DEPTH' | 'ARCORE_DEPTH';
   /** False when the native session is supplying RGB only. */
   depthEnabled?: boolean;
@@ -47,6 +49,14 @@ export function checkAtomicRgbFrame(frame: AtomicNativeFrame | null): string | n
   if (!/^[A-Za-z0-9+/]+={0,2}$/.test(frame.imageBase64) ||
       frame.imageBase64.length < 100 || frame.imageBase64.length > 3_000_000) return 'invalid_camera_frame';
   return null;
+}
+
+/** The native arrival clock is converted to the page monotonic clock only at handoff. */
+export function nativeApproachCapturedAt(frame: AtomicNativeFrame | null, receivedAt: number): number | null {
+  const age = frame?.bridgeAgeMs;
+  if (checkAtomicRgbFrame(frame) || !Number.isFinite(receivedAt) ||
+      !Number.isFinite(age) || age! < 0 || age! > 500) return null;
+  return receivedAt - age!;
 }
 
 /** Fail closed unless depth belongs to the validated camera image. */

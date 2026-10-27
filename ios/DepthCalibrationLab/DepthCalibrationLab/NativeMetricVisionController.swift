@@ -1,6 +1,7 @@
 import ARKit
 import AVFoundation
 import CoreImage
+import CoreHaptics
 import Foundation
 import QuartzCore
 import UIKit
@@ -21,6 +22,9 @@ final class NativeMetricVisionController: UIViewController, ARSessionDelegate, W
     private var latestTimestamp: TimeInterval = -1
     private var lastArrival: CFTimeInterval = -1
     private var busy = false
+    private var hapticEngine: CHHapticEngine?
+    private var hapticEngineRunning = false
+    private var lastHapticAt: CFTimeInterval = -.infinity
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -53,6 +57,16 @@ final class NativeMetricVisionController: UIViewController, ARSessionDelegate, W
                 try { return (await send('frame')) ?? null; }
                 catch { return null; }
               }
+            }), configurable: false
+          });
+          Object.defineProperty(window, 'BasiraNativeHaptics', {
+            value: Object.freeze({
+              capabilities: () => send('hapticCapabilities'),
+              pulse: options => send('hapticPulse', {
+                intensity: options?.intensity, durationMs: options?.durationMs
+              }),
+              test: () => send('hapticTest'),
+              stop: () => send('hapticStop')
             }), configurable: false
           });
         })();
@@ -150,6 +164,58 @@ final class NativeMetricVisionController: UIViewController, ARSessionDelegate, W
         latestTimestamp = -1
         lastArrival = -1
         session.pause()
+        stopHaptics()
+    }
+
+    private func stopHaptics() {
+        hapticEngine?.stop(completionHandler: nil)
+        hapticEngine = nil
+        hapticEngineRunning = false
+    }
+
+    private func playHaptic(intensity: Double, durationMs: Double, allowWithoutCamera: Bool) -> Bool {
+        guard CHHapticEngine.capabilitiesForHardware().supportsHaptics,
+              UIApplication.shared.applicationState == .active,
+              allowWithoutCamera || (running && lastArrival > 0 && CACurrentMediaTime() - lastArrival < 0.8),
+              intensity.isFinite, durationMs.isFinite,
+              (0...1).contains(intensity), (1...150).contains(durationMs) else { return false }
+        let now = CACurrentMediaTime()
+        guard now - lastHapticAt >= 0.25 else { return false }
+        do {
+            if hapticEngine == nil {
+                let engine = try CHHapticEngine()
+                engine.playsHapticsOnly = true
+                engine.isAutoShutdownEnabled = true
+                engine.stoppedHandler = { [weak self] _ in
+                    DispatchQueue.main.async { self?.hapticEngineRunning = false }
+                }
+                engine.resetHandler = { [weak self] in
+                    DispatchQueue.main.async { self?.hapticEngineRunning = false }
+                }
+                hapticEngine = engine
+            }
+            guard let engine = hapticEngine else { return false }
+            if !hapticEngineRunning {
+                try engine.start()
+                hapticEngineRunning = true
+            }
+            let parameters = [
+                CHHapticEventParameter(parameterID: .hapticIntensity, value: Float(max(0.1, intensity))),
+                CHHapticEventParameter(parameterID: .hapticSharpness, value: 0.45)
+            ]
+            // Short non-repeating pulses only. Native bounds are independent of
+            // settings or a compromised web scheduler.
+            let event = CHHapticEvent(eventType: .hapticContinuous, parameters: parameters,
+                                      relativeTime: 0, duration: min(0.12, max(0.035, durationMs / 1000)))
+            let pattern = try CHHapticPattern(events: [event], parameters: [])
+            let player = try engine.makePlayer(with: pattern)
+            try player.start(atTime: CHHapticTimeImmediate)
+            lastHapticAt = now
+            return true
+        } catch {
+            stopHaptics()
+            return false
+        }
     }
 
     @objc private func pauseInBackground() {
@@ -170,6 +236,14 @@ final class NativeMetricVisionController: UIViewController, ARSessionDelegate, W
     func session(_ session: ARSession, didFailWithError error: Error) {
         stopSession()
         showFailure("تعذر الحصول على إطار ARKit متزامن. أوقف التجربة وأعد تشغيلها.")
+    }
+
+    func sessionWasInterrupted(_ session: ARSession) {
+        stopSession()
+    }
+
+    func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
+        stopSession()
     }
 
     // Other Basira pages remain reachable, but only the vision path may call
@@ -249,6 +323,23 @@ final class NativeMetricVisionController: UIViewController, ARSessionDelegate, W
             reply(NSNull(), nil)
         case "frame":
             sendFrame(reply: reply)
+        case "hapticCapabilities":
+            let supported = CHHapticEngine.capabilitiesForHardware().supportsHaptics
+            reply(["supported": supported, "intensityControl": supported], nil)
+        case "hapticPulse":
+            guard let intensity = request["intensity"] as? Double,
+                  let durationMs = request["durationMs"] as? Double else {
+                reply(false, nil)
+                return
+            }
+            reply(playHaptic(intensity: intensity, durationMs: durationMs,
+                             allowWithoutCamera: false), nil)
+        case "hapticTest":
+            reply(playHaptic(intensity: 0.5, durationMs: 70,
+                             allowWithoutCamera: true), nil)
+        case "hapticStop":
+            stopHaptics()
+            reply(NSNull(), nil)
         default:
             reply(nil, "unknown_camera_request")
         }
@@ -268,7 +359,15 @@ final class NativeMetricVisionController: UIViewController, ARSessionDelegate, W
         // The single ARFrame owns both capturedImage and sceneDepth. Wait for a
         // new frame after enabling depth; an earlier RGB frame cannot carry it.
         let depth = meterEnabled && frame.timestamp > firstDepthTimestamp ? frame.sceneDepth : nil
-        let result = buildAtomicFrame(frame, depth: depth)
+        var result = buildAtomicFrame(frame, depth: depth)
+        if result != nil {
+            let ageMs = (CACurrentMediaTime() - lastArrival) * 1000
+            if ageMs.isFinite && ageMs >= 0 && ageMs <= 800 {
+                result?["bridgeAgeMs"] = ageMs
+            } else {
+                result = nil
+            }
+        }
         busy = false
         reply(result.map { $0 as Any } ?? NSNull(), nil)
     }

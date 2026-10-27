@@ -32,6 +32,8 @@ export interface VisualApproachObservation {
   frameId: string;
   reasons: ApproachReason[];
   evidence: readonly ('TRACKING' | 'BOX_EXPANSION' | 'COMPENSATED_OPTICAL_FLOW')[];
+  /** Optical expansion estimate only; this is not a measured collision time. */
+  opticalTtcSeconds?: number;
   experimental: true;
 }
 export interface ApproachFrame extends TrackingFrame {
@@ -39,7 +41,8 @@ export interface ApproachFrame extends TrackingFrame {
   zoom?: number;
   rotationDegrees?: number;
 }
-interface Sample { at: number; scale: number; frameId: string; positive: number; firstScale: number; firstAt: number }
+interface Sample { at: number; scale: number; frameId: string; positive: number; firstScale: number; firstAt: number;
+  type: VisionDetection['type']; source: VisionDetection['source']; firstSeenAt: number; cocoClass?: string }
 
 /** Multiple timed, independent cues are required. Missing hardware metadata is not proof of no zoom. */
 export class VisualApproachEstimator {
@@ -65,7 +68,10 @@ export class VisualApproachEstimator {
       if (!detection.trackId) continue;
       const trackId = detection.trackId; seen.add(trackId);
       const reasons: ApproachReason[] = [];
-      const old = this.samples.get(trackId), scale = Math.sqrt(detection.boundingBox.width * detection.boundingBox.height);
+      const previous = this.samples.get(trackId);
+      const old = previous?.type === detection.type && previous.source === detection.source &&
+        previous.firstSeenAt === detection.tracking?.firstSeenAt && previous.cocoClass === detection.cocoClass ? previous : undefined;
+      const scale = Math.sqrt(detection.boundingBox.width * detection.boundingBox.height);
       const motion = frame.motion?.find(item => item.trackId === trackId && item.frameId === frame.frameId);
       if (repeated) reasons.push('REPEATED_FRAME');
       if (![frame.capturedAt, frame.now, detection.timestamp].every(Number.isFinite) || frame.now - frame.capturedAt > 800 ||
@@ -78,32 +84,45 @@ export class VisualApproachEstimator {
       if (rotationChanged) reasons.push('CAMERA_ROTATION');
       if (!motion) reasons.push('BOX_ONLY');
       else {
-        if (motion.source !== 'SPARSE_OPTICAL_FLOW' || motion.quality !== 'VALID' || !motion.compensated || motion.pointCount < 6 || motion.backgroundPointCount < 12 ||
+        if (!old) reasons.push('INSUFFICIENT_HISTORY');
+        else if (motion.source !== 'SPARSE_OPTICAL_FLOW' || motion.quality !== 'VALID' || !motion.compensated || motion.pointCount < 6 || motion.backgroundPointCount < 12 ||
           motion.backgroundInlierRatio < .7 || motion.backgroundInlierRatio > 1 || motion.outwardFraction < 0 || motion.outwardFraction > 1 || motion.capturedAt !== frame.capturedAt ||
-          !old || motion.previousFrameId !== old.frameId || motion.previousCapturedAt !== old.at ||
+          motion.previousFrameId !== old.frameId || motion.previousCapturedAt !== old.at ||
           ![motion.expansionPerSecond, motion.globalScaleChange, motion.globalRotationDegrees, motion.outwardFraction,
             motion.backgroundInlierRatio, motion.pointCount, motion.backgroundPointCount].every(Number.isFinite)) reasons.push('MOTION_UNRELIABLE');
         if (Math.abs(motion.globalScaleChange) > .015) reasons.push('GLOBAL_EXPANSION');
         if (Math.abs(motion.globalRotationDegrees) > 1) reasons.push('CAMERA_ROTATION');
       }
       let state: ApproachState = 'UNAVAILABLE';
+      let opticalTtcSeconds: number | undefined;
       let positive = 0, firstScale = scale, firstAt = frame.capturedAt;
       if (!reasons.length && old && motion) {
         const expansion = (Math.log(scale) - Math.log(old.scale)) / ((frame.capturedAt - old.at) / 1000);
-        const corroborated = expansion > .08 && motion.expansionPerSecond > .1 && motion.outwardFraction >= .75;
+        // Large disagreement can be caused by partial boxes, parallax or mixed surfaces.
+        const agreement = expansion / motion.expansionPerSecond;
+        const corroborated = expansion > .08 && motion.expansionPerSecond > .1 && motion.outwardFraction >= .75 &&
+          agreement >= .45 && agreement <= 2.2;
         if (corroborated) {
           positive = old.positive + 1; firstScale = old.positive > 0 ? old.firstScale : old.scale;
           firstAt = old.positive > 0 ? old.firstAt : old.at;
           if (positive >= 2 && scale / firstScale >= 1.05 && frame.capturedAt - firstAt >= 350) {
             state = positive >= 4 && expansion > .45 && motion.expansionPerSecond > .45 &&
               motion.pointCount >= 12 && motion.outwardFraction >= .85 ? 'STRONG_APPROACH' : 'POSSIBLE_APPROACH';
+            const rate = (expansion + motion.expansionPerSecond) / 2;
+            if (positive >= 3 && rate >= .12 && rate <= 3.5) opticalTtcSeconds = Math.round(100 / rate) / 100;
           } else { state = 'OBSERVED'; reasons.push('INSUFFICIENT_HISTORY'); }
         } else { state = 'OBSERVED'; reasons.push('NO_CORROBORATED_EXPANSION'); }
       } else if (!reasons.length) reasons.push('INSUFFICIENT_HISTORY');
-      if (!repeated) this.samples.set(trackId, { at: frame.capturedAt, frameId: frame.frameId, scale, positive, firstScale, firstAt });
+      if (!repeated) {
+        // A stale or unreliable frame cannot become the baseline for a later warning.
+        if (reasons.some(reason => !['INSUFFICIENT_HISTORY', 'NO_CORROBORATED_EXPANSION', 'BOX_ONLY'].includes(reason))) this.samples.delete(trackId);
+        else this.samples.set(trackId, { at: frame.capturedAt, frameId: frame.frameId, scale, positive, firstScale, firstAt,
+          type: detection.type, source: detection.source, firstSeenAt: detection.tracking?.firstSeenAt ?? frame.capturedAt,
+          cocoClass: detection.cocoClass });
+      }
       results.push({ trackId, type: detection.type, state, capturedAt: frame.capturedAt, frameId: frame.frameId,
         reasons: Array.from(new Set(reasons)), evidence: state === 'POSSIBLE_APPROACH' || state === 'STRONG_APPROACH'
-          ? ['TRACKING', 'BOX_EXPANSION', 'COMPENSATED_OPTICAL_FLOW'] : ['TRACKING'], experimental: true });
+          ? ['TRACKING', 'BOX_EXPANSION', 'COMPENSATED_OPTICAL_FLOW'] : ['TRACKING'], opticalTtcSeconds, experimental: true });
     }
     if (!repeated) for (const trackId of Array.from(this.samples.keys())) if (!seen.has(trackId)) this.samples.delete(trackId);
     return results;
