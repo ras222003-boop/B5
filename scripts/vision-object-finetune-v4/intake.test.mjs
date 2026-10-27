@@ -32,7 +32,7 @@ function sampleData(selectedTargets = ['chair']) {
           : { bbox: [0.1, 0.2, 0.3, 0.4] })
       }));
       records.push({
-        id: 'sample-' + id, split, captureGroupId: split + '-session-' + (j % 2),
+        id: 'sample-' + id, sourceDatasetId: 'basira-first-party', split, captureGroupId: split + '-session-' + (j % 2),
         imagePath, sha256: sha(image), width: 640, height: 480,
         rights: {
           licenseId: 'OWNED-WITH-RELEASE', commercialTrainingAllowed: true,
@@ -150,5 +150,15 @@ test('path traversal and symlink escapes are not accepted', () => {
     assert.throws(() => safeFile(dir, '../unrelated-private-file'));
     manifest.records[0].imagePath = '../unrelated-private-file';
     assert(assessV4Intake(manifest, historical, policy, dir).errors.some(e => e.endsWith('image_not_verified')));
+  });
+});
+
+test('restricted BDD lineage and anonymous datasets are rejected even if labelled with a permissive licence', () => {
+  withSamples(['chair'], ({dir, manifest, historical}) => {
+    manifest.records[0].sourceDatasetId = 'bdd100k';
+    manifest.records[1].sourceDatasetId = '';
+    const errors = assessV4Intake(manifest, historical, policy, dir).errors;
+    assert(errors.some(e => e === 'record_1_restricted_or_unknown_dataset'));
+    assert(errors.some(e => e === 'record_2_restricted_or_unknown_dataset'));
   });
 });
