@@ -106,7 +106,8 @@ final class BasiraTeacherDirectoryStore: ObservableObject {
             // The contact list is local preparation data, not an account backup or cloud sync.
             var values = URLResourceValues()
             values.isExcludedFromBackup = true
-            try fileURL.setResourceValues(values)
+            var protectedURL = fileURL
+            try protectedURL.setResourceValues(values)
         } catch {
             throw BasiraTeacherDirectoryError.storageUnavailable
         }
