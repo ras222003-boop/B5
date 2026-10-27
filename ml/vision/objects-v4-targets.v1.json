@@ -204,5 +204,11 @@
     "noProductionOrNavigationFromIntake": true,
     "requireFreshIndependentFinal": true,
     "requirePhysicalIPhoneAndVoiceOverEvaluation": true
-  }
+  },
+  "deniedDatasetIds": [
+    "bdd100k",
+    "bosch-small-traffic-lights",
+    "udacity-sdc-annotations",
+    "unknown-source"
+  ]
 }
