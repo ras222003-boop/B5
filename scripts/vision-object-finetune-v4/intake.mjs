@@ -187,12 +187,23 @@ async function main() {
   }
   const policyPath = resolve('ml/vision/objects-v4-targets.v1.json');
   try {
-    const report = assessV4Intake(
-      JSON.parse(readFileSync(manifestPath, 'utf8')),
+    const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
+    const metadataReport = assessV4Intake(
+      manifest,
       JSON.parse(readFileSync(historyPath, 'utf8')),
       JSON.parse(readFileSync(policyPath, 'utf8')),
       dataRoot
     );
+    const { inspectV4Images } = await import('./image-preflight.mjs');
+    const imageReport = await inspectV4Images(manifest, dataRoot);
+    const report = {
+      ...metadataReport,
+      imageContentVerified: imageReport.imageContentVerified,
+      inspectedDecodedImages: imageReport.inspected,
+      crossSplitVisualReviewCandidates: imageReport.nearDuplicateCandidates,
+      intakeReady: metadataReport.intakeReady && imageReport.imageContentVerified,
+      errors: [...metadataReport.errors, ...imageReport.errors],
+    };
     if (reportPath) writeFileSync(reportPath, JSON.stringify(report, null, 2) + '\n', { mode: 0o600 });
     process.stdout.write(JSON.stringify(report, null, 2) + '\n');
     if (!report.intakeReady) process.exitCode = 1;
