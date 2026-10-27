@@ -39,7 +39,7 @@ jobs:
       - run: pnpm test
       - run: pnpm test:perception-metrics
       - run: pnpm test:vision-ai
-      - run: node --test scripts/vision-object-finetune-v4/intake.test.mjs
+      - run: node --test scripts/vision-object-finetune-v4/intake.test.mjs scripts/vision-object-finetune-v4/image-preflight.test.mjs
       - run: pnpm test:vision-studio
       - uses: actions/setup-python@v5
         with:
