@@ -73,7 +73,7 @@ export function assessV4Intake(manifest, protectedIndex, policy, dataRoot) {
     err(errors, 'missing_historical_final_exclusion_index');
   const oldHashes = new Set(protectedIndex?.consumedSha256 || []);
   const oldGroups = new Set(protectedIndex?.consumedCaptureGroups || []);
-  if (!Array.isArray(records)) return { intakeReady: false, trainingStarted: false, promotionEligible: false, errors: unique(errors), warnings, totals, selectedTargetCounts: {} };
+  if (!Array.isArray(records)) return { metadataReady: false, intakeReady: false, imageContentVerified: false, trainingStarted: false, promotionEligible: false, errors: unique(errors), warnings, totals, selectedTargetCounts: {} };
   for (const [index, record] of records.entries()) {
     const prefix = 'record_' + (index + 1) + '_';
     const split = record?.split;
@@ -167,7 +167,8 @@ export function assessV4Intake(manifest, protectedIndex, policy, dataRoot) {
   if (manifest.experimentKind !== 'coco80')
     warnings.push('New categories or boundaries need their own trained architecture and evaluation; not a COCO80 label remap.');
   warnings.push('Passing an intake preflight does not initiate training, qualify distances, prove walking safety, or authorize release.');
-  return { schemaVersion: 1, intakeReady: errors.length === 0, trainingStarted: false,
+  return { schemaVersion: 1, metadataReady: errors.length === 0, intakeReady: false,
+    imageContentVerified: false, trainingStarted: false,
     promotionEligible: false, errors: unique(errors), warnings, totals, selectedTargetCounts };
 }
 
@@ -201,7 +202,7 @@ async function main() {
       imageContentVerified: imageReport.imageContentVerified,
       inspectedDecodedImages: imageReport.inspected,
       crossSplitVisualReviewCandidates: imageReport.nearDuplicateCandidates,
-      intakeReady: metadataReport.intakeReady && imageReport.imageContentVerified,
+      intakeReady: metadataReport.metadataReady && imageReport.imageContentVerified,
       errors: [...metadataReport.errors, ...imageReport.errors],
     };
     if (reportPath) writeFileSync(reportPath, JSON.stringify(report, null, 2) + '\n', { mode: 0o600 });
