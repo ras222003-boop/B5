@@ -2,6 +2,10 @@
 set -euo pipefail
 
 EXPECTED_BUNDLE_ID="sa.nasjalufuq.basira"
+if [[ "${BASIRA_BUNDLE_ID:?Codemagic must set BASIRA_BUNDLE_ID}" != "$EXPECTED_BUNDLE_ID" ]]; then
+  echo "Codemagic Bundle ID does not match the registered App ID" >&2
+  exit 1
+fi
 IPA_DIR="${CM_BUILD_DIR:?}/build/ios/ipa"
 IPA_PATH="$(find "$IPA_DIR" -maxdepth 1 -type f -name '*.ipa' -print -quit)"
 if [[ -z "$IPA_PATH" ]]; then

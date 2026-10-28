@@ -10,6 +10,13 @@
 2. `basira-native-ios-signed-ipa-check`: بعد تجهيز التكامل ومواد التوقيع، ينشئ IPA موقّعًا ويفحص Bundle ID والفريق وملف التهيئة والتوقيع. يبقى IPA في آثار Codemagic ولا يُرفع إلى Apple.
 3. `basira-iphone14pro-testflight`: ينشئ IPA ثم يرفعه إلى TestFlight ومجموعة `Basira Internal Testers` تلقائيًا. لا تشغّله قبل موافقة صريحة على الرفع. `submit_to_app_store: false` ولا توجد أحداث تشغيل تلقائي لأي سير.
 
+## مواد التوقيع المتحقَّق منها في Codemagic
+
+- يعرض **Developer Portal** تكاملًا متصلًا بالاسم المرجعي `basira_apple`، وهو الاسم الذي يستخدمه سيرا التوقيع في `codemagic.yaml`.
+- يعرض **Code signing identities** الشهادة `basira_distribution` من نوع production وملف `basira_appstore_profile` من نوع `app_store`. الفريق المعروض لكليهما واحد، وتاريخ الانتهاء المعروض 28 أكتوبر 2027.
+- يعرض ملف التهيئة Bundle ID ‏`sa.nasjalufuq.basira` ورسالة Codemagic بأن الشهادة المرفوعة المطابقة له هي `basira_distribution`. يحدد `ios_signing` هذين الأصلين باسميهما المرجعيين؛ ويفحص سير IPA التوقيع والفريق ومعرّف التطبيق داخل الحزمة الناتجة. تطابق العرض في الواجهة وحده لا يثبت نجاح إنشاء IPA.
+- لا تزال صلاحية مفتاح API للنشر، ووجود مجموعة `Basira Internal Testers` في التطبيق نفسه، وبيانات TestFlight وامتثال التشفير بحاجة إلى فحص قبل أي رفع.
+
 ## متطلبات Apple التي يفحصها مالك الحساب
 
 - عضوية Apple Developer فعالة وسجل تطبيق iOS الحالي في App Store Connect مرتبطان بمعرّف `sa.nasjalufuq.basira` وSKU `BASIRA-IOS-001`.
@@ -21,8 +28,8 @@
 ## إعداد Codemagic الآمن
 
 1. افتح حساب Codemagic الذي يستضيف مستودع `ras222003-boop/B5`، ثم **Settings → Integrations → Developer Portal**.
-2. اربط مفتاح App Store Connect API داخل Codemagic باسم التكامل الحرفي `basira_apple`، مستخدمًا `Issuer ID` و`Key ID` وملف `.p8` في واجهة Codemagic الآمنة. لا تضع هذه البيانات في المحادثة أو GitHub أو ملف `codemagic.yaml`.
-3. في **Settings → Code signing identities** تحقق من شهادة Apple Distribution وملف iOS provisioning profile، ومن صلاحية كليهما وتطابق الفريق والمعرّف `sa.nasjalufuq.basira`. يمكن رفع مواد قائمة أو إنشاؤها لاحقًا وفق صلاحيات المالك؛ هذا الدليل لا ينشئها.
+2. استخدم التكامل الموجود `basira_apple`؛ إذا احتاج المفتاح إلى تجديد فليُدخل المالك بياناته داخل واجهة Codemagic الآمنة فقط. لا تضع ملف `.p8` في المحادثة أو GitHub أو `codemagic.yaml`.
+3. في **Settings → Code signing identities** راجع صلاحية `basira_distribution` و`basira_appstore_profile` وتطابق الفريق والمعرّف `sa.nasjalufuq.basira`. عند تغيير App ID أو الإمكانيات أو الشهادة، يلزم إعادة التحقق من ملف التهيئة.
 4. من الفرع المستقل الجديد شغّل `basira-native-ios-validation` وراجع نجاح الاختبارات. ثم شغّل `basira-native-ios-signed-ipa-check` فقط بعد اكتمال مواد التوقيع، وراجع نتيجة فحص IPA في السجل وأثر البناء.
 5. بعد مراجعة IPA والمجموعة والبيانات في App Store Connect، اطلب موافقة صريحة منفصلة قبل تشغيل `basira-iphone14pro-testflight`. تشغيله يرفع نسخة فعلية إلى Apple ويتيحها للمختبرين الداخليين بعد المعالجة.
 
