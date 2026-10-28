@@ -15,6 +15,8 @@ final class NativeMetricVisionController: UIViewController, ARSessionDelegate, W
     private let context = CIContext()
     private var webView: WKWebView?
     private var allowedHost = ""
+    /// The unified tab owns dismissal; closing must never open another camera.
+    var onCloseRequested: (() -> Void)?
     private var running = false
     private var meterEnabled = false
     private var sessionGeneration = 0
@@ -29,12 +31,9 @@ final class NativeMetricVisionController: UIViewController, ARSessionDelegate, W
     override func viewDidLoad() {
         super.viewDidLoad()
         view.backgroundColor = .black
-        guard let raw = Bundle.main.object(forInfoDictionaryKey: "BasiraVisionURL") as? String,
-              let url = URL(string: raw),
-              url.scheme == "https",
-              let hostname = url.host?.lowercased(),
-              !hostname.contains(".example"),
-              url.path == "/navigation/vision" else {
+        guard let baseURL = BasiraWebOrigin.baseURL,
+              let url = BasiraWebOrigin.url(for: .vision),
+              let hostname = baseURL.host?.lowercased() else {
             showFailure("يجب ضبط BasiraVisionURL على صفحة الرؤية المنشورة في بصيرة قبل تشغيل الكاميرا.")
             return
         }
@@ -271,8 +270,18 @@ final class NativeMetricVisionController: UIViewController, ARSessionDelegate, W
         if presentedViewController == nil { present(alert, animated: true) }
     }
 
+    func stopForNavigation() {
+        stopSession()
+        webView?.stopLoading()
+        webView?.navigationDelegate = nil
+    }
+
     @objc private func closeCamera() {
         stopSession()
+        if let onCloseRequested {
+            onCloseRequested()
+            return
+        }
         if presentingViewController != nil {
             dismiss(animated: true)
         } else {
