@@ -27,6 +27,19 @@ enum BasiraFeature: String, CaseIterable, Identifiable, Hashable {
     case terms
     case robotics
     case arLabs
+    case arImageTargets
+    case arFace
+    case arSky
+    case arVenues
+    case arWorld
+    case arWorldScale
+    case assistantAnalytics
+    case photoRequirements
+    case howItWorks
+    case features
+    case about
+    case contact
+    case refundPolicy
 
     var id: String { rawValue }
 
@@ -55,6 +68,19 @@ enum BasiraFeature: String, CaseIterable, Identifiable, Hashable {
         case .terms: return "/terms"
         case .robotics: return "/robotic-arm"
         case .arLabs: return "/navigation/ar-lab"
+        case .arImageTargets: return "/navigation/ar-lab/image-targets"
+        case .arFace: return "/navigation/ar-lab/face"
+        case .arSky: return "/navigation/ar-lab/sky"
+        case .arVenues: return "/navigation/ar-lab/venues"
+        case .arWorld: return "/navigation/ar-lab/world"
+        case .arWorldScale: return "/navigation/ar-lab/world-scale-sandbox"
+        case .assistantAnalytics: return "/assistant-analytics"
+        case .photoRequirements: return "/photo-requirements"
+        case .howItWorks: return "/how-it-works"
+        case .features: return "/features"
+        case .about: return "/about"
+        case .contact: return "/contact"
+        case .refundPolicy: return "/refund-policy"
         }
     }
 
@@ -83,6 +109,19 @@ enum BasiraFeature: String, CaseIterable, Identifiable, Hashable {
         case .terms: return "الشروط"
         case .robotics: return "الذراع الروبوتية"
         case .arLabs: return "مختبرات الواقع المعزز"
+        case .arImageTargets: return "تجارب الصور المكانية"
+        case .arFace: return "تجارب AR للوجه"
+        case .arSky: return "تجارب AR للسماء"
+        case .arVenues: return "تجهيز الأماكن للواقع المعزز"
+        case .arWorld: return "جاهزية العالم المكاني"
+        case .arWorldScale: return "مختبر المقياس المكاني"
+        case .assistantAnalytics: return "تحليلات المساعد"
+        case .photoRequirements: return "متطلبات الصور"
+        case .howItWorks: return "كيف تعمل بصيرة"
+        case .features: return "التعريف بالمزايا"
+        case .about: return "عن بصيرة"
+        case .contact: return "تواصل معنا"
+        case .refundPolicy: return "سياسة الاسترداد"
         }
     }
 
@@ -96,7 +135,9 @@ enum BasiraFeature: String, CaseIterable, Identifiable, Hashable {
         case .mapping, .sharedMap, .indoorManager, .navigationAdmin:
             return "تتطلب بيانات و/أو صلاحيات مناسبة"
         case .robotics: return "صفحة التعريف بالذراع؛ لا تعني اتصال الأجهزة"
-        case .arLabs: return "تجارب بحثية غير معتمدة للاستخدام الميداني"
+        case .arLabs, .arImageTargets, .arFace, .arSky, .arVenues, .arWorld, .arWorldScale:
+            return "مختبر بحثي، وليس وظيفة ملاحة معتمدة"
+        case .assistantAnalytics: return "للحسابات ذات صلاحيات التحليلات"
         default: return "افتح الخدمة الموجودة في منصة بصيرة"
         }
     }
@@ -118,7 +159,13 @@ enum BasiraFeature: String, CaseIterable, Identifiable, Hashable {
         case .support: return "questionmark.circle"
         case .terms: return "doc.plaintext"
         case .robotics: return "gearshape.2"
-        case .arLabs: return "cube.transparent"
+        case .arLabs, .arImageTargets, .arFace, .arSky, .arVenues, .arWorld, .arWorldScale:
+            return "cube.transparent"
+        case .assistantAnalytics: return "chart.bar"
+        case .photoRequirements: return "photo"
+        case .howItWorks, .features, .about: return "info.circle"
+        case .contact: return "envelope"
+        case .refundPolicy: return "doc.plaintext"
         }
     }
 
@@ -129,13 +176,15 @@ enum BasiraFeature: String, CaseIterable, Identifiable, Hashable {
     static let maps: [BasiraFeature] = [
         .navigation, .guidance, .places, .mapping, .sharedMap, .navigationCapabilities
     ]
-    static let education: [BasiraFeature] = [.onlineExams, .examDemo, .teacher]
-    static let administration: [BasiraFeature] = [.indoorManager, .navigationAdmin]
+    static let education: [BasiraFeature] = [.onlineExams, .examDemo, .teacher, .photoRequirements]
+    static let administration: [BasiraFeature] = [.indoorManager, .navigationAdmin, .assistantAnalytics]
     static let settings: [BasiraFeature] = [
         .account, .voiceSettings, .voiceValidation, .navigationPermissions,
-        .support, .privacy, .terms
+        .support, .contact, .privacy, .terms, .refundPolicy, .about, .howItWorks, .features
     ]
-    static let research: [BasiraFeature] = [.robotics, .arLabs]
+    static let research: [BasiraFeature] = [
+        .robotics, .arLabs, .arImageTargets, .arFace, .arSky, .arVenues, .arWorld, .arWorldScale
+    ]
 }
 
 /// Production web origin is injected by the build, never guessed from a preview
