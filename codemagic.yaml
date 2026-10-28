@@ -40,12 +40,9 @@ workflows:
     integrations:
       app_store_connect: basira_apple
     environment:
-      # This profile is for the registered App ID sa.nasjalufuq.basira.
       ios_signing:
-        provisioning_profiles:
-          - basira_appstore_profile
-        certificates:
-          - basira_distribution
+        distribution_type: app_store
+        bundle_identifier: sa.nasjalufuq.basira
       vars:
         XCODE_SCHEME: "BasiraDepthCalibrationLab"
         BASIRA_BUNDLE_ID: "sa.nasjalufuq.basira"
@@ -96,12 +93,9 @@ workflows:
     integrations:
       app_store_connect: basira_apple
     environment:
-      # This profile is for the registered App ID sa.nasjalufuq.basira.
       ios_signing:
-        provisioning_profiles:
-          - basira_appstore_profile
-        certificates:
-          - basira_distribution
+        distribution_type: app_store
+        bundle_identifier: sa.nasjalufuq.basira
       vars:
         XCODE_SCHEME: "BasiraDepthCalibrationLab"
         BASIRA_BUNDLE_ID: "sa.nasjalufuq.basira"

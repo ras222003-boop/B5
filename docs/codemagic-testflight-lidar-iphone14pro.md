@@ -14,7 +14,7 @@
 
 - يعرض **Developer Portal** تكاملًا متصلًا بالاسم المرجعي `basira_apple`، وهو الاسم الذي يستخدمه سيرا التوقيع في `codemagic.yaml`.
 - يعرض **Code signing identities** الشهادة `basira_distribution` من نوع production وملف `basira_appstore_profile` من نوع `app_store`. الفريق المعروض لكليهما واحد، وتاريخ الانتهاء المعروض 28 أكتوبر 2027.
-- يعرض ملف التهيئة Bundle ID ‏`sa.nasjalufuq.basira` ورسالة Codemagic بأن الشهادة المرفوعة المطابقة له هي `basira_distribution`. يحدد `ios_signing` هذين الأصلين باسميهما المرجعيين؛ ويفحص سير IPA التوقيع والفريق ومعرّف التطبيق داخل الحزمة الناتجة. تطابق العرض في الواجهة وحده لا يثبت نجاح إنشاء IPA.
+- يعرض ملف التهيئة Bundle ID ‏`sa.nasjalufuq.basira` ورسالة Codemagic بأن الشهادة المرفوعة المطابقة له هي `basira_distribution`. يختار `ios_signing` الأصول حسب نوع `app_store` ومعرّف التطبيق، وهي صيغة Codemagic الموثقة؛ ويفحص سير IPA التوقيع والفريق ومعرّف التطبيق داخل الحزمة الناتجة. تطابق العرض في الواجهة وحده لا يثبت نجاح إنشاء IPA.
 - لا تزال صلاحية مفتاح API للنشر، ووجود مجموعة `Basira Internal Testers` في التطبيق نفسه، وبيانات TestFlight وامتثال التشفير بحاجة إلى فحص قبل أي رفع.
 
 ## متطلبات Apple التي يفحصها مالك الحساب
