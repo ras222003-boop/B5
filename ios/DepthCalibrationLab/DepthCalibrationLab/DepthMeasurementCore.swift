@@ -73,6 +73,20 @@ struct DepthEstimate {
     }
 }
 
+/// Records only distances that VoiceOver actually announced. A suppressed
+/// announcement remains eligible when the speech cooldown expires.
+struct DistanceAnnouncementGate {
+    private var lastMetres: Double?
+
+    mutating func reset() { lastMetres = nil }
+
+    func shouldAnnounce(_ metres: Double) -> Bool {
+        metres.isFinite && (lastMetres.map { abs($0 - metres) >= 0.3 } ?? true)
+    }
+
+    mutating func record(_ metres: Double) { lastMetres = metres }
+}
+
 enum DepthMeasurementCore {
     static func evaluate(_ snapshot: DepthSnapshot) -> DepthEstimate {
         guard snapshot.trackingNormal else { return .rejected(.trackingLimited) }

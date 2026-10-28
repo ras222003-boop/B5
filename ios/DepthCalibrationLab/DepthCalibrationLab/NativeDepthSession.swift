@@ -23,7 +23,7 @@ final class NativeDepthSession: NSObject, ObservableObject, ARSessionDelegate {
     private var lastEvaluation: CFTimeInterval = 0
     private var watchdog: Timer?
     private var lastAnnouncement: CFTimeInterval = 0
-    private var lastAnnouncedMetres: Double?
+    private var distanceAnnouncement = DistanceAnnouncementGate()
     private var wantsRun = false
 
     override init() {
@@ -60,6 +60,7 @@ final class NativeDepthSession: NSObject, ObservableObject, ARSessionDelegate {
         let config = ARWorldTrackingConfiguration()
         config.frameSemantics = [.sceneDepth]
         stream.start()
+        distanceAnnouncement.reset()
         isRunning = true
         lastFrameArrival = CACurrentMediaTime()
         lastEvaluation = 0
@@ -83,6 +84,7 @@ final class NativeDepthSession: NSObject, ObservableObject, ARSessionDelegate {
         watchdog = nil
         isRunning = false
         stream.stop()
+        distanceAnnouncement.reset()
         session.pause()
         trackingText = "متوقف"
         reject(reason)
@@ -99,11 +101,13 @@ final class NativeDepthSession: NSObject, ObservableObject, ARSessionDelegate {
         }
     }
 
-    private func announce(_ message: String) {
+    @discardableResult
+    private func announce(_ message: String) -> Bool {
         let now = CACurrentMediaTime()
-        guard UIAccessibility.isVoiceOverRunning, now - lastAnnouncement >= 4 else { return }
+        guard UIAccessibility.isVoiceOverRunning, now - lastAnnouncement >= 4 else { return false }
         lastAnnouncement = now
         UIAccessibility.post(notification: .announcement, argument: message)
+        return true
     }
 
     func session(_ session: ARSession, didUpdate frame: ARFrame) {
@@ -149,9 +153,9 @@ final class NativeDepthSession: NSObject, ObservableObject, ARSessionDelegate {
         metres = value
         highConfidenceCoverage = stable.highConfidenceCoverage
         rejection = nil
-        if lastAnnouncedMetres.map({ abs($0 - value) >= 0.3 }) ?? true {
-            lastAnnouncedMetres = value
-            announce(String(format: "المسافة المحورية %.1f متر", value))
+        if distanceAnnouncement.shouldAnnounce(value),
+           announce(String(format: "المسافة المحورية %.1f متر", value)) {
+            distanceAnnouncement.record(value)
         }
     }
 

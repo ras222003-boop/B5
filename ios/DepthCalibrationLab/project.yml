@@ -16,7 +16,7 @@ targets:
         - BasiraDepthCalibrationLabTests
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: sa.basira.nativeprototype
+        PRODUCT_BUNDLE_IDENTIFIER: sa.nasjalufuq.basira
         INFOPLIST_FILE: DepthCalibrationLab/Info.plist
         GENERATE_INFOPLIST_FILE: NO
         CODE_SIGN_STYLE: Automatic
@@ -32,6 +32,6 @@ targets:
       - target: BasiraDepthCalibrationLab
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: sa.basira.depthcalibration.tests
+        PRODUCT_BUNDLE_IDENTIFIER: sa.nasjalufuq.basira.tests
         GENERATE_INFOPLIST_FILE: YES
         CODE_SIGNING_ALLOWED: NO

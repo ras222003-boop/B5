@@ -14,9 +14,9 @@
 
 ملف `project.yml` يولّد مشروع Xcode باستخدام XcodeGen. ملف `codemagic.yaml` يضيف سير `basira-native-ios-validation` غير موقّع: يولّد المشروع ويبنيه ويشغّل `DepthMeasurementCoreTests` على محاكي iPhone، من دون نشر. تعمل الاختبارات نفسها في `.github/workflows/ios-lidar-compile.yml` عند طلب السحب أو تشغيله يدويًا. لا يمكن لمحاكي iOS تأكيد توفر LiDAR أو دقة الأمتار على iPhone حقيقي.
 
-السير المنفصل `basira-iphone14pro-testflight` **يرفع إلى TestFlight**، لذلك لا يُشغّل قبل موافقة صريحة. يستخدم معرّفًا مستقلًا `sa.basira.nativeprototype` وتكامل Codemagic المسمى `basira_apple`. لا يعتمد التطبيق الأصلي على `BASIRA_VISION_URL`؛ إعدادات صفحة الويب باقية للجسر القديم فقط.
+معرّف التطبيق الأصلي هو `sa.nasjalufuq.basira`، المطابق لسجل «بصيرة - نسج الأفق» في App Store Connect. سير `basira-native-ios-signed-ipa-check` يُنشئ IPA موقّعًا للتحقق من شهادة التوزيع وملف التهيئة ويحتفظ به في آثار Codemagic **دون رفعه إلى Apple**. السير المنفصل `basira-iphone14pro-testflight` يرفع IPA إلى مجموعة اختبار داخلي، لذلك لا يُشغّل قبل موافقة صريحة. كلا السيرين يستخدم تكامل Codemagic المسمى `basira_apple` ولا يُشغّل تلقائيًا. لا يعتمد التطبيق الأصلي على `BASIRA_VISION_URL`؛ إعدادات صفحة الويب باقية للجسر القديم فقط.
 
-قبل أي رفع إلى Apple يلزم: عضوية Apple Developer فعالة، إنشاء App ID وتطبيق App Store Connect بمعرّف `sa.basira.nativeprototype`، صلاحية مناسبة لتكامل App Store Connect في Codemagic وشهادات/ملفات توزيع App Store أو السماح للتكامل بإدارتها، رقم بناء جديد، معلومات TestFlight ومجموعة المختبرين الداخلية، وامتثال التشفير إن طلبته Apple. لا تحفظ المفاتيح أو ملفات التوقيع في المستودع. راجع نتيجة سير التحقق غير الموقّع ثم اطلب الموافقة على تشغيل سير الرفع؛ سيبقى النشر الإنتاجي خارج هذه المرحلة.
+تحقق من ربط تكامل `basira_apple` داخل حساب Codemagic الذي يستضيف B5. يختار سيرا التوقيع مواد `app_store` المطابقة لمعرّف `sa.nasjalufuq.basira`؛ يعرض Codemagic ملف `basira_appstore_profile` وشهادته المطابقة `basira_distribution`. لا تحفظ مفتاح `.p8` أو الشهادات أو ملفات التهيئة في المستودع أو المحادثة. شغّل سير IPA دون رفع أولًا وراجع أثر البناء وتطابق المعرّف والتوقيع؛ ثم تحقق من رقم بناء جديد ومجموعة `Basira Internal Testers` والامتثال للتشفير قبل طلب الموافقة المستقلة على تشغيل سير TestFlight. لا يُرسل أي سير التطبيق إلى App Store للإنتاج.
 
 ## بروتوكول اختبار iPhone 14 Pro
 
