@@ -1,5 +1,5 @@
-# Native iOS prototype. Run validation first; the separate signed workflow must
-# only be started after explicit approval for TestFlight submission.
+# Native iOS prototype. All workflows are manual. The signed IPA check retains
+# its artifact in Codemagic; only the separate TestFlight workflow uploads it.
 workflows:
   basira-native-ios-validation:
     name: Basira native iOS — simulator build and unit tests
@@ -32,10 +32,9 @@ workflows:
       - ios-native-tests.xcresult
       - /tmp/xcodebuild_logs/*.log
 
-  # Apple credentials are held only in the Codemagic integration "basira_apple".
-  # This workflow publishes to TestFlight and is never started automatically.
-  basira-iphone14pro-testflight:
-    name: Basira native LiDAR (iPhone 14 Pro) — approved TestFlight only
+  # This workflow verifies signing without uploading to Apple.
+  basira-native-ios-signed-ipa-check:
+    name: Basira native iOS — signed IPA check (no upload)
     max_build_duration: 60
     instance_type: mac_mini_m2
     integrations:
@@ -43,7 +42,7 @@ workflows:
     environment:
       ios_signing:
         distribution_type: app_store
-        bundle_identifier: sa.basira.nativeprototype
+        bundle_identifier: sa.nasjalufuq.basira
       vars:
         XCODE_SCHEME: "BasiraDepthCalibrationLab"
       xcode: latest
@@ -58,12 +57,13 @@ workflows:
           cd ios/DepthCalibrationLab
           xcodegen generate
 
-      - name: Apply Apple distribution profile
+      - name: Apply Apple distribution profile for internal TestFlight
         script: |
           #!/bin/bash
           set -euo pipefail
           xcode-project use-profiles \
-            --project "$CM_BUILD_DIR/ios/DepthCalibrationLab/BasiraDepthCalibrationLab.xcodeproj"
+            --project "$CM_BUILD_DIR/ios/DepthCalibrationLab/BasiraDepthCalibrationLab.xcodeproj" \
+            --custom-export-options='{"testFlightInternalTestingOnly": true}'
 
       - name: Create distribution-signed IPA
         script: |
@@ -72,6 +72,64 @@ workflows:
           xcode-project build-ipa \
             --project "$CM_BUILD_DIR/ios/DepthCalibrationLab/BasiraDepthCalibrationLab.xcodeproj" \
             --scheme "$XCODE_SCHEME"
+
+      - name: Verify IPA signing and registered Bundle ID
+        script: |
+          #!/bin/bash
+          set -euo pipefail
+          bash ios/DepthCalibrationLab/scripts/verify-signed-ipa.sh
+
+    artifacts:
+      - build/ios/ipa/*.ipa
+      - /tmp/xcodebuild_logs/*.log
+      - $HOME/Library/Developer/Xcode/DerivedData/**/Build/**/*.dSYM
+
+  # This workflow uploads to internal TestFlight only and needs separate approval.
+  basira-iphone14pro-testflight:
+    name: Basira native LiDAR (iPhone 14 Pro) — approved TestFlight only
+    max_build_duration: 60
+    instance_type: mac_mini_m2
+    integrations:
+      app_store_connect: basira_apple
+    environment:
+      ios_signing:
+        distribution_type: app_store
+        bundle_identifier: sa.nasjalufuq.basira
+      vars:
+        XCODE_SCHEME: "BasiraDepthCalibrationLab"
+      xcode: latest
+    scripts:
+      - name: Generate signed iOS project
+        script: |
+          #!/bin/bash
+          set -euo pipefail
+          command -v xcodegen >/dev/null || brew install xcodegen
+          python3 ios/DepthCalibrationLab/scripts/generate-lab-icon.py
+          /usr/libexec/PlistBuddy -c "Set :CFBundleVersion ${PROJECT_BUILD_NUMBER:?}" ios/DepthCalibrationLab/DepthCalibrationLab/Info.plist
+          cd ios/DepthCalibrationLab
+          xcodegen generate
+
+      - name: Apply Apple distribution profile for internal TestFlight
+        script: |
+          #!/bin/bash
+          set -euo pipefail
+          xcode-project use-profiles \
+            --project "$CM_BUILD_DIR/ios/DepthCalibrationLab/BasiraDepthCalibrationLab.xcodeproj" \
+            --custom-export-options='{"testFlightInternalTestingOnly": true}'
+
+      - name: Create distribution-signed IPA
+        script: |
+          #!/bin/bash
+          set -euo pipefail
+          xcode-project build-ipa \
+            --project "$CM_BUILD_DIR/ios/DepthCalibrationLab/BasiraDepthCalibrationLab.xcodeproj" \
+            --scheme "$XCODE_SCHEME"
+
+      - name: Verify IPA signing and registered Bundle ID
+        script: |
+          #!/bin/bash
+          set -euo pipefail
+          bash ios/DepthCalibrationLab/scripts/verify-signed-ipa.sh
 
     artifacts:
       - build/ios/ipa/*.ipa
