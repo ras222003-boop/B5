@@ -5,6 +5,7 @@ import Foundation
 /// as safe, deployed, or usable without a backend/account/network.
 enum BasiraFeature: String, CaseIterable, Identifiable, Hashable {
     case vision
+    case metricVisionWeb
     case navigation
     case guidance
     case places
@@ -46,6 +47,7 @@ enum BasiraFeature: String, CaseIterable, Identifiable, Hashable {
     var path: String {
         switch self {
         case .vision: return "/navigation/vision"
+        case .metricVisionWeb: return "/navigation/native-vision"
         case .navigation: return "/navigation"
         case .guidance: return "/navigation/guidance"
         case .places: return "/navigation/places"
@@ -87,6 +89,7 @@ enum BasiraFeature: String, CaseIterable, Identifiable, Hashable {
     var name: String {
         switch self {
         case .vision: return "الرؤية ووصف المكان"
+        case .metricVisionWeb: return "مختبر الرؤية المترية على الويب"
         case .navigation: return "الخرائط والتنقل"
         case .guidance: return "الإرشاد المكاني التجريبي"
         case .places: return "أماكني المحفوظة"
@@ -128,6 +131,7 @@ enum BasiraFeature: String, CaseIterable, Identifiable, Hashable {
     var detail: String {
         switch self {
         case .vision: return "كشف الأشياء ووصف المشاهد وقراءة النص والتنبيهات التجريبية"
+        case .metricVisionWeb: return "واجهة ويب تجريبية مختلفة عن تبويب قياس LiDAR الأصلي"
         case .navigation: return "عرض المباني والوجهات والخرائط المتاحة"
         case .guidance: return "مساعدة استكشافية، وليست تصريحًا بالمشي أو ضمان تجنب الاصطدام"
         case .onlineExams: return "وظائف الاختبارات المنشورة في منصة بصيرة"
@@ -144,7 +148,7 @@ enum BasiraFeature: String, CaseIterable, Identifiable, Hashable {
 
     var symbol: String {
         switch self {
-        case .vision: return "eye"
+        case .vision, .metricVisionWeb: return "eye"
         case .navigation, .guidance: return "map"
         case .places: return "mappin.circle"
         case .mapping, .sharedMap: return "square.on.square"
@@ -183,7 +187,7 @@ enum BasiraFeature: String, CaseIterable, Identifiable, Hashable {
         .support, .contact, .privacy, .terms, .refundPolicy, .about, .howItWorks, .features
     ]
     static let research: [BasiraFeature] = [
-        .robotics, .arLabs, .arImageTargets, .arFace, .arSky, .arVenues, .arWorld, .arWorldScale
+        .robotics, .metricVisionWeb, .arLabs, .arImageTargets, .arFace, .arSky, .arVenues, .arWorld, .arWorldScale
     ]
 }
 
