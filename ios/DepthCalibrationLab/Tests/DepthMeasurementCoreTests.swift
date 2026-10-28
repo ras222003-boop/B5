@@ -75,4 +75,16 @@ final class DepthMeasurementCoreTests: XCTestCase {
         stream.start()
         XCTAssertEqual(stream.ingest(timestamp: 6, estimate: valid).rejection, .stabilizing)
     }
+
+    func testVoiceOverDistanceCanBeAnnouncedAfterSessionRestartOrCooldown() {
+        var gate = DistanceAnnouncementGate()
+        XCTAssertTrue(gate.shouldAnnounce(2))
+        XCTAssertTrue(gate.shouldAnnounce(2)) // a throttled announcement was not spoken
+        gate.record(2)
+        XCTAssertFalse(gate.shouldAnnounce(2.1))
+        XCTAssertTrue(gate.shouldAnnounce(2.4))
+        gate.reset()
+        XCTAssertTrue(gate.shouldAnnounce(2)) // first reading of the new session
+        XCTAssertFalse(gate.shouldAnnounce(.nan))
+    }
 }
