@@ -4,13 +4,13 @@ import SwiftUI
 struct BasiraNativeApp: App {
     var body: some Scene {
         WindowGroup {
-            BasiraDepthHome()
+            BasiraUnifiedHome()
                 .environment(\.layoutDirection, .rightToLeft)
         }
     }
 }
 
-private struct BasiraDepthHome: View {
+struct BasiraDepthHome: View {
     @StateObject private var depth = NativeDepthSession()
     @Environment(\.scenePhase) private var scenePhase
 
