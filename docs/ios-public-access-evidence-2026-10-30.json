@@ -1,0 +1,37 @@
+{
+  "date": "2026-10-30",
+  "origin": "https://basira-m7myneuo.manus.space",
+  "ownerDirection": "Continue public-page testing without requiring Basira account login",
+  "codeReference": "752ea630c20f9861276dd81048e32718650a7d98",
+  "basiraLoginPerformed": false,
+  "googleFlowContinued": false,
+  "browserContext": "Existing authorized hosting browser context; no Basira login performed by the agent",
+  "renderedPages": [
+    {"path":"/navigation","result":"Map and destination controls rendered; no registered buildings, GPS not granted"},
+    {"path":"/navigation/vision","result":"Vision page rendered, start button available, camera stopped; older deployed interface without V3 selector"},
+    {"path":"/exam-demo","result":"Exam scanning page rendered with camera and upload controls; no new capture or upload in this check"}
+  ],
+  "anonymousHttpsProbe": {
+    "cookieHeaderSent": false,
+    "authorizationHeaderSent": false,
+    "redirectsFollowed": false,
+    "results": [
+      {"path":"/","status":302,"redirectOrigin":"https://manus.im","redirectPath":"/app-auth"},
+      {"path":"/navigation","status":302,"redirectOrigin":"https://manus.im","redirectPath":"/app-auth"},
+      {"path":"/exam-demo","status":302,"redirectOrigin":"https://manus.im","redirectPath":"/app-auth"},
+      {"path":"/assistant","status":302,"redirectOrigin":"https://manus.im","redirectPath":"/app-auth"},
+      {"path":"/settings/voice","status":302,"redirectOrigin":"https://manus.im","redirectPath":"/app-auth"},
+      {"path":"/api/readiness","status":200,"contentType":"application/json; charset=utf-8"}
+    ],
+    "scope": "Proves first-hop hosting redirects only; does not prove a password prompt, failed public page or Basira account requirement. Query/state parameters omitted."
+  },
+  "protectedOperations": [
+    {"source":"server/visionDescribe.ts","operation":"Cloud single-image description","guard":"401 sign_in_required when no user"},
+    {"source":"server/support.ts","operation":"Account ticket history","guard":"Requires session"}
+  ],
+  "globalRouteAuthGuardFound": false,
+  "physicalIphoneTested": false,
+  "productionOrHostingSettingsChanged": false,
+  "testFlightUploaded": false,
+  "merged": false
+}
