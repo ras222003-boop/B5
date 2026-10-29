@@ -46,6 +46,12 @@
     "embeddedMediaScriptTests": 10,
     "scope": "Software tests only; no physical camera, native sensor, new signed IPA or TestFlight upload"
   },
+  "startupRaceCI": {
+    "sourceCommit": "9297e083ff2e7ba1fd7d136efa85b149a5e7464c",
+    "web": {"result":"success","vitestFiles":101,"vitestTests":614,"url":"https://github.com/ras222003-boop/B5/actions/runs/40896316571/job/123526262402"},
+    "iosSimulator": {"result":"success","url":"https://github.com/ras222003-boop/B5/actions/runs/40896327686/job/123526300724","detailLog":"download returned502; no new log-derived test count asserted"},
+    "scope": "GitHub checks succeeded for source commit; following README/evidence edits are documentation only. No signed IPA or physical sensor testing."
+  },
   "resumeBrowserStatus": "Previous in-app browser tool was unavailable. Windows computer-use stopped because browser URL could not be determined reliably; no resumed site mutation or repeated Codemagic configuration.",
   "productionChanged": false,
   "testFlightUploaded": false,
