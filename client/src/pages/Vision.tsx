@@ -252,16 +252,18 @@ export default function Vision() {
       const nativeFrames=window.BasiraNativeFrames;
       if(!nativeFrames)await cameraRef.current.start(videoRef.current);
       if(trial&&cameraRef.current.frameSize)trial.camera(cameraRef.current.frameSize);
-      if(run!==generation.current){cameraRef.current.stop(videoRef.current);return;}
+      if(run!==generation.current)return;
       if(!nativeFrames){setCameraPermission('allowed');setCameraSize(videoRef.current.videoWidth&&videoRef.current.videoHeight?{width:videoRef.current.videoWidth,height:videoRef.current.videoHeight}:cameraRef.current.frameSize);}
       else setCameraSize({width:nativeCanvasRef.current.width,height:nativeCanvasRef.current.height});
       const objectAbort=new AbortController();objectOpenAbort.current=objectAbort;
-      const {provider,execution}=await openObjectProvider(visionConfig,objectAbort.signal,activeObjectProfile);objectOpenAbort.current=null;
+      const {provider,execution}=await openObjectProvider(visionConfig,objectAbort.signal,activeObjectProfile);
+      if(objectOpenAbort.current===objectAbort)objectOpenAbort.current=null;
+      if(run!==generation.current){await provider.close();return;}
       if(execution==='MAIN_THREAD')setAnalysisNotice('يستخدم هذا المتصفح التحليل على خيط الواجهة؛ قد تتأخر الاستجابة.');
-      if(run!==generation.current){await provider.close();cameraRef.current.stop(videoRef.current);return;}
       const currentBuildingId=activeObjectProfile?null:sessionStorage.getItem('basira-current-building');
-      graphNodesRef.current=currentBuildingId?(await navApi.graph(currentBuildingId).then(result=>result.nodes).catch(()=>[])):[];
-      if(run!==generation.current){await provider.close();cameraRef.current.stop(videoRef.current);return;}
+      const graphNodes=currentBuildingId?(await navApi.graph(currentBuildingId).then(result=>result.nodes).catch(()=>[])):[];
+      if(run!==generation.current){await provider.close();return;}
+      graphNodesRef.current=graphNodes;
       const announcement=new VisionAnnouncementService(t,(text,priority)=>{void speechEngine.enqueue(speechInput(text,lang,'ENVIRONMENT'),priority??'HIGH_SAFETY',0,undefined,false,(perceptionRef.current?.capturedAt??performance.now())+PERCEPTION_TTL_MS);},new BrowserHapticFeedbackProvider(),visionConfig.alertCooldownMs);
       const Pipeline=activeObjectProfile?ObjectOnlyPipeline:VisionPipeline;
       const pipeline=new Pipeline({video:videoRef.current,nativeCanvas:nativeCanvasRef.current,nativeFrames,
@@ -370,8 +372,10 @@ export default function Vision() {
         if(run===generation.current)pipeline.setSegmentation(model);else void model.close();
       }).catch(()=>{if(run===generation.current)setModelWarning(t.segmentationFailure);});},2500);
     } catch(caught) {
+      if(run!==generation.current)return;
       cameraRef.current.stop(videoRef.current??undefined);
-      await pipelineRef.current?.stop();pipelineRef.current=null;
+      const failedPipeline=pipelineRef.current;pipelineRef.current=null;
+      await failedPipeline?.stop();
       if(run!==generation.current)return;
       const failure=visionStartupFailure(caught),key=failure.code;
       console.warn('Basira vision startup failed',{code:key});

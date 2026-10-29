@@ -131,6 +131,7 @@ export class ObjectOnlyPipeline {
         await this.options.nativeFrames.setMeterEnabled(false);
         if(!this.running||run!==this.generation)return;
       }catch(error){
+        if(!this.running||run!==this.generation)return;
         this.running=false;
         await this.options.nativeFrames.stop().catch(()=>{});
         throw error;
@@ -373,7 +374,8 @@ export class ObjectOnlyPipeline {
     this.timer = null;
     this.clear();
     if(this.options.nativeFrames){
-      await this.options.nativeFrames.setMeterEnabled(false).catch(()=>{});
+      // Native stop disables depth itself. Queue it before another run can
+      // start, without a preliminary meter await that could overtake a restart.
       await this.options.nativeFrames.stop().catch(()=>{});
     }
     await this.options.vision.close();

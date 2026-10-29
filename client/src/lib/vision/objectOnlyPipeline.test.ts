@@ -207,6 +207,29 @@ describe("experimental objects never enter navigation", () => {
     expect(session.active).toBe(false);expect(bridge.nextFrame).not.toHaveBeenCalled();expect(options.vision.detect).not.toHaveBeenCalled();
     expect(bridge.stop).toHaveBeenCalledOnce();expect(options.vision.close).toHaveBeenCalledOnce();
   });
+  it.each(['permission','meter'] as const)('an obsolete %s rejection cannot stop a newer native V3 session',async pending=>{
+    const {options,bridge}=nativeSetup();let reject!:(error:Error)=>void;
+    const waiting=new Promise<void>((_resolve,fail)=>{reject=fail;});
+    if(pending==='permission')bridge.start.mockReturnValueOnce(waiting);
+    else bridge.setMeterEnabled.mockReturnValueOnce(waiting);
+    const first=new ObjectOnlyPipeline(options),starting=first.start();
+    await Promise.resolve();await first.stop();
+    const nextOptions={...options,vision:{...options.vision,close:vi.fn(async()=>{})}};
+    const next=new ObjectOnlyPipeline(nextOptions);await next.start();
+    reject(Error('camera_stopped'));await starting;
+    expect(next.active).toBe(true);expect(bridge.stop).toHaveBeenCalledOnce();
+    expect(nextOptions.vision.close).not.toHaveBeenCalled();await next.stop();
+  });
+  it('queues native V3 stop before yielding without a separate meter cleanup',async()=>{
+    const {options,bridge}=nativeSetup();const first=new ObjectOnlyPipeline(options);await first.start();
+    bridge.setMeterEnabled.mockClear();let finish!:()=>void;
+    bridge.stop.mockReturnValueOnce(new Promise(resolve=>{finish=resolve;}));
+    const stopping=first.stop();expect(bridge.stop).toHaveBeenCalledOnce();
+    expect(bridge.setMeterEnabled).not.toHaveBeenCalled();
+    const next=new ObjectOnlyPipeline({...options,vision:{...options.vision,close:vi.fn(async()=>{})}});
+    await next.start();finish();await stopping;
+    expect(next.active).toBe(true);expect(bridge.stop).toHaveBeenCalledOnce();await next.stop();
+  });
   it('does not publish or speak a late inference after stop',async()=>{
     const {options,callbacks}=setup();let complete!:(detections:VisionDetection[])=>void;
     vi.mocked(options.vision.detect).mockImplementation(()=>new Promise(resolve=>{complete=resolve;}));
