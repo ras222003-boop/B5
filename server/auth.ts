@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { betterAuth } from "better-auth";
 import { createPool } from "mysql2/promise";
 import { SignJWT, importPKCS8 } from "jose";
+import { authOriginPolicy } from "./authOrigins";
 
 if (!process.env.DATABASE_URL) throw new Error("DATABASE_URL is required for Basira accounts");
 if (!process.env.MANUS_JWT_SECRET) throw new Error("MANUS_JWT_SECRET is required for Basira accounts");
@@ -17,17 +18,10 @@ export const providerReady: Record<SocialProvider, boolean> = {
 
 // Keep the application's signing key cryptographically separated from platform JWTs.
 const secret = createHash("sha256").update(`basira-account-session-v1:${process.env.MANUS_JWT_SECRET}`).digest("hex");
-const previewOrigins = [
-  "https://8328-imv45ni0cja578aqjmie4-14cb3a00.sg2.manus.computer",
-  "https://3000-imv45ni0cja578aqjmie4-14cb3a00.sg2.manus.computer",
-  "https://3001-imv45ni0cja578aqjmie4-14cb3a00.sg2.manus.computer",
-];
-const publishedOrigin = "https://basira-ve3h8rof.manus.space";
-const customOrigin = process.env.BASIRA_PUBLIC_URL?.replace(/\/+$/, "");
-if (customOrigin && !/^https:\/\/[^/]+$/.test(customOrigin)) throw new Error("BASIRA_PUBLIC_URL must be an HTTPS origin");
 // Secure is the default; only the explicit local development command uses HTTP cookies.
-const production = process.env.NODE_ENV !== "development";
-const origins = [...previewOrigins, publishedOrigin, ...(customOrigin ? [customOrigin] : [])];
+const { production, baseURL, trustedOrigins } = authOriginPolicy({
+  nodeEnv: process.env.NODE_ENV, publicURL: process.env.BASIRA_PUBLIC_URL,
+});
 const apple = providerReady.apple ? {
   apple: async () => {
     const clientId = process.env.APPLE_CLIENT_ID!;
@@ -49,12 +43,8 @@ export const auth = betterAuth({
   appName: "بصيرة · Aurum Nexus",
   database: pool,
   secret,
-  baseURL: {
-    allowedHosts: [...origins.map(origin => new URL(origin).host), "localhost:*", "127.0.0.1:*"],
-    protocol: production ? "https" : "http",
-    fallback: customOrigin || publishedOrigin,
-  },
-  trustedOrigins: [...origins, ...(!production ? ["http://localhost:3000", "http://localhost:3001", "http://127.0.0.1:3000", "http://127.0.0.1:3001"] : []), "https://appleid.apple.com"],
+  baseURL,
+  trustedOrigins,
   advanced: {
     cookiePrefix: "basira",
     useSecureCookies: production,

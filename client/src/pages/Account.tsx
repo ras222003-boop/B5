@@ -12,10 +12,14 @@ import { useI18n, useMessages } from "@/i18n";
 import { accountMessages } from "@/i18n/locales/account";
 import { navigationMessages } from "@/i18n/locales/navigation";
 import { authClient } from "@/lib/auth-client";
+import {
+  accountOAuthNotice,
+  parseOAuthReturn,
+  type OAuthReturnReceipt,
+} from "@/lib/accountOAuthNotice";
 
 type Provider = "google" | "microsoft" | "apple" | "facebook";
 type ErrorKind = "authentication" | "providerStatus" | "socialStart";
-type OAuthNotice = "success" | "failure" | "cancelled";
 type Ticket = {
   id: string;
   subject: string;
@@ -35,14 +39,27 @@ export default function Account() {
   const t = useMessages(accountMessages);
   const navigation = useMessages(navigationMessages);
   const { formatDate, lang } = useI18n();
-  const { data: session, isPending, refetch } = authClient.useSession();
+  const {
+    data: session,
+    isPending,
+    isRefetching,
+    error: sessionError,
+    refetch,
+  } = authClient.useSession();
   const [mode, setMode] = useState<"login" | "signup">("login");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [working, setWorking] = useState(false);
   const [errorKind, setErrorKind] = useState<ErrorKind | null>(null);
-  const [oauthNotice, setOauthNotice] = useState<OAuthNotice | null>(null);
+  const [oauthReceipt, setOauthReceipt] = useState<OAuthReturnReceipt | null>(
+    null
+  );
+  const oauthNotice = accountOAuthNotice(oauthReceipt, {
+    pending: isPending || Boolean(isRefetching),
+    authenticated: Boolean(session?.user),
+    failed: Boolean(sessionError),
+  });
   const [providers, setProviders] = useState<Record<Provider, boolean>>({
     google: false,
     microsoft: false,
@@ -56,22 +73,8 @@ export default function Account() {
   }, [t.pageTitle]);
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    const authResult = params.get("auth")?.trim().toLowerCase();
-    const providerError = params.get("error")?.trim().toLowerCase() ?? "";
-    const isCancelled =
-      authResult === "cancel" ||
-      authResult === "cancelled" ||
-      authResult === "canceled" ||
-      providerError === "access_denied" ||
-      providerError.includes("cancel");
-
-    if (authResult === "success" && !params.has("error"))
-      setOauthNotice("success");
-    else if (isCancelled) setOauthNotice("cancelled");
-    else if (params.has("auth") || params.has("error"))
-      setOauthNotice("failure");
-
     if (params.has("auth") || params.has("error")) {
+      setOauthReceipt(parseOAuthReturn(window.location.search));
       window.history.replaceState(
         window.history.state,
         "",
@@ -104,6 +107,7 @@ export default function Account() {
 
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    setOauthReceipt(null);
     setWorking(true);
     setErrorKind(null);
     try {
@@ -128,6 +132,7 @@ export default function Account() {
   };
   const signInSocial = async (provider: Provider) => {
     if (!providers[provider]) return;
+    setOauthReceipt(null);
     setWorking(true);
     setErrorKind(null);
     try {
@@ -231,6 +236,7 @@ export default function Account() {
                 <button
                   type="button"
                   onClick={async () => {
+                    setOauthReceipt(null);
                     await authClient.signOut();
                     await refetch();
                   }}
