@@ -34,4 +34,18 @@ final class BasiraFeatureCatalogueTests: XCTestCase {
         XCTAssertFalse(BasiraWebOrigin.allows(try XCTUnwrap(URL(string: "http://basira.example.org/navigation/vision")), within: origin))
         XCTAssertFalse(BasiraWebOrigin.allows(try XCTUnwrap(URL(string: "https://basira.example.org:8443/navigation")), within: origin))
     }
+
+    func testBuildAndRuntimeOriginRulesRejectAmbiguousURLs() {
+        for raw in [" https://basira.example.org", "https://basira.example.org\n",
+                    "https://basira.example.org:", "https://basira.example.org:443",
+                    "https://basira.example.org?", "https://basira.example.org#",
+                    "https://127.0.0.1", "https://10.1.2.3", "https://[::1]",
+                    "https://sub.localhost", "https://a.invalid", "https://a.test",
+                    "https://bad..host.org", "https://-bad.host.org", "https://host.org.",
+                    "https://%62asira.example.org", "https://host.org\\path"] {
+            XCTAssertNil(BasiraWebOrigin.validate(raw), raw)
+        }
+        XCTAssertEqual(BasiraWebOrigin.validate("HTTPS://BASIRA.example.org/")?.absoluteString,
+                       "https://basira.example.org")
+    }
 }

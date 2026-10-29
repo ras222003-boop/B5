@@ -10,7 +10,8 @@ import {getSpeechPreferences,saveSpeechPreferences,speechEngine,speechInput,test
 import {authClient} from '@/lib/auth-client';
 import { permissionService, type PermissionState } from '@/lib/permissionService';
 import { DEFAULT_VISION_CONFIG } from '@/lib/vision/config';
-import { CameraService, CameraServiceError,captureFrame } from '@/lib/vision/camera';
+import { CameraService,captureFrame } from '@/lib/vision/camera';
+import {visionStartupFailure} from '@/lib/vision/visionStartupFailure';
 import { TesseractOCRProvider, UnavailableDepthProvider } from '@/lib/vision/providers';
 import {openObjectProvider} from '@/lib/vision/workerObjectProvider';
 import {currentPerception,freshTimestamp,PERCEPTION_TTL_MS,APPROACH_TTL_MS,type PerceptionSnapshot} from '@/lib/vision/perception';
@@ -227,6 +228,7 @@ export default function Vision() {
     stopSpeaking();
   },[]);
   useEffect(()=>{const onHidden=()=>{if(document.hidden)void stop();};document.addEventListener('visibilitychange',onHidden);return()=>document.removeEventListener('visibilitychange',onHidden);},[stop]);
+  useEffect(()=>{const suspend=()=>{void stop();};window.addEventListener('basira:native-suspend',suspend);return()=>window.removeEventListener('basira:native-suspend',suspend);},[stop]);
 
   const start=async()=>{
     if(selectedModel!=='original'&&!activeObjectProfile)return;
@@ -247,7 +249,7 @@ export default function Vision() {
       if(run!==generation.current)return;
       const detected=detectVisionCapabilities();setCapabilities(detected);
       const visionConfig=activeObjectProfile?{...DEFAULT_VISION_CONFIG,detectionThreshold:activeObjectProfile.threshold}:DEFAULT_VISION_CONFIG;
-      const nativeFrames=activeObjectProfile?undefined:window.BasiraNativeFrames;
+      const nativeFrames=window.BasiraNativeFrames;
       if(!nativeFrames)await cameraRef.current.start(videoRef.current);
       if(trial&&cameraRef.current.frameSize)trial.camera(cameraRef.current.frameSize);
       if(run!==generation.current){cameraRef.current.stop(videoRef.current);return;}
@@ -371,13 +373,15 @@ export default function Vision() {
       cameraRef.current.stop(videoRef.current??undefined);
       await pipelineRef.current?.stop();pipelineRef.current=null;
       if(run!==generation.current)return;
-      const key=caught instanceof CameraServiceError?caught.code:'MODEL';
+      const failure=visionStartupFailure(caught),key=failure.code;
       console.warn('Basira vision startup failed',{code:key});
-      const nativePermission=caught instanceof Error&&caught.message.includes('camera_permission_required');
-      setError(activeObjectProfile&&key==='MODEL'?`تعذر النموذج التجريبي: ${caught instanceof Error?caught.message:'object_quality_unavailable'}؛ عادت الواجهة إلى Lite0. أعد تشغيل الكاميرا إذا أردت المتابعة.`:nativePermission?t.nativePermissionRetry:key==='NO_CAMERA'?t.noCamera:key==='DENIED'?t.denied:key==='DEVICE_SETTINGS'?t.settings:key==='UNAVAILABLE'?t.unavailable:key==='IN_USE'?t.inUse:key==='MODEL'?t.modelFailure:t.cameraFailure);
+      setError(activeObjectProfile&&key==='MODEL'?`تعذر النموذج التجريبي: ${caught instanceof Error?caught.message:'object_quality_unavailable'}؛ عادت الواجهة إلى Lite0. أعد تشغيل الكاميرا إذا أردت المتابعة.`:failure.retry?t.nativePermissionRetry:key==='NO_CAMERA'?t.noCamera:key==='DENIED'?t.denied:key==='DEVICE_SETTINGS'?t.settings:key==='UNAVAILABLE'?t.unavailable:key==='IN_USE'?t.inUse:key==='MODEL'?t.modelFailure:t.cameraFailure);
       if(activeObjectProfile&&key==='MODEL')setSelectedModel('original');
       setState('STOPPED');
-      permissionService.status('camera').then(setCameraPermission).catch(()=>{});
+      if(failure.source==='NATIVE_CAMERA'){
+        if(key==='DENIED')setCameraPermission('denied');
+        else if(key==='UNAVAILABLE')setCameraPermission('unavailable');
+      }else permissionService.status('camera').then(setCameraPermission).catch(()=>{});
     }
   };
   const report=(detail:boolean)=>{
@@ -562,7 +566,8 @@ export default function Vision() {
     link.click();window.setTimeout(()=>URL.revokeObjectURL(url),1000);
   };
   const cameraState=state==='STOPPED'?t.stopped:state==='STARTING'?t.starting:state==='WORKING'?t.working:t.analyzing;
-  const hasNativeFrames=!activeObjectProfile&&typeof window!=='undefined'&&Boolean(window.BasiraNativeFrames);
+  const hasNativeCameraFrames=typeof window!=='undefined'&&Boolean(window.BasiraNativeFrames);
+  const hasNativeFrames=!activeObjectProfile&&hasNativeCameraFrames;
   const approachRequested=experimentalAlerts||approachPreferences.audioEnabled||approachPreferences.hapticsEnabled;
   const approachLevel:ApproachAlertLevel=state==='STOPPED'||!approachSignal||!freshApproachSignal(approachSignal,observationClock)
     ?'UNAVAILABLE':approachSignal.level;
@@ -591,6 +596,19 @@ export default function Vision() {
     const link=document.createElement('a');link.href=url;link.download=`basira-object-trial-${trial.sceneId}.json`;link.click();window.setTimeout(()=>URL.revokeObjectURL(url),1000);
   };
   const captureObjectPhoto=async()=>{
+    if(window.BasiraNativeFrames){
+      const canvas=nativeCanvasRef.current,run=generation.current;
+      if(state!=='WORKING'&&state!=='ANALYZING'||!canvas||!currentPerception(perceptionRef.current,performance.now()))return null;
+      // Copy before the asynchronous JPEG callback so subsequent live frames
+      // cannot change the photo the user requested. The file stays local.
+      const still=document.createElement('canvas');still.width=canvas.width;still.height=canvas.height;
+      const context=still.getContext('2d');if(!context)return null;
+      context.drawImage(canvas,0,0);
+      try{
+        const blob=await new Promise<Blob|null>(resolve=>still.toBlob(resolve,'image/jpeg',.9));
+        return blob&&run===generation.current?new File([blob],'basira-local-camera-snapshot.jpg',{type:blob.type}):null;
+      }finally{still.width=still.height=0;}
+    }
     if(!videoRef.current||!cameraRef.current.active||videoRef.current.paused||videoRef.current.ended||videoRef.current.readyState<2)return null;
     const captured=await captureFrame(videoRef.current,{...DEFAULT_VISION_CONFIG,inputResolution:{width:1280,height:1280}});
     return captured?new File([captured.blob],'basira-local-camera-snapshot.jpg',{type:captured.blob.type}):null;
@@ -611,9 +629,9 @@ export default function Vision() {
     {activeObjectProfile&&error&&<p role="alert" className="rounded-xl border border-red-400/50 p-4 text-red-200">{error}</p>}
     <div className="flex flex-wrap gap-3">{state==='STOPPED'?<button type="button" className={button} onClick={start}>{t.start}</button>:<button type="button" className={button} onClick={()=>void stop()}>{t.stop}</button>}</div>
     <section aria-label={t.preview} className="relative mx-auto w-full max-w-2xl overflow-hidden rounded-xl bg-stone-950"
-      style={{aspectRatio:previewFrame?`${previewFrame.width}/${previewFrame.height}`:hasNativeFrames?'3/4':'4/3'}}>
-      <video ref={videoRef} muted playsInline aria-hidden="true" onLoadedMetadata={event=>setCameraSize({width:event.currentTarget.videoWidth,height:event.currentTarget.videoHeight})} onPause={()=>{if(cameraRef.current.active&&!document.hidden)setVideoPaused(true);}} onPlay={()=>setVideoPaused(false)} className={`absolute inset-0 size-full object-contain ${hasNativeFrames||currentPinnedFrame?'hidden':''}`} />
-      <canvas ref={nativeCanvasRef} width={480} height={640} aria-hidden="true" className={`absolute inset-0 size-full object-contain ${hasNativeFrames&&!currentPinnedFrame?'':'hidden'}`} />
+      style={{aspectRatio:previewFrame?`${previewFrame.width}/${previewFrame.height}`:hasNativeCameraFrames?'3/4':'4/3'}}>
+      <video ref={videoRef} muted playsInline aria-hidden="true" onLoadedMetadata={event=>setCameraSize({width:event.currentTarget.videoWidth,height:event.currentTarget.videoHeight})} onPause={()=>{if(cameraRef.current.active&&!document.hidden)setVideoPaused(true);}} onPlay={()=>setVideoPaused(false)} className={`absolute inset-0 size-full object-contain ${hasNativeCameraFrames||currentPinnedFrame?'hidden':''}`} />
+      <canvas ref={nativeCanvasRef} width={480} height={640} aria-hidden="true" className={`absolute inset-0 size-full object-contain ${hasNativeCameraFrames&&!currentPinnedFrame?'':'hidden'}`} />
       {currentPinnedFrame&&<><img src={currentPinnedFrame.imageDataUrl} alt="" aria-hidden="true" data-testid="pinned-metric-image" data-frame-id={currentPinnedFrame.frame.frameId} className="absolute inset-0 size-full object-contain" />
         <p className="absolute bottom-2 left-2 right-2 z-10 rounded-lg bg-stone-950/90 px-3 py-2 text-sm text-amber-100" role="status">{lang==='ar'?'لقطة قياس ثابتة؛ الصورة ليست بثًا حيًا.':lang==='zh-CN'?'测距静止画面；并非实时视频。':'Measurement still; this is not live video.'}</p></>}
       <LiveVisionOverlay frame={previewFrame} snapshot={currentPinnedFrame?currentMeterSnapshot:null} pinned={Boolean(currentPinnedFrame)} names={t.object} directions={t.direction} metersLabel={t.autoMeterMeters} experimentalLabel={t.autoMeterExperimental} rtl={lang==='ar'} />

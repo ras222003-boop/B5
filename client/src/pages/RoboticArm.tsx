@@ -1,80 +1,26 @@
 /*
  * Design: Warm Contemporary
- * Robotic Arm page - Shows arm features with DISCONNECTED status
+ * Informational concept. Device transport is unavailable in this build.
  */
-import { useState } from "react";
 import { motion } from "framer-motion";
 import {
-  Bot,
-  Wifi,
   WifiOff,
   Settings,
   Pen,
   Gauge,
-  Ruler,
   MapPin,
   AlertTriangle,
-  CheckCircle,
-  Loader2,
 } from "lucide-react";
 import Layout from "@/components/Layout";
 import SectionHeading from "@/components/SectionHeading";
 import { Button } from "@/components/ui/button";
 import { useMessages } from "@/i18n";
 import { roboticArmMessages } from "@/i18n/locales/roboticArm";
-import { toast } from "sonner";
 
 const roboticArmImage = "https://d2xsxph8kpxj0f.cloudfront.net/310519663660690446/egP6Ccw5DpGVLQ8nQQhPRc/robotic-arm-btZRLCutmPSqx3AVedUpMr.webp";
 
-type ConnectionStatus = "disconnected" | "connecting" | "connected";
-
 export default function RoboticArm() {
   const t = useMessages(roboticArmMessages);
-  const [status, setStatus] = useState<ConnectionStatus>("disconnected");
-
-  const handleConnect = () => {
-    setStatus("connecting");
-    // Simulate connection attempt then fail (arm not connected)
-    setTimeout(() => {
-      setStatus("disconnected");
-      toast.error(t.connect.errorTitle, {
-        description: t.connect.errorDescription,
-      });
-    }, 3000);
-  };
-
-  const statusConfig = {
-    disconnected: {
-      icon: WifiOff,
-      label: t.status.disconnected.label,
-      description: t.status.disconnected.description,
-      color: "text-red-500",
-      bg: "bg-red-50",
-      border: "border-red-200",
-      dot: "bg-red-500",
-    },
-    connecting: {
-      icon: Loader2,
-      label: t.status.connecting.label,
-      description: t.status.connecting.description,
-      color: "text-amber-500",
-      bg: "bg-amber-50",
-      border: "border-amber-200",
-      dot: "bg-amber-500",
-    },
-    connected: {
-      icon: Wifi,
-      label: t.status.connected.label,
-      description: t.status.connected.description,
-      color: "text-green-500",
-      bg: "bg-green-50",
-      border: "border-green-200",
-      dot: "bg-green-500",
-    },
-  };
-
-  const currentStatus = statusConfig[status];
-  const StatusIcon = currentStatus.icon;
 
   return (
     <Layout>
@@ -96,40 +42,28 @@ export default function RoboticArm() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5 }}
-            className={`p-6 md:p-8 rounded-2xl border-2 ${currentStatus.border} ${currentStatus.bg}`}
+            className="p-6 md:p-8 rounded-2xl border-2 border-amber-200 bg-amber-50"
           >
             <div className="flex items-center justify-between flex-wrap gap-4">
               <div className="flex items-center gap-4">
                 <div className="relative">
-                  <StatusIcon className={`w-8 h-8 ${currentStatus.color} ${status === "connecting" ? "animate-spin" : ""}`} />
-                  <div className={`absolute -top-1 -start-1 w-3 h-3 rounded-full ${currentStatus.dot} ${status === "disconnected" ? "" : "animate-pulse"}`} />
+                  <WifiOff className="w-8 h-8 text-amber-700" />
                 </div>
                 <div>
-                  <h3 className="font-bold text-lg">{currentStatus.label}</h3>
-                  <p className="text-sm text-muted-foreground">{currentStatus.description}</p>
+                  <h3 className="font-bold text-lg">{t.status.disconnected.label}</h3>
+                  <p id="arm-unavailable" role="note" className="text-sm text-muted-foreground">{t.status.disconnected.description}</p>
                 </div>
               </div>
               <Button
-                onClick={handleConnect}
-                disabled={status === "connecting"}
+                disabled
+                aria-describedby="arm-unavailable"
                 className="bg-amber-600 hover:bg-amber-700 text-white rounded-xl active:scale-[0.97] transition-all"
               >
-                {status === "connecting" ? (
-                  <>
-                    <Loader2 className="w-4 h-4 me-2 animate-spin" />
-                    {t.connect.connecting}
-                  </>
-                ) : (
-                  <>
-                    <Wifi className="w-4 h-4 me-2" />
-                    {t.connect.button}
-                  </>
-                )}
+                {t.connect.button}
               </Button>
             </div>
 
-            {status === "disconnected" && (
-              <div className="mt-4 p-4 rounded-xl bg-white/60 border border-red-100 flex items-start gap-3">
+              <div className="mt-4 p-4 rounded-xl bg-white/60 border border-amber-200 flex items-start gap-3">
                 <AlertTriangle className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
                 <div className="text-sm text-muted-foreground">
                   <p className="font-medium text-foreground mb-1">{t.instructions.title}</p>
@@ -138,7 +72,6 @@ export default function RoboticArm() {
                   </ol>
                 </div>
               </div>
-            )}
           </motion.div>
         </div>
       </section>

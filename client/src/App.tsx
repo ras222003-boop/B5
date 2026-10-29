@@ -113,6 +113,17 @@ function VoiceOutputStatus() {
 
 function App() {
   const [isWelcomeVisible, setIsWelcomeVisible] = useState(true);
+  useEffect(()=>{
+    // Native tab/background suspension also cancels queued or pending server
+    // speech; pausing DOM audio alone cannot cancel a later fetch completion.
+    const suspend=()=>speechEngine.suspend(),resume=()=>speechEngine.resume();
+    window.addEventListener('basira:native-suspend',suspend);
+    window.addEventListener('basira:native-resume',resume);
+    return()=>{
+      window.removeEventListener('basira:native-suspend',suspend);
+      window.removeEventListener('basira:native-resume',resume);
+    };
+  },[]);
 
   return (
     <I18nProvider>

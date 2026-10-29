@@ -21,6 +21,7 @@ import { grayscalePixels } from './groundHazards';
 import { SparseOpticalFlow } from './opticalFlow';
 import { VisualApproachEstimator } from './visualApproach';
 import { SmartApproachRiskEngine } from './approachRisk';
+import { captureNativeRgb } from './nativeRgbCapture';
 import {
   DEFAULT_APPROACH_PREFERENCES,
   type ApproachPreferences,
@@ -32,6 +33,7 @@ export class ObjectOnlyPipeline {
   private generation = 0;
   private timer: number | null = null;
   private lastVideoTime = -1;
+  private lastNativeFrameId = '';
   private analysisState: 'WAITING'|'LIVE'|'STALE'|'PAUSED'|'SLOW' = 'WAITING';
   private readonly tracker: ObjectTracker;
   private readonly colors = new ObjectColorTracker();
@@ -48,10 +50,10 @@ export class ObjectOnlyPipeline {
   constructor(private readonly options: VisionPipelineOptions) {
     if (
       options.mode !== "EXPLORATION" ||
-      options.nativeFrames ||
       options.vision.usagePolicy !== "EXPERIMENTAL_OBJECTS_ONLY"
     )
       throw new Error("object_only_policy_required");
+    if(options.nativeFrames&&!options.nativeCanvas)throw new Error('object_only_native_canvas_required');
     this.tracker = new ObjectTracker(
       PERCEPTION_TTL_MS,
       1800,
@@ -120,7 +122,20 @@ export class ObjectOnlyPipeline {
   async start() {
     if (this.running) return;
     this.running = true;
-    this.generation++;
+    const run=++this.generation;
+    if(this.options.nativeFrames){
+      try{
+        await this.options.nativeFrames.start();
+        if(!this.running||run!==this.generation)return;
+        // V3 may consume the native RGB camera, never native metres or fusion.
+        await this.options.nativeFrames.setMeterEnabled(false);
+        if(!this.running||run!==this.generation)return;
+      }catch(error){
+        this.running=false;
+        await this.options.nativeFrames.stop().catch(()=>{});
+        throw error;
+      }
+    }
     this.schedule(0);
   }
   private schedule(ms: number) {
@@ -137,6 +152,7 @@ export class ObjectOnlyPipeline {
     this.options.callbacks.detectionFrame?.(null);
   }
   private cameraUnavailable() {
+    if(this.options.nativeFrames)return document.hidden===true;
     const video = this.options.video;
     const tracks = (video.srcObject as MediaStream | null)?.getVideoTracks?.();
     return video.paused || video.ended || video.readyState < 2 ||
@@ -159,7 +175,7 @@ export class ObjectOnlyPipeline {
       this.schedule(200);
       return;
     }
-    if (video.currentTime === this.lastVideoTime) {
+    if (!this.options.nativeFrames && video.currentTime === this.lastVideoTime) {
       if (
         this._snapshot &&
         !freshTimestamp(this._snapshot.capturedAt, started)
@@ -171,18 +187,29 @@ export class ObjectOnlyPipeline {
       return;
     }
     this.lastVideoTime = video.currentTime;
-    const canvas = document.createElement("canvas"),
-      scale = Math.min(1, 640 / video.videoWidth, 480 / video.videoHeight);
-    canvas.width = Math.max(1, Math.round(video.videoWidth * scale));
-    canvas.height = Math.max(1, Math.round(video.videoHeight * scale));
+    const canvas = document.createElement("canvas");
+    if(!this.options.nativeFrames){
+      const scale=Math.min(1,640/video.videoWidth,480/video.videoHeight);
+      canvas.width=Math.max(1,Math.round(video.videoWidth*scale));
+      canvas.height=Math.max(1,Math.round(video.videoHeight*scale));
+    }
     try {
-      canvas
-        .getContext("2d",{willReadFrequently:true})!
-        .drawImage(video, 0, 0, canvas.width, canvas.height);
-      const at = performance.now(),
-        frameId = `objects-${at}`,
-        wallTime = Date.now(),
-        pixels = sampleColorFrame(canvas, at, frameId),
+      let at=performance.now(),frameId=`objects-${at}`,wallTime=Date.now();
+      if(this.options.nativeFrames){
+        const captured=await captureNativeRgb(this.options.nativeFrames,canvas,this.lastNativeFrameId);
+        if(!this.running||run!==this.generation)return;
+        if(!captured){
+          this.clear();this.reportAnalysis('STALE');this.schedule(100);return;
+        }
+        ({capturedAt:at,frameId,wallTime}=captured);
+        this.lastNativeFrameId=frameId;
+        const preview=this.options.nativeCanvas!;
+        preview.width=canvas.width;preview.height=canvas.height;
+        preview.getContext('2d')?.drawImage(canvas,0,0);
+      }else{
+        canvas.getContext('2d',{willReadFrequently:true})!.drawImage(video,0,0,canvas.width,canvas.height);
+      }
+      const pixels = sampleColorFrame(canvas, at, frameId),
         light = pixels ? assessFrameLight(pixels.data) : "UNKNOWN";
       const colourPixelSamplingMs=performance.now()-at;
       if(pixels&&this.options.callbacks.objectSourceSignature)this.options.callbacks.objectSourceSignature(sourcePixelSignature(pixels));
@@ -345,6 +372,10 @@ export class ObjectOnlyPipeline {
     if (this.timer !== null) window.clearTimeout(this.timer);
     this.timer = null;
     this.clear();
+    if(this.options.nativeFrames){
+      await this.options.nativeFrames.setMeterEnabled(false).catch(()=>{});
+      await this.options.nativeFrames.stop().catch(()=>{});
+    }
     await this.options.vision.close();
   }
 }

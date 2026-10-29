@@ -25,6 +25,7 @@ import Layout from "@/components/Layout";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { useTextToSpeech, useSpeechToText } from "@/hooks/useSpeech";
+import {speechEngine} from '@/lib/speechEngine';
 import { type Lang, useI18n, useMessages } from "@/i18n";
 import { assistantMessages } from "@/i18n/locales/assistant";
 
@@ -91,6 +92,7 @@ export default function DigitalAssistant() {
     if (!text.trim() || isLoadingRef.current) return;
 
     stopSpeaking();
+    const maySpeak=speechEngine.captureSpeechGuard();
 
     const userMsg: Message = {
       id: Date.now().toString(),
@@ -131,7 +133,7 @@ export default function DigitalAssistant() {
       setMessages(previous => [...previous, assistantMsg]);
 
       // Explicitly use the active platform language for the assistant's reply.
-      if (autoSpeak) setTimeout(() => speak(assistantContent, 0.9, lang), 300);
+      if (autoSpeak) setTimeout(() => {if(maySpeak())speak(assistantContent, 0.9, lang);}, 300);
     } catch (error) {
       console.error("Assistant error:", error);
       const errorMsg: Message = {
@@ -150,10 +152,11 @@ export default function DigitalAssistant() {
   const toggleListening = useCallback(() => {
     if (isListening) {
       stopListening();
+      const maySend=speechEngine.captureSpeechGuard();
       // Auto-send after stopping if there is text.
       setTimeout(() => {
         const currentInput = document.querySelector<HTMLInputElement>("[data-voice-input]")?.value;
-        if (currentInput?.trim()) sendMessage(currentInput);
+        if (maySend()&&currentInput?.trim()) sendMessage(currentInput);
       }, 500);
     } else {
       stopSpeaking();
@@ -175,7 +178,8 @@ export default function DigitalAssistant() {
     setLang(nextLang);
     toast.info(confirmation);
     // The confirmation is spoken with the newly selected platform language.
-    setTimeout(() => speak(confirmation, 0.9, nextLang), 200);
+    const maySpeak=speechEngine.captureSpeechGuard();
+    setTimeout(() => {if(maySpeak())speak(confirmation, 0.9, nextLang);}, 200);
   };
 
   const speakMessage = (content: string) => {

@@ -25,6 +25,7 @@ import Layout from "@/components/Layout";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { useTextToSpeech, useSpeechToText } from "@/hooks/useSpeech";
+import {speechEngine} from '@/lib/speechEngine';
 import { type Lang, useI18n, useMessages } from "@/i18n";
 import { aiGuideMessages } from "@/i18n/locales/aiGuide";
 
@@ -89,6 +90,7 @@ export default function AIGuide() {
     if (!text.trim() || isLoadingRef.current) return;
 
     stopSpeaking();
+    const maySpeak=speechEngine.captureSpeechGuard();
 
     const userMsg: Message = {
       id: Date.now().toString(),
@@ -127,7 +129,7 @@ export default function AIGuide() {
       };
       setMessages(previous => [...previous, assistantMsg]);
 
-      if (autoSpeak) setTimeout(() => speak(assistantContent, 0.9, lang), 300);
+      if (autoSpeak) setTimeout(() => {if(maySpeak())speak(assistantContent, 0.9, lang);}, 300);
     } catch (error) {
       console.error("AI Guide error:", error);
       const errorMsg: Message = {
@@ -146,9 +148,10 @@ export default function AIGuide() {
   const toggleListening = useCallback(() => {
     if (isListening) {
       stopListening();
+      const maySend=speechEngine.captureSpeechGuard();
       setTimeout(() => {
         const currentInput = document.querySelector<HTMLInputElement>("[data-voice-input]")?.value;
-        if (currentInput?.trim()) sendMessage(currentInput);
+        if (maySend()&&currentInput?.trim()) sendMessage(currentInput);
       }, 500);
     } else {
       stopSpeaking();
@@ -169,7 +172,8 @@ export default function AIGuide() {
     const confirmation = nextMessages.toasts.languageSwitched(languageName(nextLang, nextMessages));
     setLang(nextLang);
     toast.info(confirmation);
-    setTimeout(() => speak(confirmation, 0.9, nextLang), 200);
+    const maySpeak=speechEngine.captureSpeechGuard();
+    setTimeout(() => {if(maySpeak())speak(confirmation, 0.9, nextLang);}, 200);
   };
 
   const speakMessage = (content: string) => {

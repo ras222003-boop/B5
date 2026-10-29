@@ -99,9 +99,9 @@ enum BasiraFeature: String, CaseIterable, Identifiable, Hashable {
         case .navigationAdmin: return "إدارة الملاحة"
         case .navigationPermissions: return "الخصوصية والأذونات"
         case .navigationCapabilities: return "قدرات الملاحة وحدودها"
-        case .onlineExams: return "الاختبارات التعليمية"
+        case .onlineExams: return "ربط منصات الاختبارات — غير مفعّل"
         case .examDemo: return "تجربة الاختبارات"
-        case .teacher: return "لوحة المعلم"
+        case .teacher: return "محاكاة لوحة المعلم"
         case .assistant: return "المساعد الرقمي"
         case .aiGuide: return "الدليل الذكي"
         case .account: return "حسابي"
@@ -134,8 +134,8 @@ enum BasiraFeature: String, CaseIterable, Identifiable, Hashable {
         case .metricVisionWeb: return "واجهة ويب تجريبية مختلفة عن تبويب قياس LiDAR الأصلي"
         case .navigation: return "عرض المباني والوجهات والخرائط المتاحة"
         case .guidance: return "مساعدة استكشافية، وليست تصريحًا بالمشي أو ضمان تجنب الاصطدام"
-        case .onlineExams: return "وظائف الاختبارات المنشورة في منصة بصيرة"
-        case .teacher: return "وظائف المعلم وفق صلاحيات الحساب"
+        case .onlineExams: return "لا يتوفر تحميل اختبارات من Blackboard أو Moodle في هذه النسخة"
+        case .teacher: return "إعدادات عرض محلية، دون قفل فعلي أو مراقبة أو حفظ خادمي"
         case .mapping, .sharedMap, .indoorManager, .navigationAdmin:
             return "تتطلب بيانات و/أو صلاحيات مناسبة"
         case .robotics: return "صفحة التعريف بالذراع؛ لا تعني اتصال الأجهزة"
@@ -143,6 +143,26 @@ enum BasiraFeature: String, CaseIterable, Identifiable, Hashable {
             return "مختبر بحثي، وليس وظيفة ملاحة معتمدة"
         case .assistantAnalytics: return "للحسابات ذات صلاحيات التحليلات"
         default: return "افتح الخدمة الموجودة في منصة بصيرة"
+        }
+    }
+
+    /// A native notice remains visible even when the approved server serves an
+    /// older web version. Do not infer functional integration from a menu link.
+    var integrationNotice: String? {
+        switch self {
+        case .onlineExams:
+            return "ربط منصات الاختبارات الخارجية غير منفّذ. استخدم تبويب الاختبارات لمسح ورقة تجريبية؛ ظهور رسالة تحميل في صفحة الويب القديمة لا يثبت استيراد اختبار."
+        case .teacher:
+            return "لوحة المعلم محاكاة محلية للإعدادات. لا تفرض قفل التطبيقات ولا تراقب الطلاب ولا تحفظ الإعدادات في الخادم."
+        case .robotics:
+            return "اتصال الذراع ونقل أوامر الكتابة غير منفّذين في هذه النسخة. الصفحة للتعريف فقط."
+        case .metricVisionWeb:
+            return "هذه الصفحة البحثية لا تشغّل جسر العمق الأصلي حاليًا. لاختبار سطح ثابت استخدم تبويب LiDAR؛ لا تستخدمها للمشي."
+        case .assistantAnalytics:
+            return "مسار التحليلات غير موجود في نسخة المنصة التي فُحصت في 29 أكتوبر 2026. يلزم نشر نسخة متوافقة قبل اختباره."
+        case .vision:
+            return "نسخة الرؤية المنشورة التي فُحصت في 29 أكتوبر 2026 لا تعرض V3 أو إعدادات الاقتراب الجديدة. اكتمال الشيفرة في هذا الفرع لا يعني نشرها."
+        default: return nil
         }
     }
 
@@ -174,7 +194,7 @@ enum BasiraFeature: String, CaseIterable, Identifiable, Hashable {
     }
 
     static let everyday: [BasiraFeature] = [
-        .vision, .navigation, .guidance, .places, .onlineExams,
+        .vision, .navigation, .guidance, .places, .examDemo,
         .assistant, .aiGuide, .voiceSettings
     ]
     static let maps: [BasiraFeature] = [
@@ -202,12 +222,18 @@ enum BasiraWebOrigin {
     }
 
     static func validate(_ raw: String) -> URL? {
-        let candidate = raw.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard let parts = URLComponents(string: candidate),
+        guard raw == raw.trimmingCharacters(in: .whitespacesAndNewlines),
+              raw.rangeOfCharacter(from: .whitespacesAndNewlines) == nil,
+              raw.range(of: "^https://[a-z0-9.-]+/?$", options: [.regularExpression, .caseInsensitive]) != nil,
+              let parts = URLComponents(string: raw),
               parts.scheme?.lowercased() == "https",
               let host = parts.host?.lowercased(),
-              !host.isEmpty, host != "localhost",
-              !host.hasSuffix(".example"), !host.hasSuffix(".local"),
+              host.count <= 253, host.contains("."),
+              host.range(of: "[a-z]", options: .regularExpression) != nil,
+              ![".localhost", ".example", ".local", ".invalid", ".test"].contains(where: { host.hasSuffix($0) }),
+              host.split(separator: ".", omittingEmptySubsequences: false).allSatisfy({
+                  $0.range(of: "^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$", options: .regularExpression) != nil
+              }),
               parts.user == nil, parts.password == nil,
               parts.port == nil,
               (parts.path.isEmpty || parts.path == "/"),

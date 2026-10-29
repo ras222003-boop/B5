@@ -8,6 +8,8 @@ workflows:
     max_build_duration: 45
     instance_type: mac_mini_m2
     environment:
+      groups:
+        - basira_unified_ios
       xcode: latest
     scripts:
       - name: Generate unsigned native project
@@ -16,6 +18,7 @@ workflows:
           set -euo pipefail
           command -v xcodegen >/dev/null || brew install xcodegen
           python3 ios/DepthCalibrationLab/scripts/generate-lab-icon.py
+          python3 ios/DepthCalibrationLab/scripts/test_configure_web_origin.py
           bash ios/DepthCalibrationLab/scripts/configure-web-origin.sh
           cd ios/DepthCalibrationLab
           xcodegen generate
@@ -43,6 +46,8 @@ workflows:
     integrations:
       app_store_connect: basira_apple
     environment:
+      groups:
+        - basira_unified_ios
       ios_signing:
         distribution_type: app_store
         bundle_identifier: sa.nasjalufuq.basira
@@ -97,6 +102,8 @@ workflows:
     integrations:
       app_store_connect: basira_apple
     environment:
+      groups:
+        - basira_unified_ios
       ios_signing:
         distribution_type: app_store
         bundle_identifier: sa.nasjalufuq.basira

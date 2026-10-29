@@ -49,6 +49,7 @@ export class AudioPlaybackManager {
   private timerResolve: (() => void) | null = null;
   private generation = 0;
   private cancellations = 0;
+  private suspended = false;
   private prepared = new Map<string, { input: SpeechRequest; promise: Promise<Blob>; abort: AbortController; startedAt: number; readyAt: number | null }>();
   private listeners = new Set<(state: SpeechState) => void>();
   private state: SpeechState = { mode: 'LOCAL', isSpeaking: false };
@@ -59,6 +60,12 @@ export class AudioPlaybackManager {
   get status() { return this.state; }
   get busy() { return this.current!==null||this.queue.length>0; }
   get cancellationEpoch() { return this.cancellations; }
+  /** Capture before a feature fetch/timer. Text may still finish, but its old
+   * automatic voice must not restart after Stop or native suspend/resume. */
+  captureSpeechGuard() {
+    const epoch=this.cancellations,eligible=!this.suspended;
+    return()=>eligible&&!this.suspended&&epoch===this.cancellations;
+  }
   private muted() { return typeof localStorage !== 'undefined' && getSpeechPreferences().screenReaderMode; }
   enqueueLocal(input:SpeechRequest,expiresAt?:number,manualTest=false) {
     return this.enqueue(input,'INFORMATION',0,undefined,manualTest,expiresAt,true);
@@ -71,6 +78,9 @@ export class AudioPlaybackManager {
     });
   }
   enqueue(input: SpeechRequest, priority: SpeechPriority = 'INFORMATION', pauseAfterMs = 0, key?: string, manualTest = false, expiresAt?:number,localOnly=false,onStarted?:()=>void) {
+    // A late feature response or delayed callback must not recreate speech
+    // after native tab/background suspension. Discard it rather than queue it.
+    if(this.suspended)return Promise.resolve();
     if (!input.text.trim() || (this.muted() && !manualTest)) { this.update({ mode: 'MUTED', isSpeaking: false }); return Promise.resolve(); }
     return new Promise<void>(resolve => {
       const item = { input, priority, pauseAfterMs, key, expiresAt, manualTest,localOnly,onStarted, resolve };
@@ -97,6 +107,9 @@ export class AudioPlaybackManager {
     this.update({ ...this.state, isSpeaking: false });
   }
   stop() { this.cancelCurrent(); this.queue.forEach(item => item.resolve()); this.queue = []; this.clearPrefetch(); }
+  suspend() { this.suspended=true;this.stop(); }
+  /** Only permits subsequent requests. Cancelled/withheld speech is never replayed. */
+  resume() { this.suspended=false; }
   replaceAtPriority(priority: SpeechPriority) {
     let removed = false;
     this.queue = this.queue.filter(item => { if (priorityRank[item.priority] <= priorityRank[priority]) { item.resolve(); removed = true; return false; } return true; });
@@ -105,7 +118,7 @@ export class AudioPlaybackManager {
   }
   clearPrefetch() { this.prepared.forEach(item => item.abort.abort()); this.prepared.clear(); }
   prefetch(key: string, input: SpeechRequest) {
-    if (!this.premium.isAvailable() || this.muted() || this.prepared.has(key)) return;
+    if (this.suspended || !this.premium.isAvailable() || this.muted() || this.prepared.has(key)) return;
     if (this.prepared.size >= 3) {
       const first = this.prepared.keys().next().value;
       if (first) { this.prepared.get(first)?.abort.abort(); this.prepared.delete(first); }
@@ -119,10 +132,10 @@ export class AudioPlaybackManager {
     this.prepared.set(key, entry);
   }
   private async next() {
-    if (this.current || !this.queue.length) return;
+    if (this.suspended || this.current || !this.queue.length) return;
     const item = this.queue.shift()!; this.current = item;
     const expired=()=>item.expiresAt!==undefined&&(!Number.isFinite(item.expiresAt)||performance.now()>=item.expiresAt);
-    const muted=()=>this.muted()&&!item.manualTest;
+    const muted=()=>this.suspended||(this.muted()&&!item.manualTest);
     if(expired()){this.current=null;item.resolve();void this.next();return;}
     const generation = ++this.generation;
     const abort = new AbortController(); this.abort = abort;
@@ -173,6 +186,7 @@ export class AudioPlaybackManager {
   }
   private browserFallback(input: SpeechRequest, generation: number, signal: AbortSignal, expiresAt?:number,localOnly=false,onStarted?:()=>void) {
     return new Promise<void>(resolve => {
+      if(this.suspended||signal.aborted||generation!==this.generation){resolve();return;}
       if (typeof window === 'undefined' || !window.speechSynthesis || typeof SpeechSynthesisUtterance === 'undefined') { this.update({mode:'LOCAL',isSpeaking:false,error:'NO_VOICE'});resolve(); return; }
       const utterance = new SpeechSynthesisUtterance(input.text);
       utterance.lang = input.language === 'ar' ? (input.arabicStyle === 'SAUDI' ? 'ar-SA' : 'ar') : input.language === 'en' ? 'en-US' : 'zh-CN';
@@ -189,7 +203,7 @@ export class AudioPlaybackManager {
       const finish=()=>{finished=true;clearTimeout(timer);if(expiry!==undefined)clearTimeout(expiry);signal.removeEventListener('abort',finish);resolve();};
       utterance.onstart = () => {
         if(finished)return;
-        if(expired()||signal.aborted||generation!==this.generation){window.speechSynthesis.cancel();finish();return;}
+        if(this.suspended||expired()||signal.aborted||generation!==this.generation){window.speechSynthesis.cancel();finish();return;}
         started=true;clearTimeout(timer);if(expiry!==undefined)clearTimeout(expiry);
         this.update({ mode: 'LOCAL', isSpeaking: true,error:undefined });
         onStarted?.();

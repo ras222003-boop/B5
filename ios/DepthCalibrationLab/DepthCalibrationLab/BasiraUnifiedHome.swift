@@ -14,8 +14,12 @@ struct BasiraUnifiedHome: View {
 
     var body: some View {
         TabView(selection: $selectedTab) {
-            NavigationStack {
-                BasiraFeatureDirectory(selectedTab: $selectedTab)
+            Group {
+                if selectedTab == .home {
+                    NavigationStack { BasiraFeatureDirectory(selectedTab: $selectedTab) }
+                } else {
+                    Color.clear
+                }
             }
             .tabItem { Label("الرئيسية", systemImage: "house.fill") }
             .tag(BasiraMainTab.home)
@@ -23,7 +27,12 @@ struct BasiraUnifiedHome: View {
             Group {
                 // Unmounting the controller stops its native ARSession on tab exit.
                 if selectedTab == .vision, BasiraWebOrigin.baseURL != nil {
-                    BasiraNativeVisionHost { selectedTab = .home }
+                    VStack(spacing: 0) {
+                        if let notice = BasiraFeature.vision.integrationNotice {
+                            BasiraIntegrationNotice(message: notice)
+                        }
+                        BasiraNativeVisionHost { selectedTab = .home }
+                    }
                 } else if BasiraWebOrigin.baseURL == nil {
                     BasiraMissingWebOrigin()
                 } else {
@@ -33,18 +42,30 @@ struct BasiraUnifiedHome: View {
             .tabItem { Label("الرؤية", systemImage: "eye.fill") }
             .tag(BasiraMainTab.vision)
 
-            BasiraDepthHome()
+            Group {
+                // TabView may preload hidden tabs. A hidden tab must never ask
+                // for camera permission or compete with the native vision tab.
+                if selectedTab == .depth { BasiraDepthHome() } else { Color.clear }
+            }
                 .tabItem { Label("LiDAR", systemImage: "viewfinder") }
                 .tag(BasiraMainTab.depth)
 
-            NavigationStack {
-                BasiraWebFeatureScreen(feature: .onlineExams)
+            Group {
+                if selectedTab == .exams {
+                    NavigationStack { BasiraWebFeatureScreen(feature: .examDemo) }
+                } else {
+                    Color.clear
+                }
             }
             .tabItem { Label("الاختبارات", systemImage: "doc.text") }
             .tag(BasiraMainTab.exams)
 
-            NavigationStack {
-                BasiraMoreFeatures()
+            Group {
+                if selectedTab == .more {
+                    NavigationStack { BasiraMoreFeatures() }
+                } else {
+                    Color.clear
+                }
             }
             .tabItem { Label("المزيد", systemImage: "square.grid.2x2") }
             .tag(BasiraMainTab.more)
@@ -74,7 +95,7 @@ private struct BasiraFeatureDirectory: View {
                             BasiraFeatureLabel(feature: feature)
                         }
                         .accessibilityHint("افتح الرؤية باستخدام جسر ARKit في النسخة التجريبية")
-                    } else if feature == .onlineExams {
+                    } else if feature == .examDemo {
                         Button { selectedTab = .exams } label: {
                             BasiraFeatureLabel(feature: feature)
                         }
@@ -196,15 +217,32 @@ private struct BasiraMissingWebOrigin: View {
     }
 }
 
+private struct BasiraIntegrationNotice: View {
+    let message: String
+
+    var body: some View {
+        Text(message)
+            .font(.footnote)
+            .foregroundStyle(.secondary)
+            .padding(10)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Color.orange.opacity(0.12))
+    }
+}
+
 private struct BasiraWebFeatureScreen: View {
     let feature: BasiraFeature
     @State private var failure: String?
+    @State private var visible = false
 
     var body: some View {
         Group {
             if let url = BasiraWebOrigin.url(for: feature),
                let base = BasiraWebOrigin.baseURL {
                 VStack(spacing: 0) {
+                    if let notice = feature.integrationNotice {
+                        BasiraIntegrationNotice(message: notice)
+                    }
                     if let failure {
                         Text(failure)
                             .font(.footnote)
@@ -213,8 +251,10 @@ private struct BasiraWebFeatureScreen: View {
                             .frame(maxWidth: .infinity)
                             .accessibilityAddTraits(.updatesFrequently)
                     }
-                    BasiraEmbeddedWebPage(url: url, allowedOrigin: base) {
-                        failure = $0
+                    if visible {
+                        BasiraEmbeddedWebPage(url: url, allowedOrigin: base) {
+                            failure = $0
+                        }
                     }
                 }
             } else {
@@ -223,6 +263,8 @@ private struct BasiraWebFeatureScreen: View {
         }
         .navigationTitle(feature.name)
         .navigationBarTitleDisplayMode(.inline)
+        .onAppear { visible = true }
+        .onDisappear { visible = false }
     }
 }
 
@@ -242,12 +284,14 @@ private struct BasiraEmbeddedWebPage: UIViewRepresentable {
         let config = WKWebViewConfiguration()
         config.websiteDataStore = .default()
         config.allowsInlineMediaPlayback = true
+        BasiraWebMediaLifecycle.install(in: config.userContentController)
         let view = WKWebView(frame: .zero, configuration: config)
         view.navigationDelegate = context.coordinator
         view.uiDelegate = context.coordinator
         view.allowsBackForwardNavigationGestures = true
         view.isOpaque = false
         view.backgroundColor = .systemBackground
+        context.coordinator.attach(view)
         view.load(URLRequest(url: url))
         return view
     }
@@ -255,12 +299,7 @@ private struct BasiraEmbeddedWebPage: UIViewRepresentable {
     func updateUIView(_ uiView: WKWebView, context: Context) {}
 
     static func dismantleUIView(_ view: WKWebView, coordinator: Coordinator) {
-        // Release any web camera/microphone tracks before opening native LiDAR.
-        view.evaluateJavaScript("""
-          document.querySelectorAll('video, audio').forEach(el => {
-            if (el.srcObject?.getTracks) el.srcObject.getTracks().forEach(t => t.stop());
-          });
-          """, completionHandler: nil)
+        coordinator.detach()
         view.stopLoading()
         view.navigationDelegate = nil
         view.uiDelegate = nil
@@ -269,10 +308,47 @@ private struct BasiraEmbeddedWebPage: UIViewRepresentable {
     final class Coordinator: NSObject, WKNavigationDelegate, WKUIDelegate {
         let allowedOrigin: URL
         let onFailure: (String) -> Void
+        private weak var webView: WKWebView?
 
         init(allowedOrigin: URL, onFailure: @escaping (String) -> Void) {
             self.allowedOrigin = allowedOrigin
             self.onFailure = onFailure
+        }
+
+        func attach(_ view: WKWebView) {
+            webView = view
+            NotificationCenter.default.addObserver(self, selector: #selector(suspendMedia),
+                name: UIApplication.willResignActiveNotification, object: nil)
+            NotificationCenter.default.addObserver(self, selector: #selector(resumeMedia),
+                name: UIApplication.didBecomeActiveNotification, object: nil)
+        }
+
+        func detach() {
+            BasiraWebMediaLifecycle.suspend(webView)
+            webView = nil
+            NotificationCenter.default.removeObserver(self)
+        }
+
+        @objc private func suspendMedia() { BasiraWebMediaLifecycle.suspend(webView) }
+
+        @objc private func resumeMedia() {
+            guard webView?.window != nil else { return }
+            BasiraWebMediaLifecycle.resume(webView)
+        }
+
+        deinit { NotificationCenter.default.removeObserver(self) }
+
+        func webView(_ webView: WKWebView,
+                     requestMediaCapturePermissionFor origin: WKSecurityOrigin,
+                     initiatedByFrame frame: WKFrameInfo, type: WKMediaCaptureType,
+                     decisionHandler: @escaping (WKPermissionDecision) -> Void) {
+            let allowed = BasiraWebMediaLifecycle.mayRequestCapture(
+                scheme: origin.protocol, host: origin.host, port: origin.port,
+                mainFrame: frame.isMainFrame, page: webView.url, allowedOrigin: allowedOrigin,
+                active: UIApplication.shared.applicationState == .active,
+                visible: webView.window != nil)
+            // The approved origin can ask the user; it is never auto-granted.
+            decisionHandler(allowed ? .prompt : .deny)
         }
 
         func webView(_ webView: WKWebView,
@@ -316,6 +392,7 @@ private struct BasiraEmbeddedWebPage: UIViewRepresentable {
         }
 
         func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
+            BasiraWebMediaLifecycle.suspend(webView)
             onFailure("توقفت صفحة الخدمة. أغلقها ثم افتحها من جديد.")
         }
     }
