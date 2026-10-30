@@ -49,8 +49,7 @@ describe("billing page account state is fail-closed", () => {
   it("does not interpret network errors or broken JSON as sign-out", async () => {
     const networkError = vi.fn().mockRejectedValue(new Error("offline")) as unknown as typeof fetch;
     expect(await fetchBillingAccountStatus(networkError)).toEqual({ kind: "unavailable" });
-    const invalidJson = vi.fn().mockResolvedValue(new Response("not-json", { status: 200 }))
-      as unknown as typeof fetch;
+    const invalidJson = vi.fn().mockResolvedValue(new Response("not-json", { status: 200 })) as unknown as typeof fetch;
     expect(await fetchBillingAccountStatus(invalidJson)).toEqual({ kind: "unavailable" });
   });
 
