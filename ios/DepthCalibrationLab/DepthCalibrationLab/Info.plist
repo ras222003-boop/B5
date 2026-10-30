@@ -23,6 +23,7 @@
   <!-- The app's approved HTTPS origin is injected by a future configured build.
        Empty by default: web features fail closed rather than load a guess. -->
   <key>BasiraWebBaseURL</key><string></string>
+  <key>BasiraWebReleaseSHA</key><string></string>
   <key>BasiraVisionURL</key><string>https://YOUR-BASIRA-DOMAIN.example/navigation/vision</string>
   <key>BasiraLabURL</key><string>https://YOUR-BASIRA-DOMAIN.example/navigation/depth-lab</string>
 </dict>
