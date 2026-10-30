@@ -3,6 +3,7 @@ import { execFileSync } from "node:child_process";
 import { createReadStream } from "node:fs";
 import { lstat, mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 const shaPattern = /^[0-9a-f]{40}$/;
 const excludedFile = "basira-mobile-release.json";
@@ -105,7 +106,7 @@ export async function writeMobileManifest(options = {}) {
   return manifest;
 }
 
-if (process.argv[1] && path.resolve(process.argv[1]) === path.resolve(new URL(import.meta.url).pathname)) {
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   writeMobileManifest().then(manifest => {
     console.log("Basira web build manifest:", manifest.sourceRevision ?? "source-not-verifiable",
                 manifest.webBundle.assetCount, "assets");
