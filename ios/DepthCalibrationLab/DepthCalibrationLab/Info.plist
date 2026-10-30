@@ -24,6 +24,10 @@
        Empty by default: web features fail closed rather than load a guess. -->
   <key>BasiraWebBaseURL</key><string></string>
   <key>BasiraWebReleaseSHA</key><string></string>
+  <!-- Product IDs and checkout are disabled until App Store Connect and server
+       transaction verification have been reviewed and tested end-to-end. -->
+  <key>BasiraSubscriptionProductIDs</key><array/>
+  <key>BasiraStoreKitCheckoutEnabled</key><false/>
   <key>BasiraVisionURL</key><string>https://YOUR-BASIRA-DOMAIN.example/navigation/vision</string>
   <key>BasiraLabURL</key><string>https://YOUR-BASIRA-DOMAIN.example/navigation/depth-lab</string>
 </dict>
