@@ -21,7 +21,8 @@ import {DEFAULT_APPROACH_PREFERENCES, type ApproachPreferences} from './approach
 import {SparseOpticalFlow} from './opticalFlow';
 import {GroundHazardEngine,grayscalePixels,type GroundHazardSnapshot} from './groundHazards';
 import {freshTimestamp,observationFor,PerceptionTelemetry,type PerceptionSnapshot} from './perception';
-import {sampleColorFrame,analyzeObjectColor,ObjectColorTracker} from './objectColors';
+import {sampleColorFrame,ObjectColorTracker} from './objectColors';
+import {analyzeColour} from './colourEngine';
 
 interface Callbacks {
   objectSourceSignature?:(signature:number)=>void;
@@ -512,7 +513,7 @@ export class VisionPipeline {
       const frameId=this.options.nativeFrames?nativeFrameId:`web-${detectorTimestamp}`;
       const tracked=this.tracker.update(rawDetections,{frameId,capturedAt:detectorTimestamp,now:performance.now()});
       if(tracked.rejectedFrame){if(metricFrame)metricFrame.width=metricFrame.height=0;this.invalidate('STALE');this.schedule(100);return;}
-      const detections=tracked.detections.map(detection=>colorPixels&&detection.source==='OBJECT_DETECTOR'?{...detection,color:this.colors.update(detection,analyzeObjectColor(colorPixels,detection,tracked.detections))}:detection);
+      const detections=tracked.detections.map(detection=>colorPixels&&detection.source==='OBJECT_DETECTOR'?{...detection,color:this.colors.update(detection,analyzeColour(colorPixels,detection,tracked.detections))}:detection);
       this.lastCapturedAt=detectorTimestamp;this.lastCaptureWallTime=frameCapturedAt;
       const width=detectionFrame instanceof HTMLVideoElement?detectionFrame.videoWidth:detectionFrame.width;
       const height=detectionFrame instanceof HTMLVideoElement?detectionFrame.videoHeight:detectionFrame.height;

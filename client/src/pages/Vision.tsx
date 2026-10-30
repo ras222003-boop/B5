@@ -41,6 +41,7 @@ import {ExperimentalVision} from '@/components/vision/ExperimentalVision';
 import {experimentalModels} from '@/lib/vision/experimentalStairs';
 import type {ExperimentalModel} from '@shared/experimentalModels';
 import {getColorSpeechEnabled,saveColorSpeechEnabled} from '@/lib/vision/objectColors';
+import {getColourEngine,saveColourEngine,colourEngineLabel,type ColourEngineId} from '@/lib/vision/colourEngine';
 import {ObjectPhotoInput} from '@/components/vision/ObjectPhotoInput';
 import {availableObjectQualityProfiles} from '@/lib/vision/objectQuality';
 import type {ObjectQualityProfile} from '@shared/objectQuality';
@@ -130,6 +131,7 @@ export default function Vision() {
   const objectSpeechRef=useRef(objectSpeechEnabled);
   const [colorSpeechEnabled,setColorSpeechEnabled]=useState(()=>getColorSpeechEnabled());
   const colorSpeechRef=useRef(colorSpeechEnabled);
+  const [colourEngine,setColourEngine]=useState<ColourEngineId>(()=>getColourEngine());
   const [lastObjectText,setLastObjectText]=useState('');
   const [videoPaused,setVideoPaused]=useState(false);
   const [screenReaderMode,setScreenReaderMode]=useState(()=>getSpeechPreferences().screenReaderMode);
@@ -675,6 +677,8 @@ export default function Vision() {
       <button type="button" className={secondary} aria-pressed={objectSpeechEnabled} onClick={toggleObjectSpeech}>{assistant.objectSpeech}: {objectSpeechEnabled?assistant.objectSpeechOn:assistant.objectSpeechOff}</button>
       <button type="button" className={`${secondary} mx-2`} aria-describedby="colour-speech-qualification" aria-pressed={colorSpeechEnabled} onClick={()=>{const enabled=!colorSpeechEnabled;colorSpeechRef.current=enabled;setColorSpeechEnabled(saveColorSpeechEnabled(enabled));pipelineRef.current?.setColorSpeechEnabled(enabled);if(!enabled)speechEngine.replaceAtPriority('INFORMATION');}}>وصف الألوان صوتيًا: {colorSpeechEnabled?'مطلوب عند التأهل':'إيقاف'}</button>
       <p id="colour-speech-qualification" data-testid="colour-speech-qualification" className="mt-2 text-sm text-stone-300">{COLOUR_SPEECH_QUALIFICATION.status==='UNQUALIFIED'?'تقديرات اللون تشخيصية وغير معايرة. يستمر نطق اسم الجسم دون لونه حتى اجتياز اختبار ألوان مستقل؛ تكرار التقدير لا يثبت صحته.':'إعلان الألوان يخضع لسياسة التحقق المستقلة.'}</p>
+      <div className="mt-2"><button type="button" className={secondary} data-testid="colour-engine-toggle" aria-pressed={colourEngine==='v4-experimental'} aria-describedby="colour-engine-note" onClick={()=>setColourEngine(saveColourEngine(colourEngine==='v4-experimental'?'v3':'v4-experimental'))}>محرك الألوان: {colourEngineLabel(colourEngine)}</button>
+      <p id="colour-engine-note" data-testid="colour-engine-note" className="mt-2 text-sm text-stone-300">{colourEngine==='v4-experimental'?'محرك V4 تجريبي: يعرض اللون الغالب (ولونًا ثانويًا عند توفر قناع موثوق) على الشاشة وفي سجل الاختبار فقط، ولا يُنطق. دقته المقاسة على صور حقيقية أقل بكثير من المطلوب للإعلان الصوتي.':'محرك V3 الحالي. يمكنك تجربة محرك V4 التجريبي للعرض على الشاشة فقط؛ لن يُنطق لون في الحالتين قبل اجتياز اختبار مستقل.'}</p></div>
       <p className="mt-2 text-stone-300">درجات الكاشف غير معايرة وليست نسب صحة مثبتة. الألوان تقديرية من بكسلات الإطار نفسه؛ عند غياب قناع جسم موثوق قد يمتنع النظام. يمين الصورة ويسارها مواضع بصرية وليسا تعليمات للمشي.</p>
       <div className="mt-3 flex flex-wrap gap-3"><button type="button" className={secondary} onClick={repeatLast}>إعادة آخر وصف</button></div>
       <p className="mt-2 text-stone-300">مؤشرات الاقتراب تتطلب تتبعًا مستقرًا وأدلة حركة متعددة. قد تتوقف عند بطء الجهاز أو دوران الكاميرا أو التكبير؛ لا تثبت احتمال اصطدام أو سلامة المشي.</p>

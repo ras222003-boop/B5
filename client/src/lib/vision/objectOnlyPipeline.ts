@@ -2,11 +2,8 @@ import type { VisionPipelineOptions } from "./pipeline";
 import type { SceneSegmentationProvider } from "@shared/vision";
 import { ObjectTracker } from "./objectTracking";
 import { ObjectSpeechTracker } from "./objectSpeech";
-import {
-  ObjectColorTracker,
-  sampleColorFrame,
-  analyzeObjectColor,
-} from "./objectColors";
+import { ObjectColorTracker, sampleColorFrame } from "./objectColors";
+import { analyzeColour } from "./colourEngine";
 import {
   freshTimestamp,
   observationFor,
@@ -246,7 +243,7 @@ export class ObjectOnlyPipeline {
         color: pixels
           ? this.colors.update(
               d,
-              analyzeObjectColor(pixels, d, tracked.detections)
+              analyzeColour(pixels, d, tracked.detections)
             )
           : undefined,
       }));

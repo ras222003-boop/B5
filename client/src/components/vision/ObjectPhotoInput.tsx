@@ -2,11 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import type { VisionDetection, VisionProvider } from "@shared/vision";
 import { openObjectProvider } from "@/lib/vision/workerObjectProvider";
 import { DEFAULT_VISION_CONFIG } from "@/lib/vision/config";
-import {
-  analyzeObjectColor,
-  sampleColorFrame,
-  colorDescription,
-} from "@/lib/vision/objectColors";
+import { sampleColorFrame, colorDescription } from "@/lib/vision/objectColors";
+import { analyzeColour } from "@/lib/vision/colourEngine";
 import { objectLabel } from "@/lib/vision/cocoLabels";
 import type { VisionCopy } from "@/lib/vision/scene";
 import type { ObjectQualityProfile } from "@shared/objectQuality";
@@ -127,7 +124,7 @@ export function ObjectPhotoInput({
             d.color?.timestamp === capturedAt
               ? d.color
               : pixels
-                ? analyzeObjectColor(pixels, d, detections)
+                ? analyzeColour(pixels, d, detections)
                 : undefined,
         }));
       setRows(result);
