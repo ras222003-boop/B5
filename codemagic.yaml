@@ -20,6 +20,7 @@ workflows:
           python3 ios/DepthCalibrationLab/scripts/generate-lab-icon.py
           python3 ios/DepthCalibrationLab/scripts/test_configure_web_origin.py
           bash ios/DepthCalibrationLab/scripts/configure-web-origin.sh
+          python3 ios/DepthCalibrationLab/scripts/configure_storekit.py
           cd ios/DepthCalibrationLab
           xcodegen generate
       - name: Build and test on iPhone simulator
@@ -63,6 +64,7 @@ workflows:
           command -v xcodegen >/dev/null || brew install xcodegen
           python3 ios/DepthCalibrationLab/scripts/generate-lab-icon.py
           bash ios/DepthCalibrationLab/scripts/configure-web-origin.sh
+          python3 ios/DepthCalibrationLab/scripts/configure_storekit.py
           source_sha="$(git rev-parse HEAD)"
           [[ "$source_sha" =~ ^[0-9a-f]{40}$ ]] || { echo "Invalid source SHA" >&2; exit 1; }
           /usr/libexec/PlistBuddy -c "Set :BasiraWebReleaseSHA $source_sha" ios/DepthCalibrationLab/DepthCalibrationLab/Info.plist
@@ -128,6 +130,7 @@ workflows:
           command -v xcodegen >/dev/null || brew install xcodegen
           python3 ios/DepthCalibrationLab/scripts/generate-lab-icon.py
           BASIRA_REQUIRE_WEB_ORIGIN=true bash ios/DepthCalibrationLab/scripts/configure-web-origin.sh
+          python3 ios/DepthCalibrationLab/scripts/configure_storekit.py
           source_sha="$(git rev-parse HEAD)"
           [[ "$source_sha" =~ ^[0-9a-f]{40}$ ]] || { echo "Invalid source SHA" >&2; exit 1; }
           /usr/libexec/PlistBuddy -c "Set :BasiraWebReleaseSHA $source_sha" ios/DepthCalibrationLab/DepthCalibrationLab/Info.plist
