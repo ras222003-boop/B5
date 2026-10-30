@@ -19,7 +19,7 @@ class WebOriginConfigurationTests(unittest.TestCase):
         self.folder = tempfile.TemporaryDirectory()
         self.addCleanup(self.folder.cleanup)
         self.plist = Path(self.folder.name) / "Info.plist"
-        self.initial = {"CFBundleIdentifier": "sa.nasjalufuq.basira", "CFBundleVersion": "7", "BasiraWebBaseURL": "https://previous.example.org"}
+        self.initial = {"CFBundleIdentifier": "sa.nasjalufuq.basira", "CFBundleVersion": "7", "BasiraWebBaseURL": "https://previous.example.org", "BasiraWebReleaseSHA": "f" * 40}
         self.plist.write_bytes(plistlib.dumps(self.initial))
 
     def read(self):
@@ -33,6 +33,7 @@ class WebOriginConfigurationTests(unittest.TestCase):
         self.assertEqual(result["BasiraLabURL"], "https://basira.example.org/navigation/native-vision")
         self.assertEqual(result["CFBundleIdentifier"], self.initial["CFBundleIdentifier"])
         self.assertEqual(result["CFBundleVersion"], "7")
+        self.assertEqual(result["BasiraWebReleaseSHA"], "", "Never inherit a stale web revision")
 
     def test_missing_optional_origin_clears_cached_build_values(self):
         config.configure(self.plist, "", "false")
