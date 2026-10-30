@@ -21,6 +21,7 @@ import { useI18n, useMessages } from "@/i18n";
 import { examDemoMessages } from "@/i18n/locales/examDemo";
 import ExamDeliveryPanel, { RecentExamSubmissions } from "@/components/exam/ExamDeliveryPanel";
 import type { ExamLanguage, OcrQuestion, OcrResult } from "@shared/ocr";
+import { requestExamPrint, type ExamPrintWindow } from "@/lib/examPrint";
 
 type Question = OcrQuestion;
 type ExamData = OcrResult;
@@ -293,12 +294,16 @@ export default function ExamDemo() {
 
   const downloadPdf = useCallback(() => {
     if (!pdfHtml) return;
-    const printWindow = window.open("", "_blank");
-    if (!printWindow) return;
-    printWindow.document.write(pdfHtml);
-    printWindow.document.close();
-    window.setTimeout(() => printWindow.print(), 500);
-  }, [pdfHtml]);
+    const started = requestExamPrint(pdfHtml, window as ExamPrintWindow);
+    if (!started) {
+      // Native print must not falsely claim the file was downloaded.
+      setActionError(lang === "ar"
+        ? "تعذّر فتح الطباعة في التطبيق. تحقق من توفر وظيفة الطباعة ثم أعد المحاولة."
+        : lang === "zh-CN"
+          ? "无法在应用中打开打印功能，请重试。"
+          : "Could not open the print dialog. Please try again.");
+    }
+  }, [pdfHtml, lang]);
 
   const resetExam = useCallback(() => {
     stopCamera();

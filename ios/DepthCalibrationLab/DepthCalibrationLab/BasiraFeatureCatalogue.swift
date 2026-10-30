@@ -215,6 +215,75 @@ enum BasiraFeature: String, CaseIterable, Identifiable, Hashable {
     static let research: [BasiraFeature] = [
         .robotics, .metricVisionWeb, .arLabs, .arImageTargets, .arFace, .arSky, .arVenues, .arWorld, .arWorldScale
     ]
+
+    /// Every static platform service has exactly one discoverable section on iOS.
+    /// Static routes are web modules, not evidence of sensor or backend readiness.
+    static let completeDirectory: [BasiraFeatureGroup] = [
+        .init(title: "الرؤية والتعرّف", features: [.vision]),
+        .init(title: "الخرائط والتوجيه", features: [
+            .navigation, .guidance, .places, .mapping, .sharedMap,
+            .indoorManager, .navigationAdmin, .navigationPermissions, .navigationCapabilities
+        ]),
+        .init(title: "الاختبارات والتعليم", features: [
+            .examDemo, .onlineExams, .teacher, .photoRequirements
+        ]),
+        .init(title: "المساعد والصوت", features: [
+            .assistant, .aiGuide, .assistantAnalytics, .voiceSettings, .voiceValidation
+        ]),
+        .init(title: "الحساب والخدمات", features: [
+            .account, .billing, .support, .contact, .privacy, .terms, .refundPolicy
+        ]),
+        .init(title: "المختبرات والتجارب", features: [
+            .metricVisionWeb, .robotics, .arLabs, .arImageTargets, .arFace,
+            .arSky, .arVenues, .arWorld, .arWorldScale
+        ]),
+        .init(title: "عن بصيرة", features: [.howItWorks, .features, .about]),
+    ]
+
+    var availability: BasiraFeatureAvailability {
+        switch self {
+        case .onlineExams, .teacher, .robotics, .metricVisionWeb:
+            return .notConnected
+        case .vision, .guidance, .arLabs, .arImageTargets, .arFace, .arSky,
+             .arVenues, .arWorld, .arWorldScale:
+            return .experimental
+        case .mapping, .sharedMap, .indoorManager, .navigationAdmin, .assistantAnalytics:
+            return .requiresPermissions
+        default:
+            return .webRoute
+        }
+    }
+
+    func matchesSearch(_ query: String) -> Bool {
+        let text = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else { return true }
+        return name.localizedStandardContains(text)
+            || detail.localizedStandardContains(text)
+            || path.localizedStandardContains(text)
+            || availability.title.localizedStandardContains(text)
+    }
+}
+
+struct BasiraFeatureGroup: Identifiable {
+    let title: String
+    let features: [BasiraFeature]
+    var id: String { title }
+}
+
+enum BasiraFeatureAvailability {
+    case webRoute
+    case experimental
+    case requiresPermissions
+    case notConnected
+
+    var title: String {
+        switch self {
+        case .webRoute: return "خدمة تعتمد على المنصة"
+        case .experimental: return "تجريبي — غير معتمد للتنقل"
+        case .requiresPermissions: return "تتطلب حسابًا أو بيانات وصلاحيات"
+        case .notConnected: return "الربط الفعلي غير مكتمل"
+        }
+    }
 }
 
 /// Production web origin is injected by the build, never guessed from a preview

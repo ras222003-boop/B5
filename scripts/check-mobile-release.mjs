@@ -1,5 +1,7 @@
 import { createHash } from "node:crypto";
 import { execFileSync } from "node:child_process";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 const gitSHA = /^[0-9a-f]{40}$/;
 const sha256 = /^[0-9a-f]{64}$/;
@@ -119,7 +121,7 @@ export async function checkMobileRelease({
   };
 }
 
-if (process.argv[1]?.endsWith("/check-mobile-release.mjs")) {
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const origin = process.env.BASIRA_IOS_WEB_ORIGIN;
   const revision = currentCheckoutSHA();
   const tier = process.env.BASIRA_MOBILE_RELEASE_TIER || "internal";

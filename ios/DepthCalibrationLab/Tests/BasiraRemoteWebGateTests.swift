@@ -6,10 +6,7 @@ final class BasiraRemoteWebGateTests: XCTestCase {
     private let htmlDigest = String(repeating: "b", count: 64)
 
     private func manifest(source: String? = nil, routes: [String]? = nil) throws -> Data {
-        let required = routes ?? [
-            "/navigation", "/navigation/vision", "/navigation/guidance",
-            "/exam-demo", "/assistant", "/account", "/settings/voice", "/teacher"
-        ]
+        let required = routes ?? BasiraFeature.allCases.map(\.path)
         let candidate: [String: Any] = [
             "schemaVersion": 1,
             "product": "basira",
@@ -59,6 +56,18 @@ final class BasiraRemoteWebGateTests: XCTestCase {
         XCTAssertNil(BasiraRemoteWebGate.indexDigest(
             for: Data("not-json".utf8), expectedRevision: revision
         ))
+    }
+
+    @MainActor
+    func testMissingAnyAdvertisedPlatformFeatureBlocksUnifiedApp() throws {
+        let withoutBilling = BasiraFeature.allCases.map(\.path)
+            .filter { $0 != BasiraFeature.billing.path }
+        XCTAssertNil(BasiraRemoteWebGate.indexDigest(
+            for: try manifest(routes: withoutBilling), expectedRevision: revision
+        ))
+        XCTAssertEqual(BasiraRemoteWebGate.indexDigest(
+            for: try manifest(), expectedRevision: revision
+        ), htmlDigest)
     }
 
     @MainActor

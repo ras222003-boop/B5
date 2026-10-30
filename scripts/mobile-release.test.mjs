@@ -1,9 +1,11 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
+import { spawnSync } from "node:child_process";
 import { mkdtemp, mkdir, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 import os from "node:os";
+import { fileURLToPath } from "node:url";
 import { buildMobileManifest, writeMobileManifest } from "./write-mobile-release-manifest.mjs";
 import { validateMobileOrigin, checkMobileRelease } from "./check-mobile-release.mjs";
 
@@ -61,6 +63,15 @@ test("mobile origin rejects insecure, test, local and credential-bearing hosts",
   assert.equal(validateMobileOrigin("https://basira.example.org"), "https://basira.example.org");
 });
 
+test("mobile release command actually runs its gate when invoked as a script", () => {
+  const result = spawnSync(process.execPath,
+    [fileURLToPath(new URL("./check-mobile-release.mjs", import.meta.url))],
+    { cwd: fileURLToPath(new URL("../", import.meta.url)),
+      env: { ...process.env, BASIRA_IOS_WEB_ORIGIN: "" }, encoding: "utf8" });
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /BASIRA MOBILE RELEASE BLOCKED:.*missing or malformed/);
+});
+
 test("internal release gate checks a deployed build, not locally passing unit tests", async () => {
   const result = await checkMobileRelease({
     origin: "https://basira.example.org", expectedRevision: FULL_SHA,
@@ -116,6 +127,11 @@ test("web bundle receipt hashes real index and assets and ignores its own receip
     await writeFile(path.join(src, "App.tsx"), routes.map(route => '<Route path="' + route + '" />').join("\n"));
     await writeFile(path.join(dist, "index.html"), webHTML);
     await writeFile(path.join(dist, "assets", "main.js"), "console.log('basira')");
+    const cli = spawnSync(process.execPath,
+      [fileURLToPath(new URL("./write-mobile-release-manifest.mjs", import.meta.url))],
+      { cwd, env: { ...process.env, BASIRA_SOURCE_SHA: FULL_SHA }, encoding: "utf8" });
+    assert.equal(cli.status, 0, cli.stderr);
+    assert.match(cli.stdout, /Basira web build manifest:/);
     const first = await writeMobileManifest({ cwd, providedRevision: FULL_SHA });
     assert.equal(first.sourceRevision, FULL_SHA);
     assert.equal(first.webBundle.assetCount, 2);
@@ -124,7 +140,14 @@ test("web bundle receipt hashes real index and assets and ignores its own receip
     assert.deepEqual(receipt, first);
     const second = await buildMobileManifest({ cwd, providedRevision: FULL_SHA });
     assert.equal(first.webBundle.sha256, second.webBundle.sha256);
-    await symlink(path.join(dist, "index.html"), path.join(dist, "symlink.html"));
+    try {
+      await symlink(path.join(dist, "index.html"), path.join(dist, "symlink.html"));
+    } catch (error) {
+      // Windows can deny symlink creation without Developer Mode or the
+      // SeCreateSymbolicLinkPrivilege. CI on Linux still tests the rejection.
+      if (process.platform !== "win32" || error?.code !== "EPERM") throw error;
+      return;
+    }
     await assert.rejects(() => buildMobileManifest({ cwd, providedRevision: FULL_SHA }), /Symlink/);
   } finally {
     await rm(cwd, { recursive: true, force: true });

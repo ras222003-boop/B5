@@ -70,7 +70,12 @@ final class BasiraRemoteWebGate: ObservableObject {
               manifest.sourceRevision == expectedRevision,
               manifest.webBundle.indexSha256.range(
                 of: "^[a-f0-9]{64}$", options: .regularExpression) != nil,
-              Self.requiredRoutes.allSatisfy(manifest.declaredRoutes.contains)
+              Self.requiredRoutes.allSatisfy(manifest.declaredRoutes.contains),
+              // The unified iPhone app must not mount a backend whose shipped
+              // web bundle omits any advertised native service route.
+              Set(BasiraFeature.allCases.map(\.path)).isSubset(
+                  of: Set(manifest.declaredRoutes)
+              )
         else { return nil }
         return manifest.webBundle.indexSha256
     }

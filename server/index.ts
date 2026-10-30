@@ -62,6 +62,19 @@ async function invokeLLM(messages: Array<{ role: string; content: any }>, option
 }
 
 async function startServer() {
+  // A newly provisioned private MySQL service can still be initializing when
+  // Render starts the web service. Retry connectivity, never a failed migration.
+  if (process.env.BASIRA_DB_HOST) {
+    for (let attempt = 0; attempt < 24; attempt++) {
+      try {
+        await pool.query("SELECT 1");
+        break;
+      } catch {
+        if (attempt === 23) throw new Error("Staging database did not become ready");
+        await new Promise(resolve => setTimeout(resolve, 5000));
+      }
+    }
+  }
   await ensureSchema();
   const app = express();
   const server = createServer(app);

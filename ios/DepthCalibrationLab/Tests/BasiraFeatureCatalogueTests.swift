@@ -16,6 +16,27 @@ final class BasiraFeatureCatalogueTests: XCTestCase {
         XCTAssertEqual(BasiraFeature.teacher.path, "/teacher")
     }
 
+    func testNativeDirectoryContainsEveryPlatformFeatureExactlyOnce() {
+        let listed = BasiraFeature.completeDirectory.flatMap(\.features)
+        XCTAssertEqual(listed.count, BasiraFeature.allCases.count)
+        XCTAssertEqual(Set(listed), Set(BasiraFeature.allCases))
+        XCTAssertEqual(Set(listed).count, listed.count, "A service appears in multiple sections")
+        XCTAssertEqual(
+            Set(BasiraFeature.completeDirectory.map(\.title)).count,
+            BasiraFeature.completeDirectory.count
+        )
+    }
+
+    func testNativeFeatureSearchAndVisibleIntegrationLimitations() {
+        XCTAssertTrue(BasiraFeature.vision.matchesSearch("الرؤية"))
+        XCTAssertTrue(BasiraFeature.vision.matchesSearch("/navigation/vision"))
+        XCTAssertTrue(BasiraFeature.examDemo.matchesSearch("الاختبارات"))
+        XCTAssertFalse(BasiraFeature.examDemo.matchesSearch("لاوجودلهذاالمسار"))
+        XCTAssertTrue(BasiraFeature.robotics.availability.title.contains("غير مكتمل"))
+        XCTAssertTrue(BasiraFeature.onlineExams.availability.title.contains("غير مكتمل"))
+        XCTAssertTrue(BasiraFeature.guidance.availability.title.contains("تجريبي"))
+    }
+
     func testWebOriginNeverUsesUnconfiguredOrInsecureHosts() {
         XCTAssertNil(BasiraWebOrigin.validate(""))
         XCTAssertNil(BasiraWebOrigin.validate("$(BASIRA_IOS_WEB_ORIGIN)"))
