@@ -5,6 +5,7 @@ on:
       - "Dockerfile"
       - ".dockerignore"
       - "compose.staging.yaml"
+      - "render.yaml"
       - "package.json"
       - "pnpm-lock.yaml"
       - "scripts/write-mobile-release-manifest.mjs"
@@ -36,7 +37,7 @@ jobs:
         run: |
           set -euo pipefail
           SHA="$(git rev-parse HEAD)"
-          docker build --build-arg BASIRA_SOURCE_SHA="$SHA" -t basira-staging:ci .
+          docker build --build-arg RENDER_GIT_COMMIT="$SHA" -t basira-staging:ci .
       - name: Confirm app manifest is from the checked-out source
         run: |
           set -euo pipefail

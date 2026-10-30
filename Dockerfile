@@ -1,5 +1,5 @@
 # Independent Basira staging container. Never include local/private model data
-# or App Store signing material. Build with an explicit Git commit SHA.
+# or App Store signing material. Build with a verified Git commit SHA.
 FROM node:24-bookworm-slim
 
 WORKDIR /app
@@ -20,10 +20,16 @@ COPY tsconfig.json tsconfig.node.json vite.config.ts ./
 # The release contract must identify a known immutable checkout.
 # This is a public source SHA, never a credential.
 ARG BASIRA_SOURCE_SHA
-RUN printf '%s' "$BASIRA_SOURCE_SHA" | grep -Eq '^[0-9a-f]{40}$' \
-  || (echo 'Set --build-arg BASIRA_SOURCE_SHA to the complete Git commit SHA' >&2; exit 1)
-ENV BASIRA_SOURCE_SHA="${BASIRA_SOURCE_SHA}"
-RUN pnpm build && pnpm prune --prod
+ARG RENDER_GIT_COMMIT
+RUN set -eu; \
+  sha="${RENDER_GIT_COMMIT:-${BASIRA_SOURCE_SHA:-}}"; \
+  printf '%s' "$sha" | grep -Eq '^[0-9a-f]{40}$' \
+    || (echo 'Supply RENDER_GIT_COMMIT or BASIRA_SOURCE_SHA as a complete Git commit SHA' >&2; exit 1); \
+  if [ -n "${RENDER_GIT_COMMIT:-}" ] && [ -n "${BASIRA_SOURCE_SHA:-}" ] && [ "$RENDER_GIT_COMMIT" != "$BASIRA_SOURCE_SHA" ]; then \
+    echo 'Render and explicit source SHAs disagree' >&2; exit 1; \
+  fi; \
+  BASIRA_SOURCE_SHA="$sha" pnpm build; \
+  pnpm prune --prod
 
 ENV NODE_ENV=production
 ENV PORT=3000

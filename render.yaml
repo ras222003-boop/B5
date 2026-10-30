@@ -1,0 +1,69 @@
+# Prepared staging Blueprint. Sync only after the account owner approves the
+# paid services and public HTTPS endpoint. No production resource is referenced.
+previews:
+  generation: off
+
+projects:
+  - name: basira-b5-staging-20261030
+    environments:
+      - name: staging
+        services:
+          - type: pserv
+            name: basira-b5-staging-20261030-mysql
+            runtime: image
+            image:
+              url: docker.io/library/mysql:8.4
+            region: frankfurt
+            plan: 1c-2g
+            numInstances: 1
+            disk:
+              name: basira-b5-staging-mysql-data
+              mountPath: /var/lib/mysql
+              sizeGB: 10
+            envVars:
+              - key: MYSQL_DATABASE
+                value: basira_staging
+              - key: MYSQL_USER
+                value: basira_staging
+              - key: MYSQL_PASSWORD
+                generateValue: true
+              - key: MYSQL_ROOT_PASSWORD
+                generateValue: true
+
+          - type: web
+            name: basira-b5-staging-20261030-web
+            runtime: docker
+            repo: https://github.com/ras222003-boop/B5
+            branch: codex/basira-ios-full-feature-catalog-20261030
+            region: frankfurt
+            plan: 1c-2g
+            numInstances: 1
+            autoDeployTrigger: off
+            healthCheckPath: /api/readiness
+            dockerfilePath: ./Dockerfile
+            envVars:
+              - key: NODE_ENV
+                value: production
+              - key: PORT
+                value: "3000"
+              - key: BASIRA_DB_HOST
+                fromService:
+                  type: pserv
+                  name: basira-b5-staging-20261030-mysql
+                  property: host
+              - key: BASIRA_DB_USER
+                value: basira_staging
+              - key: BASIRA_DB_NAME
+                value: basira_staging
+              - key: BASIRA_DB_PASSWORD
+                fromService:
+                  type: pserv
+                  name: basira-b5-staging-20261030-mysql
+                  envVarKey: MYSQL_PASSWORD
+              - key: MANUS_JWT_SECRET
+                generateValue: true
+              - key: BASIRA_PUBLIC_URL
+                fromService:
+                  type: web
+                  name: basira-b5-staging-20261030-web
+                  envVarKey: RENDER_EXTERNAL_URL

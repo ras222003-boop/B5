@@ -3,11 +3,11 @@ import { betterAuth } from "better-auth";
 import { createPool } from "mysql2/promise";
 import { SignJWT, importPKCS8 } from "jose";
 import { authOriginPolicy } from "./authOrigins";
+import { databaseConnectionOptions } from "./databaseConfig";
 
-if (!process.env.DATABASE_URL) throw new Error("DATABASE_URL is required for Basira accounts");
 if (!process.env.MANUS_JWT_SECRET) throw new Error("MANUS_JWT_SECRET is required for Basira accounts");
 
-export const pool = createPool({ uri: process.env.DATABASE_URL, waitForConnections: true, connectionLimit: 6 });
+export const pool = createPool(databaseConnectionOptions(process.env));
 export type SocialProvider = "google" | "microsoft" | "apple" | "facebook";
 export const providerReady: Record<SocialProvider, boolean> = {
   google: Boolean(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET),
