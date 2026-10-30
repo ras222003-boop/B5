@@ -37,6 +37,7 @@ jobs:
       - run: pnpm exec tsc --noEmit -p tsconfig.github-preview.json
       - run: node --test scripts/github-preview/policy.test.mjs
       - run: pnpm test
+      - run: node --test scripts/mobile-release.test.mjs
       - run: pnpm test:perception-metrics
       - run: pnpm test:vision-ai
       - run: pnpm test:vision-studio
