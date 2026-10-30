@@ -65,7 +65,7 @@ struct BasiraUnifiedHome: View {
 
             Group {
                 if selectedTab == .more {
-                    NavigationStack { BasiraMoreFeatures() }
+                    NavigationStack { BasiraMoreFeatures(selectedTab: $selectedTab) }
                 } else {
                     Color.clear
                 }
@@ -153,50 +153,79 @@ private struct BasiraFeatureDirectory: View {
 }
 
 private struct BasiraMoreFeatures: View {
+    @Binding var selectedTab: BasiraMainTab
+    @State private var searchText = ""
+
+    private var matchingGroups: [BasiraFeatureGroup] {
+        BasiraFeature.completeDirectory.filter { group in
+            group.features.contains { $0.matchesSearch(searchText) }
+        }
+    }
+
+    private var showNativeTools: Bool {
+        let search = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        return search.isEmpty || ["LiDAR", "المعلمين", "الدفع", "الاشتراكات", "قياس"].contains {
+            $0.localizedStandardContains(search) || search.localizedStandardContains($0)
+        }
+    }
+
     var body: some View {
         List {
-            Section("الخرائط") {
-                ForEach(BasiraFeature.maps) { feature in
-                    NavigationLink(value: feature) { BasiraFeatureLabel(feature: feature) }
-                }
-            }
-            Section("التعليم والمعلمون") {
-                ForEach(BasiraFeature.education) { feature in
-                    NavigationLink(value: feature) { BasiraFeatureLabel(feature: feature) }
-                }
-                NavigationLink {
-                    BasiraNativeExamsView()
-                } label: {
-                    Label("دليل المعلمين المحلي على iPhone", systemImage: "person.crop.rectangle.stack")
-                }
-            }
-            Section("اشتراكات التطبيق") {
-                NavigationLink {
-                    BasiraSubscriptionScreen()
-                } label: {
-                    Label("الاشتراكات واستعادة المشتريات", systemImage: "creditcard")
-                }
-                Text("الدفع داخل iPhone يستخدم Apple. التحقق الخادمي مطلوب قبل تفعيل المزايا.")
+            Section {
+                Text("جميع خدمات منصة بصيرة تظهر هنا، لكن وجود المسار لا يعني أن الخدمة أو المستشعر تم اختباره على iPhone.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
+                Text("استخدم الرؤية والتنبيهات كمساعدة استكشافية فقط، ولا تعتمد عليها وحدها لتجنب العوائق.")
+                    .font(.footnote)
+                    .foregroundStyle(.orange)
             }
-            Section("الحساب والصوت") {
-                ForEach(BasiraFeature.settings) { feature in
-                    NavigationLink(value: feature) { BasiraFeatureLabel(feature: feature) }
+            if showNativeTools {
+                Section("أدوات iPhone الأصلية") {
+                    Button { selectedTab = .depth } label: {
+                        Label("قياس سطح ثابت عبر LiDAR", systemImage: "viewfinder")
+                    }
+                    .accessibilityHint("يفتح مختبر قياس ثابت لا يُستخدم للمشي")
+                    NavigationLink {
+                        BasiraNativeExamsView()
+                    } label: {
+                        Label("دليل المعلمين المحفوظ محليًا", systemImage: "person.crop.rectangle.stack")
+                    }
+                    NavigationLink {
+                        BasiraSubscriptionScreen()
+                    } label: {
+                        Label("اشتراكات Apple واستعادتها", systemImage: "creditcard")
+                    }
                 }
             }
-            Section("أدوات المؤسسات — صلاحيات خاصة") {
-                ForEach(BasiraFeature.administration) { feature in
-                    NavigationLink(value: feature) { BasiraFeatureLabel(feature: feature) }
+            ForEach(matchingGroups) { group in
+                Section(group.title) {
+                    ForEach(group.features.filter { $0.matchesSearch(searchText) }) { feature in
+                        if feature == .vision {
+                            Button { selectedTab = .vision } label: {
+                                BasiraFeatureLabel(feature: feature)
+                            }
+                            .accessibilityHint("يفتح صفحة الرؤية باستخدام جسر المستشعر الأصلي عند توفر إصدار متوافق")
+                        } else if feature == .examDemo {
+                            Button { selectedTab = .exams } label: {
+                                BasiraFeatureLabel(feature: feature)
+                            }
+                            .accessibilityHint("يفتح الاختبارات في تبويب مستقل")
+                        } else {
+                            NavigationLink(value: feature) {
+                                BasiraFeatureLabel(feature: feature)
+                            }
+                        }
+                    }
                 }
             }
-            Section("التجارب والتعريف") {
-                ForEach(BasiraFeature.research) { feature in
-                    NavigationLink(value: feature) { BasiraFeatureLabel(feature: feature) }
-                }
+            if matchingGroups.isEmpty && !showNativeTools {
+                Text("لم نعثر على خدمة تطابق البحث. جرّب اسمًا آخر.")
+                    .foregroundStyle(.secondary)
+                    .accessibilityAddTraits(.isStaticText)
             }
         }
-        .navigationTitle("خدمات بصيرة")
+        .navigationTitle("جميع خدمات بصيرة")
+        .searchable(text: $searchText, prompt: "ابحث عن إحدى خدمات بصيرة")
         .navigationDestination(for: BasiraFeature.self) { feature in
             BasiraWebFeatureScreen(feature: feature)
         }
@@ -213,6 +242,9 @@ private struct BasiraFeatureLabel: View {
                 Text(feature.detail)
                     .font(.caption)
                     .foregroundStyle(.secondary)
+                Text(feature.availability.title)
+                    .font(.caption2)
+                    .foregroundStyle(.orange)
             }
         } icon: {
             Image(systemName: feature.symbol)
