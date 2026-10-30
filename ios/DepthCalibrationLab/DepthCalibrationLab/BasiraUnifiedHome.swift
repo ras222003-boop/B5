@@ -368,6 +368,14 @@ private struct BasiraEmbeddedWebPage: UIViewRepresentable {
         let config = WKWebViewConfiguration()
         config.websiteDataStore = .default()
         config.allowsInlineMediaPlayback = true
+        // A UI hint only: Better Auth email/password operates on the approved
+        // site; social OAuth requires a separately reviewed native callback
+        // handoff and must not be attempted inside WKWebView.
+        config.userContentController.addUserScript(WKUserScript(
+            source: "Object.defineProperty(window, '__basiraNativeIOS', { value: true, writable: false });",
+            injectionTime: .atDocumentStart,
+            forMainFrameOnly: true
+        ))
         BasiraWebMediaLifecycle.install(in: config.userContentController)
         let view = WKWebView(frame: .zero, configuration: config)
         view.navigationDelegate = context.coordinator
