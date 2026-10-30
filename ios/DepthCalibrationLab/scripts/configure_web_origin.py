@@ -41,6 +41,9 @@ def configure(plist, origin, required):
         data = plistlib.load(source)
     # Clear cached values when an offline build supplies no origin.
     data["BasiraWebBaseURL"] = canonical or ""
+    # The signed-build workflow injects the exact checkout SHA afterward.
+    # Never inherit a release identity from a previous local build.
+    data["BasiraWebReleaseSHA"] = ""
     data["BasiraVisionURL"] = canonical + "/navigation/vision" if canonical else ""
     data["BasiraLabURL"] = canonical + "/navigation/native-vision" if canonical else ""
     temp = None
