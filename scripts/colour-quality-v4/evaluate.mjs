@@ -21,7 +21,7 @@ const humanLabels = new Map();
 if (labelsFlag) {
   for (const line of (await readFile(labelsFlag.slice(9), "utf8")).split(/\r?\n/).filter(Boolean)) {
     const r = JSON.parse(line);
-    humanLabels.set(r.itemId, r.label);
+    humanLabels.set(r.itemId, r);
   }
 }
 const overrides = paramsFlag ? JSON.parse(paramsFlag.slice(9)) : null;
@@ -65,8 +65,10 @@ for (const line of lines) {
   for (const [i, o] of frame.objects.entries()) {
     if (labelsFlag) {
       const human = humanLabels.get(frame.id + "#" + o.objectId);
-      if (!human || human === "unsure" || human === "bad-mask") continue;
-      o.referenceColor = human;
+      if (!human || human.label === "unsure" || human.label === "bad-mask") continue;
+      o.referenceColor = human.label;
+      o.referenceSecondary = human.label === "multicolor" ? null : (human.secondary ?? "none");
+      o.referenceComponents = [];
     }
     const detection = detections[i];
     let mask;
@@ -98,7 +100,7 @@ for (const line of lines) {
     const answered = !!colour.name;
     const correct = answered && accepted.includes(colour.name);
     const refSecondary = o.referenceSecondary ?? null;
-    const pair = refSecondary !== null && answered ? { agree: correct && colour.secondary === refSecondary } : null;
+    const pair = refSecondary !== null && answered ? { agree: correct && (colour.secondary ?? "none") === refSecondary } : null;
     if (pair) pairs.push(pair.agree);
     results.push({
       secondaryPredicted: colour.secondary ?? null,

@@ -11,7 +11,7 @@ const manifest = JSON.parse(await readFile(join(resolve(cohortArg), "manifest.js
 const published = new Map();
 for (const s of manifest.samples)
   for (const o of s.objects)
-    published.set(`${s.id}#${o.objectId}`, { split: s.split, cocoClass: o.cocoClass, label: o.referenceColor, group: s.groupId });
+    published.set(`${s.id}#${o.objectId}`, { split: s.split, cocoClass: o.cocoClass, label: o.referenceColor, components: o.referenceComponents ?? [], group: s.groupId });
 const latest = new Map();
 for (const line of (await readFile(resolve(reviewsArg), "utf8")).split("\n").filter(Boolean)) {
   const r = JSON.parse(line);
@@ -29,7 +29,7 @@ for (const [id, r] of latest) {
   if (r.label === "unsure" || r.label === "bad-mask") {
     unusable.push({ id, reviewer: r.label });
     c.unusable++;
-  } else if (r.label === p.label) {
+  } else if (p.label === "multicolor" ? p.components.includes(r.label) : r.label === p.label) {
     agreed.push({ id, label: r.label, split: p.split, cocoClass: p.cocoClass });
     c.agreed++;
   } else {
