@@ -60,7 +60,7 @@ export async function buildMobileManifest({
   const nativeSource = await readFile(
     path.join(cwd, "ios", "DepthCalibrationLab", "DepthCalibrationLab", "BasiraFeatureCatalogue.swift"), "utf8"
   );
-  const nativeRoutes = new Set([...nativeSource.matchAll(/case \\.\\w+: return "(\\/[^"]+)"/g)].map(match => match[1]));
+  const nativeRoutes = new Set([...nativeSource.matchAll(/case \.\w+: return "(\/[^"]+)"/g)].map(match => match[1]));
   // These two aliases intentionally reuse a single native catalogue item.
   const intentionalAliases = new Set(["/teacher-panel", "/settings/privacy-permissions"]);
   const missingNative = routes.filter(route => !nativeRoutes.has(route) && !intentionalAliases.has(route));
