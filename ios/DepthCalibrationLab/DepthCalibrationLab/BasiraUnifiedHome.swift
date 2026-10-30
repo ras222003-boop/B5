@@ -12,6 +12,7 @@ private enum BasiraMainTab: Hashable {
 struct BasiraUnifiedHome: View {
     @State private var selectedTab: BasiraMainTab = .home
     @StateObject private var webGate = BasiraRemoteWebGate()
+    @StateObject private var subscriptions = BasiraAppleSubscriptions()
     @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
@@ -75,7 +76,11 @@ struct BasiraUnifiedHome: View {
         .tint(.orange)
         .environment(\.layoutDirection, .rightToLeft)
         .environmentObject(webGate)
-        .task { await webGate.ensureChecked() }
+        .environmentObject(subscriptions)
+        .task {
+            subscriptions.start()
+            await webGate.ensureChecked()
+        }
         .onChange(of: scenePhase) { phase in
             if phase == .active {
                 Task { await webGate.verify() }
@@ -121,6 +126,16 @@ private struct BasiraFeatureDirectory: View {
                     }
                 }
             }
+            Section("حسابي والاشتراكات") {
+                NavigationLink(value: BasiraFeature.account) {
+                    Label("تسجيل الدخول أو إنشاء حساب", systemImage: "person.crop.circle")
+                }
+                NavigationLink {
+                    BasiraSubscriptionScreen()
+                } label: {
+                    Label("اشتراكات Apple واستعادة المشتريات", systemImage: "creditcard")
+                }
+            }
             Section("مستشعر العمق") {
                 Button { selectedTab = .depth } label: {
                     Label("قياس المسافة إلى سطح ثابت", systemImage: "viewfinder")
@@ -154,6 +169,16 @@ private struct BasiraMoreFeatures: View {
                 } label: {
                     Label("دليل المعلمين المحلي على iPhone", systemImage: "person.crop.rectangle.stack")
                 }
+            }
+            Section("اشتراكات التطبيق") {
+                NavigationLink {
+                    BasiraSubscriptionScreen()
+                } label: {
+                    Label("الاشتراكات واستعادة المشتريات", systemImage: "creditcard")
+                }
+                Text("الدفع داخل iPhone يستخدم Apple. التحقق الخادمي مطلوب قبل تفعيل المزايا.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
             }
             Section("الحساب والصوت") {
                 ForEach(BasiraFeature.settings) { feature in
