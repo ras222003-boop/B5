@@ -1,6 +1,8 @@
 import type { Express } from "express";
 import { fromNodeHeaders } from "better-auth/node";
-import { auth } from "./auth";
+import type { RowDataPacket } from "mysql2";
+import { auth, pool } from "./auth";
+import { activeVerifiedTier, type VerifiedEntitlementRow } from "./billingEntitlements";
 import { basiraBillingCapabilities, basiraPlans } from "./billingCatalog";
 
 /**
@@ -28,11 +30,22 @@ export function registerBillingRoutes(app: Express) {
     try {
       const session = await auth.api.getSession({ headers: fromNodeHeaders(req.headers) });
       if (!session?.user?.id) return res.status(401).json({ error: "login_required" });
+      const [rows] = await pool.execute<(RowDataPacket & VerifiedEntitlementRow)[]>(
+        `SELECT plan_id,provider,verification_source,status,valid_until,revoked_at
+           FROM basira_billing_entitlements WHERE user_id=?
+           ORDER BY verified_at DESC LIMIT 20`,
+        [session.user.id],
+      );
+      const tier = activeVerifiedTier(rows);
       return res.json({
         authenticated: true,
         accountId: session.user.id,
-        entitlement: { tier: "basic", activePaidSubscription: false, verifiedByServer: false },
-        message: "paid_entitlements_not_configured",
+        entitlement: {
+          tier,
+          activePaidSubscription: tier !== "basic",
+          verifiedByServer: tier !== "basic",
+        },
+        message: tier === "basic" ? "no_provider_verified_paid_subscription" : "verified_entitlement_available",
       });
     } catch {
       return res.status(503).json({ error: "billing_status_unavailable" });
