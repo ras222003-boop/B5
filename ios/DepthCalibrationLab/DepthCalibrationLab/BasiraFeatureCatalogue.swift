@@ -21,6 +21,7 @@ enum BasiraFeature: String, CaseIterable, Identifiable, Hashable {
     case assistant
     case aiGuide
     case account
+    case billing
     case voiceSettings
     case voiceValidation
     case support
@@ -63,6 +64,7 @@ enum BasiraFeature: String, CaseIterable, Identifiable, Hashable {
         case .assistant: return "/assistant"
         case .aiGuide: return "/ai-guide"
         case .account: return "/account"
+        case .billing: return "/billing"
         case .voiceSettings: return "/settings/voice"
         case .voiceValidation: return "/settings/voice-validation"
         case .support: return "/support"
@@ -105,6 +107,7 @@ enum BasiraFeature: String, CaseIterable, Identifiable, Hashable {
         case .assistant: return "المساعد الرقمي"
         case .aiGuide: return "الدليل الذكي"
         case .account: return "حسابي"
+        case .billing: return "خطط الاشتراك على الويب"
         case .voiceSettings: return "إعدادات الصوت"
         case .voiceValidation: return "اختبار الأصوات"
         case .support: return "الدعم"
@@ -154,6 +157,8 @@ enum BasiraFeature: String, CaseIterable, Identifiable, Hashable {
             return "ربط منصات الاختبارات الخارجية غير منفّذ. استخدم تبويب الاختبارات لمسح ورقة تجريبية؛ ظهور رسالة تحميل في صفحة الويب القديمة لا يثبت استيراد اختبار."
         case .teacher:
             return "لوحة المعلم محاكاة محلية للإعدادات. لا تفرض قفل التطبيقات ولا تراقب الطلاب ولا تحفظ الإعدادات في الخادم."
+        case .billing:
+            return "الشراء الرقمي داخل تطبيق iPhone يتم عبر Apple فقط؛ صفحة الويب تعرض معلومات الخطط دون إرسال مستخدم iPhone إلى بوابة دفع خارجية."
         case .robotics:
             return "اتصال الذراع ونقل أوامر الكتابة غير منفّذين في هذه النسخة. الصفحة للتعريف فقط."
         case .metricVisionWeb:
@@ -179,6 +184,7 @@ enum BasiraFeature: String, CaseIterable, Identifiable, Hashable {
         case .teacher: return "person.crop.rectangle.stack"
         case .assistant, .aiGuide: return "waveform"
         case .account: return "person.crop.circle"
+        case .billing: return "creditcard"
         case .voiceSettings, .voiceValidation: return "speaker.wave.2"
         case .support: return "questionmark.circle"
         case .terms: return "doc.plaintext"
@@ -203,7 +209,7 @@ enum BasiraFeature: String, CaseIterable, Identifiable, Hashable {
     static let education: [BasiraFeature] = [.onlineExams, .examDemo, .teacher, .photoRequirements]
     static let administration: [BasiraFeature] = [.indoorManager, .navigationAdmin, .assistantAnalytics]
     static let settings: [BasiraFeature] = [
-        .account, .voiceSettings, .voiceValidation, .navigationPermissions,
+        .account, .billing, .voiceSettings, .voiceValidation, .navigationPermissions,
         .support, .contact, .privacy, .terms, .refundPolicy, .about, .howItWorks, .features
     ]
     static let research: [BasiraFeature] = [
