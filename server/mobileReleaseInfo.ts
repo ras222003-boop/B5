@@ -7,7 +7,7 @@ type MobileManifest = {
   product: "basira";
   sourceRevision: string | null;
   sourceVerified: boolean;
-  webBundle: { assetCount: number; totalBytes: number; sha256: string };
+  webBundle: { assetCount: number; totalBytes: number; sha256: string; indexSha256: string };
   declaredRoutes: string[];
   disclaimer: string;
 };
@@ -29,6 +29,7 @@ export function parseMobileManifest(raw: string): MobileManifest | null {
     if (!Number.isSafeInteger(b.assetCount) || (b.assetCount as number) <= 0) return null;
     if (!Number.isSafeInteger(b.totalBytes) || (b.totalBytes as number) <= 0) return null;
     if (typeof b.sha256 !== "string" || !sha256.test(b.sha256)) return null;
+    if (typeof b.indexSha256 !== "string" || !sha256.test(b.indexSha256)) return null;
     if (!Array.isArray(m.declaredRoutes) || m.declaredRoutes.length === 0 ||
         m.declaredRoutes.some(x => typeof x !== "string" || !x.startsWith("/") || x.length > 200)) return null;
     if (typeof m.disclaimer !== "string") return null;
