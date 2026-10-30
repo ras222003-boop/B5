@@ -63,6 +63,10 @@ export async function ensureSchema() {
     for (const statement of visionQuota.split(";").map(s => s.trim()).filter(Boolean)) {
       await connection.query(statement);
     }
+    const billing = await readFile(resolve(process.cwd(), "server/migrations/0012_billing.sql"), "utf8");
+    for (const statement of billing.split(";").map(s => s.trim()).filter(Boolean)) {
+      await connection.query(statement);
+    }
     for (const [column, definition] of Object.entries({
       organization_id: 'varchar(36) NULL',
       official_map_source: 'varchar(30) NULL',

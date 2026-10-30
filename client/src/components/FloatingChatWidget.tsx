@@ -20,6 +20,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { useTextToSpeech, useSpeechToText } from "@/hooks/useSpeech";
+import {speechEngine} from '@/lib/speechEngine';
 import { type Lang, useI18n, useMessages } from "@/i18n";
 import { floatingChatMessages } from "@/i18n/locales/floatingChat";
 
@@ -103,6 +104,7 @@ export default function FloatingChatWidget() {
       if (!text.trim() || isLoadingRef.current) return;
 
       stopSpeaking();
+      const maySpeak=speechEngine.captureSpeechGuard();
 
       const userMsg: Message = {
         id: Date.now().toString(),
@@ -145,7 +147,7 @@ export default function FloatingChatWidget() {
         setMessages(previous => [...previous, assistantMsg]);
 
         if (autoSpeak)
-          setTimeout(() => speak(assistantContent, 0.9, lang), 300);
+          setTimeout(() => {if(maySpeak())speak(assistantContent, 0.9, lang);}, 300);
       } catch (error) {
         console.error("Chat error:", error);
         const errorMsg: Message = {
@@ -166,10 +168,11 @@ export default function FloatingChatWidget() {
   const toggleListening = useCallback(() => {
     if (isListening) {
       stopListening();
+      const maySend=speechEngine.captureSpeechGuard();
       setTimeout(() => {
         const currentInput =
           document.querySelector<HTMLInputElement>("[data-chat-input]")?.value;
-        if (currentInput?.trim()) sendMessage(currentInput);
+        if (maySend()&&currentInput?.trim()) sendMessage(currentInput);
       }, 500);
     } else {
       stopSpeaking();

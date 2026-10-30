@@ -71,7 +71,9 @@ export const accountMessages = defineMessages({
         "تعذّر بدء تسجيل الدخول عبر هذا المزود. حاول مرة أخرى أو استخدم البريد الإلكتروني وكلمة المرور.",
     },
     oauth: {
-      success: "تم تسجيل الدخول بنجاح.",
+      success: "تأكدت جلسة دخولك إلى بصيرة.",
+      unconfirmed:
+        "لم تتأكد جلسة دخولك إلى بصيرة. تحقق من الاتصال وأعد المحاولة أو استخدم البريد الإلكتروني وكلمة المرور.",
       failure:
         "تعذّر إكمال تسجيل الدخول عبر الموفر. حاول مرة أخرى أو استخدم البريد الإلكتروني وكلمة المرور.",
       cancelled: "أُلغي تسجيل الدخول عبر الموفر. لم يُجرَ أي تغيير على حسابك.",
@@ -163,7 +165,9 @@ export const accountMessages = defineMessages({
         "We couldn't start sign-in with this provider. Try again or use email and password.",
     },
     oauth: {
-      success: "You signed in successfully.",
+      success: "Your Basira sign-in session is confirmed.",
+      unconfirmed:
+        "Your Basira sign-in session could not be confirmed. Check your connection and try again, or use email and password.",
       failure:
         "We couldn't complete sign-in with the provider. Try again or use email and password.",
       cancelled:
@@ -253,7 +257,9 @@ export const accountMessages = defineMessages({
       socialStart: "无法通过此服务商开始登录。请重试或使用邮箱和密码。",
     },
     oauth: {
-      success: "登录成功。",
+      success: "已确认你的 Basira 登录会话。",
+      unconfirmed:
+        "无法确认你的 Basira 登录会话。请检查网络后重试，或使用邮箱和密码登录。",
       failure: "无法通过该服务商完成登录。请重试或使用邮箱和密码。",
       cancelled: "已取消服务商登录。你的账户没有任何变更。",
     },

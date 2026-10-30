@@ -1,0 +1,42 @@
+# Never transmit local project history, secrets, certificates or training data
+# into the container build context. Dockerfile explicitly copies only runtime
+# source and the iOS route catalogue required to validate the web bundle.
+.git
+.git/**
+.github
+.env
+.env.*
+**/.env
+**/.env.*
+!.env.example
+node_modules
+**/node_modules
+dist
+build
+coverage
+.cache
+.vite
+.manus-logs
+*.log
+*.ipa
+*.mobileprovision
+*.p8
+*.p12
+*.key
+*.pem
+*.xcarchive
+*.xcresult
+.DS_Store
+.vscode
+.idea
+.vision-ai
+ml
+model-assets
+reports
+media
+uploads
+tmp
+temp
+*.zip
+*.tar
+*.tgz

@@ -10,11 +10,13 @@ import WebKit
 /// Camera frames for the existing Basira vision page. RGB and optional LiDAR
 /// depth are captured from one ARFrame; the page decides when to enable metres.
 /// Nothing here enables walking or stair alerts.
-final class NativeMetricVisionController: UIViewController, ARSessionDelegate, WKNavigationDelegate {
+final class NativeMetricVisionController: UIViewController, ARSessionDelegate, WKNavigationDelegate, WKUIDelegate {
     private let session = ARSession()
     private let context = CIContext()
     private var webView: WKWebView?
     private var allowedHost = ""
+    /// The unified tab owns dismissal; closing must never open another camera.
+    var onCloseRequested: (() -> Void)?
     private var running = false
     private var meterEnabled = false
     private var sessionGeneration = 0
@@ -25,21 +27,24 @@ final class NativeMetricVisionController: UIViewController, ARSessionDelegate, W
     private var hapticEngine: CHHapticEngine?
     private var hapticEngineRunning = false
     private var lastHapticAt: CFTimeInterval = -.infinity
+    private var hadNormalTracking = false
+    private var sessionStartedAt: CFTimeInterval = -1
+    private var watchdog: Timer?
+    private let navigationStatus = UILabel()
+    private var navigationFailureDisplayed = false
 
     override func viewDidLoad() {
         super.viewDidLoad()
         view.backgroundColor = .black
-        guard let raw = Bundle.main.object(forInfoDictionaryKey: "BasiraVisionURL") as? String,
-              let url = URL(string: raw),
-              url.scheme == "https",
-              let hostname = url.host?.lowercased(),
-              !hostname.contains(".example"),
-              url.path == "/navigation/vision" else {
+        guard let baseURL = BasiraWebOrigin.baseURL,
+              let url = BasiraWebOrigin.url(for: .vision),
+              let hostname = baseURL.host?.lowercased() else {
             showFailure("يجب ضبط BasiraVisionURL على صفحة الرؤية المنشورة في بصيرة قبل تشغيل الكاميرا.")
             return
         }
         allowedHost = hostname
         let userContent = WKUserContentController()
+        BasiraWebMediaLifecycle.install(in: userContent)
         userContent.addScriptMessageHandler(WeakVisionFrameHandler(self),
                                             contentWorld: .page,
                                             name: "basiraNativeFrame")
@@ -73,8 +78,11 @@ final class NativeMetricVisionController: UIViewController, ARSessionDelegate, W
         """, injectionTime: .atDocumentStart, forMainFrameOnly: true))
         let configuration = WKWebViewConfiguration()
         configuration.userContentController = userContent
+        configuration.websiteDataStore = .default()
+        configuration.allowsInlineMediaPlayback = true
         let web = WKWebView(frame: .zero, configuration: configuration)
         web.navigationDelegate = self
+        web.uiDelegate = self
         web.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(web)
         NSLayoutConstraint.activate([
@@ -100,9 +108,23 @@ final class NativeMetricVisionController: UIViewController, ARSessionDelegate, W
             close.widthAnchor.constraint(greaterThanOrEqualToConstant: 150),
             close.heightAnchor.constraint(equalToConstant: 45)
         ])
+        navigationStatus.font = .preferredFont(forTextStyle: .footnote)
+        navigationStatus.adjustsFontForContentSizeCategory = true
+        navigationStatus.numberOfLines = 0
+        navigationStatus.textColor = .white
+        navigationStatus.backgroundColor = .black.withAlphaComponent(0.92)
+        navigationStatus.isHidden = true
+        navigationStatus.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(navigationStatus)
+        NSLayoutConstraint.activate([
+            navigationStatus.topAnchor.constraint(equalTo: close.bottomAnchor, constant: 8),
+            navigationStatus.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 12),
+            navigationStatus.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -12)
+        ])
         session.delegate = self
         session.delegateQueue = .main
-        NotificationCenter.default.addObserver(self, selector: #selector(pauseInBackground), name: UIApplication.didEnterBackgroundNotification, object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(pauseInBackground), name: UIApplication.willResignActiveNotification, object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(resumeInForeground), name: UIApplication.didBecomeActiveNotification, object: nil)
     }
 
     private func startSession(reply: @escaping (Any?, String?) -> Void) {
@@ -116,15 +138,28 @@ final class NativeMetricVisionController: UIViewController, ARSessionDelegate, W
         let launch = { [weak self] in
             guard let self else { reply(nil, "camera_unavailable"); return }
             guard self.sessionGeneration == attempt else { reply(nil, "camera_stopped"); return }
+            guard UIApplication.shared.applicationState == .active,
+                  self.view.window != nil else { reply(nil, "camera_stopped"); return }
             guard !self.running else { reply(NSNull(), nil); return }
             // Scene depth stays OFF until the Auto Meter switch is enabled.
             self.meterEnabled = false
             self.firstDepthTimestamp = .infinity
             self.latestTimestamp = -1
             self.lastArrival = -1
+            self.hadNormalTracking = false
+            self.sessionStartedAt = CACurrentMediaTime()
+            BasiraWebMediaLifecycle.resume(self.webView)
             let config = ARWorldTrackingConfiguration()
             self.session.run(config, options: [.resetTracking, .removeExistingAnchors])
             self.running = true
+            self.watchdog?.invalidate()
+            self.watchdog = Timer.scheduledTimer(withTimeInterval: 0.25, repeats: true) { [weak self] _ in
+                guard let self, self.running else { return }
+                if NativeVisionSafety.frameGapRequiresStop(lastArrival: self.lastArrival,
+                            startedAt: self.sessionStartedAt, now: CACurrentMediaTime()) {
+                    self.stopAndSuspendPage()
+                }
+            }
             reply(NSNull(), nil)
         }
         switch AVCaptureDevice.authorizationStatus(for: .video) {
@@ -157,12 +192,15 @@ final class NativeMetricVisionController: UIViewController, ARSessionDelegate, W
     }
 
     private func stopSession() {
+        watchdog?.invalidate()
+        watchdog = nil
         sessionGeneration += 1
         meterEnabled = false
         running = false
         firstDepthTimestamp = .infinity
         latestTimestamp = -1
         lastArrival = -1
+        hadNormalTracking = false
         session.pause()
         stopHaptics()
     }
@@ -174,9 +212,15 @@ final class NativeMetricVisionController: UIViewController, ARSessionDelegate, W
     }
 
     private func playHaptic(intensity: Double, durationMs: Double, allowWithoutCamera: Bool) -> Bool {
+        let trackingNormal: Bool
+        if let frame = session.currentFrame, case .normal = frame.camera.trackingState {
+            trackingNormal = true
+        } else { trackingNormal = false }
         guard CHHapticEngine.capabilitiesForHardware().supportsHaptics,
               UIApplication.shared.applicationState == .active,
-              allowWithoutCamera || (running && lastArrival > 0 && CACurrentMediaTime() - lastArrival < 0.8),
+              view.window != nil,
+              allowWithoutCamera || NativeVisionSafety.mayPulse(running: running,
+                    trackingNormal: trackingNormal, lastArrival: lastArrival, now: CACurrentMediaTime()),
               intensity.isFinite, durationMs.isFinite,
               (0...1).contains(intensity), (1...150).contains(durationMs) else { return false }
         let now = CACurrentMediaTime()
@@ -219,50 +263,119 @@ final class NativeMetricVisionController: UIViewController, ARSessionDelegate, W
     }
 
     @objc private func pauseInBackground() {
+        stopAndSuspendPage()
+    }
+
+    @objc private func resumeInForeground() {
+        guard view.window != nil else { return }
+        // A fresh Start action is required; AR and alerts do not auto-resume.
+        BasiraWebMediaLifecycle.resume(webView)
+    }
+
+    private func stopAndSuspendPage() {
+        // Page receives the suspension only after native state was invalidated.
+        // Its resulting bridge.stop does not emit another event (no recursion).
         stopSession()
+        BasiraWebMediaLifecycle.suspend(webView)
     }
 
     override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
-        stopSession()
+        stopAndSuspendPage()
     }
 
     func session(_ session: ARSession, didUpdate frame: ARFrame) {
         guard running else { return }
         latestTimestamp = frame.timestamp
         lastArrival = CACurrentMediaTime()
+        if case .normal = frame.camera.trackingState {
+            hadNormalTracking = true
+        } else {
+            stopHaptics()
+            // Initial ARKit warm-up is expected. Loss after valid tracking must
+            // stop queued alerts and require a new user-initiated session.
+            if hadNormalTracking { stopAndSuspendPage() }
+        }
     }
 
     func session(_ session: ARSession, didFailWithError error: Error) {
-        stopSession()
+        stopAndSuspendPage()
         showFailure("تعذر الحصول على إطار ARKit متزامن. أوقف التجربة وأعد تشغيلها.")
     }
 
     func sessionWasInterrupted(_ session: ARSession) {
-        stopSession()
+        stopAndSuspendPage()
     }
 
     func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
-        stopSession()
+        stopAndSuspendPage()
     }
 
     // Other Basira pages remain reachable, but only the vision path may call
     // the native camera handler. Leaving it stops the AR session immediately.
     func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction,
                  decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
-        guard let url = navigationAction.request.url,
-              url.scheme == "https",
-              url.host?.lowercased() == allowedHost,
-              url.port == nil || url.port == 443 else {
-            decisionHandler(.cancel)
-            return
-        }
+        // Subframe failures must neither expand bridge access nor produce a
+        // stream of alerts. Only top-level navigation gets a visible status.
         if navigationAction.targetFrame?.isMainFrame == false {
             decisionHandler(.cancel)
             return
         }
-        if url.path != "/navigation/vision" { stopSession() }
+        guard let url = navigationAction.request.url,
+              url.scheme == "https",
+              url.host?.lowercased() == allowedHost,
+              url.user == nil, url.password == nil,
+              url.port == nil || url.port == 443 else {
+            stopAndSuspendPage()
+            showNavigationFailure("توقفت الصفحة لأنها تطلب فتح نطاق خارج بصيرة المعتمد. قد تتطلب الخدمة دخولًا خارجيًا؛ يجب التحقق من مسار دخول يعود إلى منصة بصيرة قبل استخدام الرؤية داخل التطبيق.")
+            decisionHandler(.cancel)
+            return
+        }
+        if url.path != "/navigation/vision" { stopAndSuspendPage() }
         decisionHandler(.allow)
+    }
+
+    func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+        guard UIApplication.shared.applicationState == .active, view.window != nil,
+              let base = BasiraWebOrigin.baseURL, let page = webView.url,
+              BasiraWebOrigin.allows(page, within: base) else { return }
+        // A freshly loaded approved module may make a new user media request.
+        // This neither starts ARKit nor restarts media from the previous page.
+        BasiraWebMediaLifecycle.resume(webView)
+    }
+
+    func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!,
+                 withError error: Error) {
+        let failure = error as NSError
+        guard !(failure.domain == NSURLErrorDomain && failure.code == NSURLErrorCancelled) else { return }
+        stopAndSuspendPage()
+        showNavigationFailure("تعذر تحميل رؤية بصيرة. تحقق من اتصال الإنترنت ونطاق المنصة وتسجيل الدخول، ثم أغلق الرؤية وافتحها من جديد.")
+    }
+
+    private func showNavigationFailure(_ message: String) {
+        guard !navigationFailureDisplayed else { return }
+        navigationFailureDisplayed = true
+        navigationStatus.text = message
+        navigationStatus.isHidden = false
+        if UIAccessibility.isVoiceOverRunning {
+            UIAccessibility.post(notification: .announcement, argument: message)
+        }
+    }
+
+    func webView(_ webView: WKWebView,
+                 requestMediaCapturePermissionFor origin: WKSecurityOrigin,
+                 initiatedByFrame frame: WKFrameInfo, type: WKMediaCaptureType,
+                 decisionHandler: @escaping (WKPermissionDecision) -> Void) {
+        guard let allowedOrigin = BasiraWebOrigin.baseURL,
+              webView.url?.path == "/navigation/vision" else {
+            decisionHandler(.deny)
+            return
+        }
+        let allowed = BasiraWebMediaLifecycle.mayRequestCapture(
+            scheme: origin.protocol, host: origin.host, port: origin.port,
+            mainFrame: frame.isMainFrame, page: webView.url, allowedOrigin: allowedOrigin,
+            active: UIApplication.shared.applicationState == .active, visible: view.window != nil)
+        decisionHandler(allowed ? .prompt : .deny)
     }
 
     private func showFailure(_ message: String) {
@@ -271,8 +384,19 @@ final class NativeMetricVisionController: UIViewController, ARSessionDelegate, W
         if presentedViewController == nil { present(alert, animated: true) }
     }
 
+    func stopForNavigation() {
+        stopAndSuspendPage()
+        webView?.stopLoading()
+        webView?.navigationDelegate = nil
+        webView?.uiDelegate = nil
+    }
+
     @objc private func closeCamera() {
-        stopSession()
+        stopAndSuspendPage()
+        if let onCloseRequested {
+            onCloseRequested()
+            return
+        }
         if presentingViewController != nil {
             dismiss(animated: true)
         } else {
@@ -284,6 +408,7 @@ final class NativeMetricVisionController: UIViewController, ARSessionDelegate, W
 
     deinit {
         session.delegate = nil
+        watchdog?.invalidate()
         NotificationCenter.default.removeObserver(self)
     }
 
@@ -303,9 +428,17 @@ final class NativeMetricVisionController: UIViewController, ARSessionDelegate, W
               [0, 443].contains(message.frameInfo.securityOrigin.port),
               let page = webView?.url,
               page.scheme == "https", page.host?.lowercased() == allowedHost,
-              page.path == "/navigation/vision",
+              page.user == nil, page.password == nil,
+              page.port == nil || page.port == 443,
               let request = message.body as? [String: Any],
               let action = request["action"] as? String else {
+            reply(nil, "invalid_camera_request")
+            return
+        }
+        // React cleanup can run after a same-origin SPA route changed. These
+        // two actions only revoke resources; camera/depth/frame access remains
+        // restricted to the vision route, including after history.pushState.
+        guard NativeVisionSafety.mayHandleBridgeAction(action, path: page.path) else {
             reply(nil, "invalid_camera_request")
             return
         }

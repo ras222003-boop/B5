@@ -8,6 +8,7 @@ import { SparseOpticalFlow } from './opticalFlow';
 import { DEFAULT_APPROACH_PREFERENCES } from './approachPreferences';
 import { PerceptionTelemetry } from './perception';
 import { AdaptiveHapticAlerts } from './adaptiveHaptics';
+import type {AtomicNativeFrame} from './nativeFramePair';
 const candidate = (at: number): VisionDetection => ({
   id: "cup-" + at,
   cocoClass: "cup",
@@ -108,12 +109,127 @@ function expandingV3(options: VisionPipelineOptions, video: ReturnType<typeof se
     })) : [];
   });
 }
+function nativeSetup(){
+  const session=setup();
+  const makeCanvas=()=>{
+    const canvas={width:0,height:0,getContext:()=>({
+      save:vi.fn(),restore:vi.fn(),translate:vi.fn(),rotate:vi.fn(),drawImage:vi.fn(),
+      getImageData:()=>({data:new Uint8ClampedArray(canvas.width*canvas.height*4).fill(200)}),
+    })};return canvas;
+  };
+  vi.stubGlobal('document',{hidden:false,createElement:makeCanvas});
+  vi.stubGlobal('Image',class{naturalWidth=640;naturalHeight=480;src='';decode=async()=>{};});
+  const frame=():AtomicNativeFrame=>{
+    const nativeTimestampMs=100_000+performance.now();
+    return {
+      frameId:`arkit-${nativeTimestampMs/1000}`,nativeTimestampMs,bridgeAgeMs:0,source:'ARKIT_DEPTH',
+      cameraWidth:1920,cameraHeight:1440,imageBase64:'A'.repeat(256),capturedWithNativeSession:true,
+      // If the experimental route ever tries to consume depth, fail the test.
+      get values():number[]{throw Error('V3_must_not_read_depth');},
+      depthEnabled:true,alignedToCameraFrame:true,rawDepthFresh:true,depthWidth:64,depthHeight:48,validCoverage:1,
+    };
+  };
+  const bridge={start:vi.fn(async()=>{}),setMeterEnabled:vi.fn(async()=>{}),
+    stop:vi.fn(async()=>{}),nextFrame:vi.fn(async()=>frame() as AtomicNativeFrame|null)};
+  session.options.nativeFrames=bridge;
+  session.options.nativeCanvas=makeCanvas() as unknown as HTMLCanvasElement;
+  // There is no second WebKit camera. Native RGB must work without a playing video.
+  Object.assign(session.video,{paused:true,readyState:0,videoWidth:0,videoHeight:0});
+  return {...session,bridge,frame};
+}
 afterEach(() => {
   vi.useRealTimers();
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
 });
 describe("experimental objects never enter navigation", () => {
+  it('requires a preview canvas for the native RGB transport',()=>{
+    const {options}=nativeSetup();
+    expect(()=>new ObjectOnlyPipeline({...options,nativeCanvas:undefined})).toThrow('object_only_native_canvas_required');
+  });
+  it.each(['audioEnabled','hapticsEnabled'] as const)(
+    'runs V3 objects and relative approach on native RGB when %s is enabled, without reading depth',async preference=>{
+      const {options,callbacks,video,bridge}=nativeSetup();
+      options.experimentalApproachEnabled=false;
+      options.approachPreferences={...DEFAULT_APPROACH_PREFERENCES,[preference]:true};
+      expandingV3(options,video);
+      const session=new ObjectOnlyPipeline(options);await session.start();await vi.advanceTimersByTimeAsync(2000);
+      expect(bridge.start).toHaveBeenCalledOnce();
+      expect(bridge.setMeterEnabled.mock.calls.every(([enabled])=>enabled===false)).toBe(true);
+      expect(callbacks.fatal).not.toHaveBeenCalled();
+      expect(callbacks.approachRisk.mock.calls.some(([signal])=>signal.level==='CAUTION'||signal.level==='HIGH')).toBe(true);
+      expect(callbacks.detectionFrame.mock.calls.some(([frame])=>frame?.width===480&&frame.height===640&&frame.detections.length)).toBe(true);
+      expect(callbacks.detectionFrame.mock.calls.filter(([frame])=>frame).every(([frame])=>frame.detections.every(d=>d.approximateDistance===null))).toBe(true);
+      expect(options.depth.read).not.toHaveBeenCalled();expect(options.ocr.recognize).not.toHaveBeenCalled();
+      expect(callbacks.alert).not.toHaveBeenCalled();expect(callbacks.scene).not.toHaveBeenCalled();
+      expect(options.announcement.announce).not.toHaveBeenCalled();
+      expect(await session.setAutoMeterEnabled(true)).toBe(false);
+      await session.stop();expect(bridge.stop).toHaveBeenCalledOnce();expect(options.vision.close).toHaveBeenCalledOnce();
+    }
+  );
+  it.each(['frame-unavailable','frame-stale','frame-repeated','document-hidden'] as const)(
+    'withdraws native V3 audio/haptics cues when RGB becomes unusable: %s',async loss=>{
+      const {options,callbacks,video,bridge,frame}=nativeSetup();
+      options.approachPreferences={...DEFAULT_APPROACH_PREFERENCES,hapticsEnabled:true};
+      const platform={capabilities:vi.fn(async()=>({supported:true,intensityControl:true,source:'NATIVE' as const})),
+        pulse:vi.fn(async()=>true),test:vi.fn(async()=>true),stop:vi.fn()};
+      const haptics=new AdaptiveHapticAlerts(options.approachPreferences,platform,()=>performance.now());
+      await haptics.refreshCapabilities();callbacks.approachRisk.mockImplementation(signal=>haptics.update(signal));
+      expandingV3(options,video);
+      const session=new ObjectOnlyPipeline(options);await session.start();await vi.advanceTimersByTimeAsync(2000);
+      expect(platform.pulse).toHaveBeenCalled();const stopsBefore=platform.stop.mock.calls.length;
+      if(loss==='frame-unavailable')bridge.nextFrame.mockResolvedValue(null);
+      else if(loss==='frame-stale')bridge.nextFrame.mockImplementation(async()=>({...frame(),bridgeAgeMs:501}));
+      else if(loss==='frame-repeated'){const repeated=await bridge.nextFrame();bridge.nextFrame.mockResolvedValue(repeated);}
+      else (document as unknown as {hidden:boolean}).hidden=true;
+      await vi.advanceTimersByTimeAsync(loss==='frame-repeated'?600:300);
+      expect(callbacks.approachRisk).toHaveBeenLastCalledWith(expect.objectContaining({level:'UNAVAILABLE'}));
+      expect(callbacks.perception).toHaveBeenLastCalledWith(null);
+      expect(platform.stop.mock.calls.length).toBeGreaterThan(stopsBefore);
+      const pulses=platform.pulse.mock.calls.length;await vi.advanceTimersByTimeAsync(1000);
+      expect(platform.pulse).toHaveBeenCalledTimes(pulses);
+      await session.stop();
+    }
+  );
+  it('does not publish a native inference that completes after camera suspension',async()=>{
+    const {options,callbacks}=nativeSetup();let finish!:()=>void;
+    vi.mocked(options.vision.detect).mockImplementation((_image,at)=>new Promise(resolve=>{finish=()=>resolve([candidate(at)]);}));
+    const session=new ObjectOnlyPipeline(options);await session.start();await vi.advanceTimersByTimeAsync(1);
+    (document as unknown as {hidden:boolean}).hidden=true;finish();await vi.advanceTimersByTimeAsync(1);
+    expect(callbacks.objectSpeech).not.toHaveBeenCalled();expect(callbacks.detectionFrame.mock.calls.every(([frame])=>frame===null)).toBe(true);
+    expect(callbacks.analysisState).toHaveBeenLastCalledWith('PAUSED');await session.stop();
+  });
+  it('does not restart analysis when native camera permission completes after stop',async()=>{
+    const {options,bridge}=nativeSetup();let finish!:()=>void;
+    bridge.start.mockImplementation(()=>new Promise(resolve=>{finish=resolve;}));
+    const session=new ObjectOnlyPipeline(options);const starting=session.start();await session.stop();
+    finish();await starting;await vi.advanceTimersByTimeAsync(1500);
+    expect(session.active).toBe(false);expect(bridge.nextFrame).not.toHaveBeenCalled();expect(options.vision.detect).not.toHaveBeenCalled();
+    expect(bridge.stop).toHaveBeenCalledOnce();expect(options.vision.close).toHaveBeenCalledOnce();
+  });
+  it.each(['permission','meter'] as const)('an obsolete %s rejection cannot stop a newer native V3 session',async pending=>{
+    const {options,bridge}=nativeSetup();let reject!:(error:Error)=>void;
+    const waiting=new Promise<void>((_resolve,fail)=>{reject=fail;});
+    if(pending==='permission')bridge.start.mockReturnValueOnce(waiting);
+    else bridge.setMeterEnabled.mockReturnValueOnce(waiting);
+    const first=new ObjectOnlyPipeline(options),starting=first.start();
+    await Promise.resolve();await first.stop();
+    const nextOptions={...options,vision:{...options.vision,close:vi.fn(async()=>{})}};
+    const next=new ObjectOnlyPipeline(nextOptions);await next.start();
+    reject(Error('camera_stopped'));await starting;
+    expect(next.active).toBe(true);expect(bridge.stop).toHaveBeenCalledOnce();
+    expect(nextOptions.vision.close).not.toHaveBeenCalled();await next.stop();
+  });
+  it('queues native V3 stop before yielding without a separate meter cleanup',async()=>{
+    const {options,bridge}=nativeSetup();const first=new ObjectOnlyPipeline(options);await first.start();
+    bridge.setMeterEnabled.mockClear();let finish!:()=>void;
+    bridge.stop.mockReturnValueOnce(new Promise(resolve=>{finish=resolve;}));
+    const stopping=first.stop();expect(bridge.stop).toHaveBeenCalledOnce();
+    expect(bridge.setMeterEnabled).not.toHaveBeenCalled();
+    const next=new ObjectOnlyPipeline({...options,vision:{...options.vision,close:vi.fn(async()=>{})}});
+    await next.start();finish();await stopping;
+    expect(next.active).toBe(true);expect(bridge.stop).toHaveBeenCalledOnce();await next.stop();
+  });
   it('does not publish or speak a late inference after stop',async()=>{
     const {options,callbacks}=setup();let complete!:(detections:VisionDetection[])=>void;
     vi.mocked(options.vision.detect).mockImplementation(()=>new Promise(resolve=>{complete=resolve;}));

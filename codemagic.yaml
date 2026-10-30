@@ -1,3 +1,5 @@
+# The unified iOS web-feature hub requires a verified BASIRA_IOS_WEB_ORIGIN
+# configured in Codemagic before the TestFlight upload workflow can run.
 # Native iOS prototype. All workflows are manual. The signed IPA check retains
 # its artifact in Codemagic; only the separate TestFlight workflow uploads it.
 workflows:
@@ -6,6 +8,8 @@ workflows:
     max_build_duration: 45
     instance_type: mac_mini_m2
     environment:
+      groups:
+        - basira_unified_ios
       xcode: latest
     scripts:
       - name: Generate unsigned native project
@@ -14,6 +18,10 @@ workflows:
           set -euo pipefail
           command -v xcodegen >/dev/null || brew install xcodegen
           python3 ios/DepthCalibrationLab/scripts/generate-lab-icon.py
+          python3 ios/DepthCalibrationLab/scripts/test_configure_web_origin.py
+          python3 ios/DepthCalibrationLab/scripts/test_configure_storekit.py
+          bash ios/DepthCalibrationLab/scripts/configure-web-origin.sh
+          python3 ios/DepthCalibrationLab/scripts/configure_storekit.py
           cd ios/DepthCalibrationLab
           xcodegen generate
       - name: Build and test on iPhone simulator
@@ -40,6 +48,8 @@ workflows:
     integrations:
       app_store_connect: basira_apple
     environment:
+      groups:
+        - basira_unified_ios
       ios_signing:
         distribution_type: app_store
         bundle_identifier: sa.nasjalufuq.basira
@@ -54,6 +64,11 @@ workflows:
           set -euo pipefail
           command -v xcodegen >/dev/null || brew install xcodegen
           python3 ios/DepthCalibrationLab/scripts/generate-lab-icon.py
+          bash ios/DepthCalibrationLab/scripts/configure-web-origin.sh
+          python3 ios/DepthCalibrationLab/scripts/configure_storekit.py
+          source_sha="$(git rev-parse HEAD)"
+          [[ "$source_sha" =~ ^[0-9a-f]{40}$ ]] || { echo "Invalid source SHA" >&2; exit 1; }
+          /usr/libexec/PlistBuddy -c "Set :BasiraWebReleaseSHA $source_sha" ios/DepthCalibrationLab/DepthCalibrationLab/Info.plist
           /usr/libexec/PlistBuddy -c "Set :CFBundleVersion ${PROJECT_BUILD_NUMBER:?}" ios/DepthCalibrationLab/DepthCalibrationLab/Info.plist
           cd ios/DepthCalibrationLab
           xcodegen generate
@@ -93,6 +108,8 @@ workflows:
     integrations:
       app_store_connect: basira_apple
     environment:
+      groups:
+        - basira_unified_ios
       ios_signing:
         distribution_type: app_store
         bundle_identifier: sa.nasjalufuq.basira
@@ -101,12 +118,23 @@ workflows:
         BASIRA_BUNDLE_ID: "sa.nasjalufuq.basira"
       xcode: latest
     scripts:
+      - name: Verify published Basira feature bundle and API before any upload
+        script: |
+          #!/bin/bash
+          set -euo pipefail
+          node --test scripts/mobile-release.test.mjs
+          BASIRA_MOBILE_RELEASE_TIER=internal node scripts/check-mobile-release.mjs
       - name: Generate signed iOS project
         script: |
           #!/bin/bash
           set -euo pipefail
           command -v xcodegen >/dev/null || brew install xcodegen
           python3 ios/DepthCalibrationLab/scripts/generate-lab-icon.py
+          BASIRA_REQUIRE_WEB_ORIGIN=true bash ios/DepthCalibrationLab/scripts/configure-web-origin.sh
+          python3 ios/DepthCalibrationLab/scripts/configure_storekit.py
+          source_sha="$(git rev-parse HEAD)"
+          [[ "$source_sha" =~ ^[0-9a-f]{40}$ ]] || { echo "Invalid source SHA" >&2; exit 1; }
+          /usr/libexec/PlistBuddy -c "Set :BasiraWebReleaseSHA $source_sha" ios/DepthCalibrationLab/DepthCalibrationLab/Info.plist
           /usr/libexec/PlistBuddy -c "Set :CFBundleVersion ${PROJECT_BUILD_NUMBER:?}" ios/DepthCalibrationLab/DepthCalibrationLab/Info.plist
           cd ios/DepthCalibrationLab
           xcodegen generate

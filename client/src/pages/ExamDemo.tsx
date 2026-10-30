@@ -14,6 +14,7 @@ import { Button } from "@/components/ui/button";
 import Layout from "@/components/Layout";
 import { useCamera } from "@/hooks/useCamera";
 import { detectLanguage, useTextToSpeech, useSpeechToText } from "@/hooks/useSpeech";
+import {speechEngine} from '@/lib/speechEngine';
 import { ExamImagePreparationError, prepareExamUpload } from "@/lib/examImage";
 import { beginVoiceAnswer, classifyOcrFailure, consumeVoiceAnswer, countAnswers, ScanAttemptTracker, updateAnswer, type OcrFailureKind, type VoiceAnswerSession } from "@/lib/examFlow";
 import { useI18n, useMessages } from "@/i18n";
@@ -126,7 +127,7 @@ export default function ExamDemo() {
     return scanAttemptsRef.current.begin();
   }, []);
 
-  const processImage = useCallback(async (imageData: string, generation: number) => {
+  const processImage = useCallback(async (imageData: string, generation: number, maySpeak=speechEngine.captureSpeechGuard()) => {
     if (!scanAttemptsRef.current.isCurrent(generation)) return;
     setIsProcessing(true);
     setStatusMsg(t.status.analyzing);
@@ -171,7 +172,7 @@ export default function ExamDemo() {
       setGradingData(null);
       setStage("exam");
       const title = data.examTitle || t.content.examTitle[languageKey(data.language)];
-      speak(t.announcements.loaded(title, data.questions.length), 0.9, lang);
+      if(maySpeak())speak(t.announcements.loaded(title, data.questions.length), 0.9, lang);
     } catch (error) {
       if (!scanAttemptsRef.current.isCurrent(generation)) return;
       const reason: OcrFailureKind = error instanceof OcrHttpError
@@ -209,13 +210,14 @@ export default function ExamDemo() {
     if (generation === null) return;
     setIsPreparingImage(true);
     setScanNotice(null);
+    const maySpeak=speechEngine.captureSpeechGuard();
     try {
       const image = await prepareExamUpload(file);
       if (!scanAttemptsRef.current.isCurrent(generation)) return;
       setCapturedImage(image);
       stopCamera();
       setIsPreparingImage(false);
-      await processImage(image, generation);
+      await processImage(image, generation, maySpeak);
     } catch (error) {
       if (!scanAttemptsRef.current.isCurrent(generation)) return;
       const kind = error instanceof ExamImagePreparationError ? error.kind : "unreadable";
@@ -234,6 +236,7 @@ export default function ExamDemo() {
     if (!examData) return;
     setIsGrading(true);
     setActionError(null);
+    const maySpeak=speechEngine.captureSpeechGuard();
     try {
       const response = await fetch("/api/grade", {
         method: "POST",
@@ -250,7 +253,7 @@ export default function ExamDemo() {
       const data: GradingData = await response.json();
       setGradingData(data);
       setStage("grading");
-      speak(t.announcements.graded(data.totalScore, data.totalCorrect, data.totalQuestions), 0.9, lang);
+      if(maySpeak())speak(t.announcements.graded(data.totalScore, data.totalCorrect, data.totalQuestions), 0.9, lang);
     } catch (error) {
       console.error("Grading error:", error);
       setActionError(t.status.gradingError);

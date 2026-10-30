@@ -18,6 +18,12 @@ jobs:
           brew list xcodegen >/dev/null 2>&1 || brew install xcodegen
       - name: Generate app icon
         run: python3 ios/DepthCalibrationLab/scripts/generate-lab-icon.py
+      - name: Test StoreKit checkout gating (no payments)
+        run: python3 ios/DepthCalibrationLab/scripts/test_configure_storekit.py
+      - name: Test approved web-origin configuration (no deployment)
+        run: python3 ios/DepthCalibrationLab/scripts/test_configure_web_origin.py
+      - name: Test embedded WebKit media lifecycle (no permissions or camera)
+        run: node --test ios/DepthCalibrationLab/scripts/test-web-media-lifecycle.mjs
       - name: Generate iOS project
         run: |
           cd ios/DepthCalibrationLab

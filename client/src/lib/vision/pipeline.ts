@@ -288,8 +288,13 @@ export class VisionPipeline {
       if(!enabled&&this.estimatedModel){const model=this.estimatedModel;this.estimatedModel=null;void model.close();}
     }
     if(this.running&&this.options.nativeFrames){
-      try{await this.options.nativeFrames.setMeterEnabled(this.nativeDepthRequired());}
+      const run=this.generation,meterRun=this.autoMeterGeneration;
+      try{
+        await this.options.nativeFrames.setMeterEnabled(this.nativeDepthRequired());
+        if(!this.running||run!==this.generation||meterRun!==this.autoMeterGeneration)return false;
+      }
       catch{
+        if(!this.running||run!==this.generation||meterRun!==this.autoMeterGeneration)return false;
         this.autoMeterEnabled=false;this.autoMeterGeneration++;
         this.cancelMeterRequests('OFF');
         this.options.callbacks.autoMeterRejected?.();
@@ -302,12 +307,20 @@ export class VisionPipeline {
   async start(){
     if(this.running)return;
     this.running=true;
-    this.generation++;
+    const run=++this.generation;
     if(this.options.nativeFrames){
-      try{await this.options.nativeFrames.start();}
-      catch(error){await this.stop();throw error;}
-      if(this.autoMeterEnabled)await this.setAutoMeterEnabled(true);
-      else if(this.nativeDepthRequired())await this.options.nativeFrames.setMeterEnabled(true);
+      try{
+        await this.options.nativeFrames.start();
+        if(!this.running||run!==this.generation)return;
+        if(this.autoMeterEnabled)await this.setAutoMeterEnabled(true);
+        else if(this.nativeDepthRequired())await this.options.nativeFrames.setMeterEnabled(true);
+        if(!this.running||run!==this.generation)return;
+      }catch(error){
+        // A cancelled permission/meter request can finish after another
+        // pipeline owns the shared native camera. It must not stop that run.
+        if(!this.running||run!==this.generation)return;
+        await this.stop();throw error;
+      }
     }
     console.info('Basira vision session started',{mode:this.options.mode});
     this.watchBattery();
@@ -762,7 +775,8 @@ export class VisionPipeline {
     this.objectSpeech.reset();
     this.invalidate('WAITING');this.lastVideoTime=-1;
     if(this.options.nativeFrames){
-      await this.options.nativeFrames.setMeterEnabled(false).catch(()=>{});
+      // Native stop clears depth too. Send it before yielding so a new Start
+      // cannot be overtaken by this old session's delayed meter cleanup.
       await this.options.nativeFrames.stop().catch(()=>{});
     }
     await Promise.allSettled([this.options.vision.close(),this.options.ocr.close(),this.options.depth.close(),

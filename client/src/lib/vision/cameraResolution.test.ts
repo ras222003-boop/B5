@@ -39,4 +39,35 @@ describe('separate capture and detection resolutions',()=>{
     expect(drawImage).toHaveBeenCalledWith(video,0,0,640,360);
     expect([video.videoWidth,video.videoHeight]).toEqual([1920,1080]);
   });
+  it.each(['AbortError','Error'])('never retries an obsolete %s camera acquisition after Stop',async name=>{
+    let reject!:(error:Error)=>void;
+    const getUserMedia=vi.fn(()=>new Promise<MediaStream>((_resolve,fail)=>{reject=fail;}));
+    vi.stubGlobal('window',{isSecureContext:true});vi.stubGlobal('navigator',{mediaDevices:{getUserMedia}});
+    const video={pause:vi.fn(),srcObject:null} as unknown as HTMLVideoElement;
+    const service=new CameraService(DEFAULT_VISION_CONFIG),starting=service.start(video);
+    await Promise.resolve();service.stop(video);reject(new DOMException('stopped',name));
+    await expect(starting).rejects.toThrow('FAILED');expect(getUserMedia).toHaveBeenCalledOnce();
+  });
+  it('does not retry an active native-suspend AbortError with different constraints',async()=>{
+    const getUserMedia=vi.fn().mockRejectedValue(new DOMException('suspended','AbortError'));
+    vi.stubGlobal('window',{isSecureContext:true});vi.stubGlobal('navigator',{mediaDevices:{getUserMedia}});
+    const service=new CameraService(DEFAULT_VISION_CONFIG);
+    await expect(service.start({pause:vi.fn(),srcObject:null} as unknown as HTMLVideoElement)).rejects.toThrow('FAILED');
+    expect(getUserMedia).toHaveBeenCalledOnce();
+  });
+  it('an old playback failure cannot stop or detach a newer camera stream',async()=>{
+    let reject!:(error:Error)=>void;
+    const oldTrack={readyState:'live',stop:vi.fn()},newTrack={readyState:'live',stop:vi.fn()};
+    const stream=(track:typeof oldTrack)=>({getTracks:()=>[track],getVideoTracks:()=>[track]});
+    const oldStream=stream(oldTrack),newStream=stream(newTrack);
+    const getUserMedia=vi.fn().mockResolvedValueOnce(oldStream).mockResolvedValueOnce(newStream);
+    vi.stubGlobal('window',{isSecureContext:true});vi.stubGlobal('navigator',{mediaDevices:{getUserMedia}});
+    const play=vi.fn().mockReturnValueOnce(new Promise<void>((_resolve,fail)=>{reject=fail;})).mockResolvedValue(undefined);
+    const video={pause:vi.fn(),srcObject:null,play} as unknown as HTMLVideoElement;
+    const service=new CameraService(DEFAULT_VISION_CONFIG),starting=service.start(video);
+    await Promise.resolve();await Promise.resolve();expect(play).toHaveBeenCalledOnce();
+    service.stop(video);await service.start(video);reject(Error('old play failed'));
+    await expect(starting).rejects.toThrow('FAILED');expect(service.active).toBe(true);
+    expect(video.srcObject).toBe(newStream);expect(newTrack.stop).not.toHaveBeenCalled();service.stop(video);
+  });
 });

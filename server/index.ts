@@ -12,6 +12,8 @@ import { registerOcrRoute } from "./ocr";
 import { registerVisionDescribeRoute } from "./visionDescribe";
 import { registerExperimentalModelRoutes } from './experimentalModels';
 import { registerObjectQualityRoutes } from './objectQuality';
+import { registerMobileReleaseInfoRoute } from "./mobileReleaseInfo";
+import { registerBillingRoutes } from "./billingRoutes";
 import { registerNavigationRoutes } from "./navigation";
 import { toExamLanguage, assistantSystem, guideSystem, aiFallback, pdfLabels, escapeHtml } from "./locale";
 
@@ -78,6 +80,7 @@ async function startServer() {
     res.set('Cache-Control','no-store').status(ready?200:503).json({status:ready?'READY':'DOWN',capabilities});
   });
 
+  registerMobileReleaseInfoRoute(app);
   registerAccountAndSpeechRoutes(app);
   registerVisionDescribeRoute(app, invokeLLM);
   registerExperimentalModelRoutes(app);
@@ -86,6 +89,7 @@ async function startServer() {
   // Parse JSON bodies up to 20MB for image data
   app.use('/api/navigation/organizations',express.json({limit:'1mb'}));
   app.use(express.json({ limit: "20mb" }));
+  registerBillingRoutes(app);
   registerSupportRoutes(app);
   registerExamDeliveryRoutes(app);
   registerExamSubmissionRoutes(app);

@@ -12,10 +12,14 @@ import { useI18n, useMessages } from "@/i18n";
 import { accountMessages } from "@/i18n/locales/account";
 import { navigationMessages } from "@/i18n/locales/navigation";
 import { authClient } from "@/lib/auth-client";
+import {
+  accountOAuthNotice,
+  parseOAuthReturn,
+  type OAuthReturnReceipt,
+} from "@/lib/accountOAuthNotice";
 
 type Provider = "google" | "microsoft" | "apple" | "facebook";
 type ErrorKind = "authentication" | "providerStatus" | "socialStart";
-type OAuthNotice = "success" | "failure" | "cancelled";
 type Ticket = {
   id: string;
   subject: string;
@@ -32,17 +36,33 @@ const social: { id: Provider; mark: string }[] = [
 ];
 
 export default function Account() {
+  const nativeIOS = typeof window !== "undefined" && Boolean(
+    (window as Window & { __basiraNativeIOS?: boolean }).__basiraNativeIOS
+  );
   const t = useMessages(accountMessages);
   const navigation = useMessages(navigationMessages);
   const { formatDate, lang } = useI18n();
-  const { data: session, isPending, refetch } = authClient.useSession();
+  const {
+    data: session,
+    isPending,
+    isRefetching,
+    error: sessionError,
+    refetch,
+  } = authClient.useSession();
   const [mode, setMode] = useState<"login" | "signup">("login");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [working, setWorking] = useState(false);
   const [errorKind, setErrorKind] = useState<ErrorKind | null>(null);
-  const [oauthNotice, setOauthNotice] = useState<OAuthNotice | null>(null);
+  const [oauthReceipt, setOauthReceipt] = useState<OAuthReturnReceipt | null>(
+    null
+  );
+  const oauthNotice = accountOAuthNotice(oauthReceipt, {
+    pending: isPending || Boolean(isRefetching),
+    authenticated: Boolean(session?.user),
+    failed: Boolean(sessionError),
+  });
   const [providers, setProviders] = useState<Record<Provider, boolean>>({
     google: false,
     microsoft: false,
@@ -56,22 +76,8 @@ export default function Account() {
   }, [t.pageTitle]);
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    const authResult = params.get("auth")?.trim().toLowerCase();
-    const providerError = params.get("error")?.trim().toLowerCase() ?? "";
-    const isCancelled =
-      authResult === "cancel" ||
-      authResult === "cancelled" ||
-      authResult === "canceled" ||
-      providerError === "access_denied" ||
-      providerError.includes("cancel");
-
-    if (authResult === "success" && !params.has("error"))
-      setOauthNotice("success");
-    else if (isCancelled) setOauthNotice("cancelled");
-    else if (params.has("auth") || params.has("error"))
-      setOauthNotice("failure");
-
     if (params.has("auth") || params.has("error")) {
+      setOauthReceipt(parseOAuthReturn(window.location.search));
       window.history.replaceState(
         window.history.state,
         "",
@@ -104,6 +110,7 @@ export default function Account() {
 
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    setOauthReceipt(null);
     setWorking(true);
     setErrorKind(null);
     try {
@@ -127,7 +134,8 @@ export default function Account() {
     }
   };
   const signInSocial = async (provider: Provider) => {
-    if (!providers[provider]) return;
+    if (!providers[provider] || nativeIOS) return;
+    setOauthReceipt(null);
     setWorking(true);
     setErrorKind(null);
     try {
@@ -192,6 +200,19 @@ export default function Account() {
       </section>
       <div className="container max-w-5xl py-12 sm:py-16">
         <section className="mb-8 rounded-2xl border border-amber-200/20 bg-card p-6">
+          <h2 className="text-xl font-bold text-white">
+            {lang === 'ar' ? 'اشتراكات بصيرة' : lang === 'en' ? 'Basira subscriptions' : 'Basira 订阅'}
+          </h2>
+          <p className="mt-2 text-sm text-stone-300">
+            {lang === 'ar'
+              ? 'الاشتراكات الرقمية في تطبيق iPhone تستخدم Apple. لا يمكن تفعيل الميزات المدفوعة دون تحقق الخادم.'
+              : 'iPhone digital subscriptions use Apple. Paid services require backend verification.'}
+          </p>
+          <Link href="/billing" className="mt-3 inline-flex min-h-12 items-center rounded-xl border border-amber-300/40 px-4 font-bold text-amber-200">
+            {lang === 'ar' ? 'عرض خطط الاشتراك' : 'View subscription plans'}
+          </Link>
+        </section>
+        <section className="mb-8 rounded-2xl border border-amber-200/20 bg-card p-6">
           <h2 className="text-xl font-bold text-white">{navigation.permissions}</h2>
           <Link href="/settings/privacy-permissions" className="mt-3 inline-flex min-h-12 items-center rounded-xl border border-amber-300/40 px-4 font-bold text-amber-200 hover:bg-amber-300/10">{navigation.permissionTitle}</Link>
         </section>
@@ -231,6 +252,7 @@ export default function Account() {
                 <button
                   type="button"
                   onClick={async () => {
+                    setOauthReceipt(null);
                     await authClient.signOut();
                     await refetch();
                   }}
@@ -444,6 +466,13 @@ export default function Account() {
                 <p className="mb-5 text-sm leading-7 text-stone-400">
                   {t.social.description}
                 </p>
+                {nativeIOS && (
+                  <p role="status" className="mb-4 rounded-xl border border-amber-300/30 bg-amber-300/10 p-4 text-sm text-amber-100">
+                    {lang === "ar"
+                      ? "داخل تطبيق iPhone سجّل الدخول بالبريد وكلمة المرور. تسجيل Google وApple يحتاج ربط عودة آمن بالنظام ولم يُفعّل بعد."
+                      : "On iPhone, sign in with email and password. Google and Apple sign-in need a secure native callback and are not yet enabled."}
+                  </p>
+                )}
                 <div className="space-y-3">
                   {social.map(item => {
                     const providerName = t.social.providers[item.id];
@@ -451,7 +480,7 @@ export default function Account() {
                       <button
                         type="button"
                         key={item.id}
-                        disabled={!providers[item.id] || working}
+                        disabled={nativeIOS || !providers[item.id] || working}
                         onClick={() => void signInSocial(item.id)}
                         aria-label={t.social.continueWith(providerName)}
                         className="flex min-h-12 w-full items-center gap-3 rounded-xl border border-amber-200/20 bg-[#0d0b08] px-4 text-start text-sm font-bold text-stone-100 enabled:hover:border-amber-300/60 disabled:cursor-not-allowed disabled:opacity-55"

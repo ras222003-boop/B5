@@ -1,0 +1,54 @@
+name: Basira staging image build (no deployment)
+on:
+  pull_request:
+    paths:
+      - "Dockerfile"
+      - ".dockerignore"
+      - "compose.staging.yaml"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "scripts/write-mobile-release-manifest.mjs"
+      - "server/mobileReleaseInfo.ts"
+      - "ios/DepthCalibrationLab/DepthCalibrationLab/BasiraFeatureCatalogue.swift"
+      - ".github/workflows/docker-staging-build.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  staging-image:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Validate staging compose without real credentials
+        run: |
+          set -euo pipefail
+          printf '%s\n' '# CI placeholder - no credentials' > .env.staging
+          trap 'rm -f .env.staging' EXIT
+          export BASIRA_SOURCE_SHA="$(git rev-parse HEAD)"
+          export BASIRA_STAGE_ORIGIN="https://staging.example.org"
+          export BASIRA_STAGE_DB_PASSWORD="ci_only_db"
+          export BASIRA_STAGE_ROOT_PASSWORD="ci_only_root"
+          docker compose --env-file .env.staging -f compose.staging.yaml config --quiet
+      - name: Build immutable web/API container (no secrets or deployment)
+        run: |
+          set -euo pipefail
+          SHA="$(git rev-parse HEAD)"
+          docker build --build-arg BASIRA_SOURCE_SHA="$SHA" -t basira-staging:ci .
+      - name: Confirm app manifest is from the checked-out source
+        run: |
+          set -euo pipefail
+          SHA="$(git rev-parse HEAD)"
+          docker run --rm --entrypoint node basira-staging:ci -e '
+            const { readFileSync } = require("node:fs");
+            const r = JSON.parse(readFileSync("dist/public/basira-mobile-release.json", "utf8"));
+            if (!r.sourceVerified || r.sourceRevision !== process.env.BASIRA_SOURCE_SHA)
+              process.exit(1);
+            if (!r.webBundle || !r.webBundle.indexSha256 || r.webBundle.assetCount < 2)
+              process.exit(1);
+            console.log("Docker staging source and app bundle are consistent");
+          '
+        env:
+          BASIRA_SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}

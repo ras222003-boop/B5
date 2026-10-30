@@ -1,0 +1,59 @@
+{
+  "date": "2026-10-29",
+  "method": "Codex in-app browser, visible page and rendered JSON observations",
+  "origin": "https://basira-m7myneuo.manus.space",
+  "ownerApproved": true,
+  "releaseSha": null,
+  "https": "loaded without visible certificate warning; no independent TLS audit",
+  "readiness": {"status":"READY","capabilities":{"api":"READY","database":"READY","authentication":"READY","mapCore":"READY","optionalModels":"DEGRADED"}},
+  "codemagic": {"app":"B5","variable":"BASIRA_IOS_WEB_ORIGIN","group":"basira_unified_ios","value":"https://basira-m7myneuo.manus.space","secret":false,"saved":true,"verifiedAfterReload":true,"buildStarted":false},
+  "observations": {
+    "/api/health": {"status":"ok"},
+    "/api/auth/providers": {"providers":{"google":true,"microsoft":false,"apple":false,"facebook":false},"emailPassword":true},
+    "/api/navigation/buildings": {"buildings":[]},
+    "/api/navigation/safety-flags": {"dropOffDetection":false,"stairDirection":false,"metricDepth":true,"nativeArLocalization":false,"experimentalObstacleClasses":false},
+    "/api/support/status": {"emailDeliveryConfigured":false,"email":"redacted public contact address"},
+    "/api/vision/object-quality/manifest": {"error":"API endpoint not found"},
+    "/api/vision/experimental-models": {"error":"API endpoint not found"},
+    "/navigation/vision": "basic stopped-camera page; no V3/Tiny model selector or adaptive approach controls displayed",
+    "/account": "Basira sign-in form despite hosting gateway session",
+    "/navigation/mapping": "mapper/admin required",
+    "/navigation/admin": "role restricted",
+    "/navigation/places": "sign-in required to save; empty",
+    "/navigation/indoor-manager": "no organization selected",
+    "/assistant-analytics": "rendered 404 page",
+    "/settings/voice-validation": "LOCAL; NOT LIVE VALIDATED",
+    "/navigation/ar-lab/world-scale-sandbox": "restricted engine disabled, start disabled",
+    "/assistant": "synthetic technical text question received a server response; auto speech off",
+    "/ai-guide": "synthetic technical text question received a server response; auto speech off",
+    "/exam-demo": "synthetic PNG OCR 2 English questions; answers4/hello; review2/2; grading100%; export preview; delivery DRAFT; no recipients/submission/email/printed PDF"
+  },
+  "languages": {"english":{"lang":"en","dir":"ltr"},"simplifiedChinese":{"lang":"zh-CN","dir":"ltr"},"restored":"ar","voiceOverTested":false,"nativeEnglishChineseValidated":false},
+  "sensorsTested": false,
+  "initialIntegrationCI": {
+    "sourceCommit": "e2084df17b93c8c9c7ade2bc9205c5dac0bbb363",
+    "web": {"result":"success","vitestFiles":99,"vitestTests":588,"url":"https://github.com/ras222003-boop/B5/actions/runs/40867786324/job/123426829516"},
+    "iosSimulator": {"result":"success","xctestTests":19,"failures":0,"url":"https://github.com/ras222003-boop/B5/actions/runs/40867792831/job/123426851181"},
+    "scope": "No hardware or signed IPA; later startup-race fixes require their own checks"
+  },
+  "startupRaceLocalChecks": {
+    "vitestFiles": 101,
+    "vitestTests": 614,
+    "vitestResult": "success after permitting local loopback tests outside Windows sandbox",
+    "typescript": "success",
+    "viteProductionBuild": "success; existing large chunk warnings",
+    "serverBundle": "success",
+    "embeddedMediaScriptTests": 10,
+    "scope": "Software tests only; no physical camera, native sensor, new signed IPA or TestFlight upload"
+  },
+  "startupRaceCI": {
+    "sourceCommit": "9297e083ff2e7ba1fd7d136efa85b149a5e7464c",
+    "web": {"result":"success","vitestFiles":101,"vitestTests":614,"url":"https://github.com/ras222003-boop/B5/actions/runs/40896316571/job/123526262402"},
+    "iosSimulator": {"result":"success","url":"https://github.com/ras222003-boop/B5/actions/runs/40896327686/job/123526300724","detailLog":"download returned502; no new log-derived test count asserted"},
+    "scope": "GitHub checks succeeded for source commit; following README/evidence edits are documentation only. No signed IPA or physical sensor testing."
+  },
+  "resumeBrowserStatus": "Previous in-app browser tool was unavailable. Windows computer-use stopped because browser URL could not be determined reliably; no resumed site mutation or repeated Codemagic configuration.",
+  "productionChanged": false,
+  "testFlightUploaded": false,
+  "merged": false
+}

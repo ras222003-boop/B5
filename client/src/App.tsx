@@ -23,6 +23,7 @@ import FloatingChatWidget from "./components/FloatingChatWidget";
 import { About, Terms, Privacy, RefundPolicy, Contact } from "./pages/Information";
 import Support from "./pages/Support";
 import Account from "./pages/Account";
+import Billing from "./pages/Billing";
 import { speechEngine } from './lib/speechEngine';
 const Navigation=lazy(()=>import('./pages/Navigation'));
 const VoiceSettings=lazy(()=>import('./pages/VoiceSettings'));
@@ -59,6 +60,7 @@ function Router() {
       <Route path="/contact" component={Contact} />
       <Route path="/support" component={Support} />
       <Route path="/account" component={Account} />
+      <Route path="/billing" component={Billing} />
       <Route path="/navigation" component={Navigation} />
       <Route path="/navigation/places" component={MyPlaces} />
       <Route path="/navigation/permissions" component={NavigationPermissions} />
@@ -113,6 +115,17 @@ function VoiceOutputStatus() {
 
 function App() {
   const [isWelcomeVisible, setIsWelcomeVisible] = useState(true);
+  useEffect(()=>{
+    // Native tab/background suspension also cancels queued or pending server
+    // speech; pausing DOM audio alone cannot cancel a later fetch completion.
+    const suspend=()=>speechEngine.suspend(),resume=()=>speechEngine.resume();
+    window.addEventListener('basira:native-suspend',suspend);
+    window.addEventListener('basira:native-resume',resume);
+    return()=>{
+      window.removeEventListener('basira:native-suspend',suspend);
+      window.removeEventListener('basira:native-resume',resume);
+    };
+  },[]);
 
   return (
     <I18nProvider>

@@ -28,6 +28,13 @@ if [[ "$ACTUAL_BUNDLE_ID" != "$EXPECTED_BUNDLE_ID" ]]; then
   exit 1
 fi
 
+EXPECTED_WEB_REVISION="$(git rev-parse HEAD)"
+ACTUAL_WEB_REVISION="$(/usr/libexec/PlistBuddy -c 'Print :BasiraWebReleaseSHA' "$APP_DIR/Info.plist" 2>/dev/null || true)"
+if [[ "$ACTUAL_WEB_REVISION" != "$EXPECTED_WEB_REVISION" ]]; then
+  echo "IPA web release revision does not match signed Git checkout" >&2
+  exit 1
+fi
+
 codesign --verify --deep --strict "$APP_DIR"
 PROFILE_PLIST="$TEMP_DIR/profile.plist"
 security cms -D -i "$APP_DIR/embedded.mobileprovision" > "$PROFILE_PLIST"

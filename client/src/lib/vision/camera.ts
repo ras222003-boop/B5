@@ -18,6 +18,7 @@ export class CameraService {
   private generation = 0;
   constructor(private readonly config: VisionConfig) {}
   async start(video: HTMLVideoElement): Promise<void> {
+    this.stop(video);
     const token = ++this.generation;
     if (!navigator.mediaDevices?.getUserMedia || !window.isSecureContext) throw new CameraServiceError('UNAVAILABLE');
     let previousPermission: PermissionState | 'unavailable' = 'prompt';
@@ -29,6 +30,7 @@ export class CameraService {
     let stream: MediaStream;
     try { stream = await navigator.mediaDevices.getUserMedia({ video: { ...base, facingMode: { ideal: 'environment' } }, audio: false }); }
     catch (error) {
+      if(token!==this.generation||(error as {name?:string}|null)?.name==='AbortError')throw new CameraServiceError('FAILED');
       const failure = classifyCameraError(error, previousPermission);
       if (failure === 'NO_CAMERA') throw new CameraServiceError(failure);
       if (failure !== 'FAILED') throw new CameraServiceError(failure);
@@ -41,7 +43,8 @@ export class CameraService {
     video.muted = true;
     video.playsInline = true;
     try { await video.play(); }
-    catch { this.stop(video); throw new CameraServiceError('FAILED'); }
+    catch { if(token===this.generation)this.stop(video); throw new CameraServiceError('FAILED'); }
+    if(token!==this.generation)throw new CameraServiceError('FAILED');
   }
   stop(video?: HTMLVideoElement) {
     this.generation++;

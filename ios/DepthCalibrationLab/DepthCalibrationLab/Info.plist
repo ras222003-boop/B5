@@ -12,11 +12,22 @@
   <key>CFBundleShortVersionString</key><string>1.0</string>
   <key>CFBundleVersion</key><string>1</string>
   <key>LSRequiresIPhoneOS</key><true/>
-  <key>NSCameraUsageDescription</key><string>تستخدم بصيرة الكاميرا وLiDAR لقياس عمق سطح أمام الهاتف أثناء اختبار ثابت.</string>
+  <key>NSCameraUsageDescription</key><string>تستخدم بصيرة الكاميرا، بعد إذنك، لقياس العمق والتعرف التجريبي على الأشياء وقراءة النصوص ووصف المشاهد.</string>
+  <key>NSMicrophoneUsageDescription</key><string>يُستخدم الميكروفون بعد إذنك لأوامر الصوت والإجابة الصوتية في خدمات بصيرة التي تدعم ذلك.</string>
+  <key>NSLocationWhenInUseUsageDescription</key><string>تُستخدم بيانات الموقع بعد إذنك للمساعدة في اختيار المبنى والوجهات داخل خدمات الخرائط التجريبية.</string>
+  <key>NSMotionUsageDescription</key><string>تُستخدم بيانات الحركة بعد إذنك لبعض وظائف الإرشاد التجريبية، ولا يعتمد عليها التطبيق لضمان سلامة المشي.</string>
   <key>UIRequiredDeviceCapabilities</key>
   <array><string>arkit</string></array>
   <key>UISupportedInterfaceOrientations</key>
   <array><string>UIInterfaceOrientationPortrait</string></array>
+  <!-- The app's approved HTTPS origin is injected by a future configured build.
+       Empty by default: web features fail closed rather than load a guess. -->
+  <key>BasiraWebBaseURL</key><string></string>
+  <key>BasiraWebReleaseSHA</key><string></string>
+  <!-- Product IDs and checkout are disabled until App Store Connect and server
+       transaction verification have been reviewed and tested end-to-end. -->
+  <key>BasiraSubscriptionProductIDs</key><array/>
+  <key>BasiraStoreKitCheckoutEnabled</key><false/>
   <key>BasiraVisionURL</key><string>https://YOUR-BASIRA-DOMAIN.example/navigation/vision</string>
   <key>BasiraLabURL</key><string>https://YOUR-BASIRA-DOMAIN.example/navigation/depth-lab</string>
 </dict>
