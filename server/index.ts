@@ -12,6 +12,7 @@ import { registerOcrRoute } from "./ocr";
 import { registerVisionDescribeRoute } from "./visionDescribe";
 import { registerExperimentalModelRoutes } from './experimentalModels';
 import { registerObjectQualityRoutes } from './objectQuality';
+import { registerMobileReleaseInfoRoute } from "./mobileReleaseInfo";
 import { registerNavigationRoutes } from "./navigation";
 import { toExamLanguage, assistantSystem, guideSystem, aiFallback, pdfLabels, escapeHtml } from "./locale";
 
@@ -78,6 +79,7 @@ async function startServer() {
     res.set('Cache-Control','no-store').status(ready?200:503).json({status:ready?'READY':'DOWN',capabilities});
   });
 
+  registerMobileReleaseInfoRoute(app);
   registerAccountAndSpeechRoutes(app);
   registerVisionDescribeRoute(app, invokeLLM);
   registerExperimentalModelRoutes(app);
