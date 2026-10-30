@@ -23,6 +23,7 @@ import FloatingChatWidget from "./components/FloatingChatWidget";
 import { About, Terms, Privacy, RefundPolicy, Contact } from "./pages/Information";
 import Support from "./pages/Support";
 import Account from "./pages/Account";
+import Billing from "./pages/Billing";
 import { speechEngine } from './lib/speechEngine';
 const Navigation=lazy(()=>import('./pages/Navigation'));
 const VoiceSettings=lazy(()=>import('./pages/VoiceSettings'));
@@ -59,6 +60,7 @@ function Router() {
       <Route path="/contact" component={Contact} />
       <Route path="/support" component={Support} />
       <Route path="/account" component={Account} />
+      <Route path="/billing" component={Billing} />
       <Route path="/navigation" component={Navigation} />
       <Route path="/navigation/places" component={MyPlaces} />
       <Route path="/navigation/permissions" component={NavigationPermissions} />
