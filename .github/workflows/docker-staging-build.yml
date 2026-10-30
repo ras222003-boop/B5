@@ -4,6 +4,7 @@ on:
     paths:
       - "Dockerfile"
       - ".dockerignore"
+      - "compose.staging.yaml"
       - "package.json"
       - "pnpm-lock.yaml"
       - "scripts/write-mobile-release-manifest.mjs"
@@ -21,6 +22,16 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Validate staging compose without real credentials
+        run: |
+          set -euo pipefail
+          printf '%s\n' '# CI placeholder - no credentials' > .env.staging
+          trap 'rm -f .env.staging' EXIT
+          export BASIRA_SOURCE_SHA="$(git rev-parse HEAD)"
+          export BASIRA_STAGE_ORIGIN="https://staging.example.org"
+          export BASIRA_STAGE_DB_PASSWORD="ci_only_db"
+          export BASIRA_STAGE_ROOT_PASSWORD="ci_only_root"
+          docker compose --env-file .env.staging -f compose.staging.yaml config --quiet
       - name: Build immutable web/API container (no secrets or deployment)
         run: |
           set -euo pipefail
