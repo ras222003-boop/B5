@@ -36,6 +36,9 @@ const social: { id: Provider; mark: string }[] = [
 ];
 
 export default function Account() {
+  const nativeIOS = typeof window !== "undefined" && Boolean(
+    (window as Window & { __basiraNativeIOS?: boolean }).__basiraNativeIOS
+  );
   const t = useMessages(accountMessages);
   const navigation = useMessages(navigationMessages);
   const { formatDate, lang } = useI18n();
@@ -131,7 +134,7 @@ export default function Account() {
     }
   };
   const signInSocial = async (provider: Provider) => {
-    if (!providers[provider]) return;
+    if (!providers[provider] || nativeIOS) return;
     setOauthReceipt(null);
     setWorking(true);
     setErrorKind(null);
@@ -463,6 +466,13 @@ export default function Account() {
                 <p className="mb-5 text-sm leading-7 text-stone-400">
                   {t.social.description}
                 </p>
+                {nativeIOS && (
+                  <p role="status" className="mb-4 rounded-xl border border-amber-300/30 bg-amber-300/10 p-4 text-sm text-amber-100">
+                    {lang === "ar"
+                      ? "داخل تطبيق iPhone سجّل الدخول بالبريد وكلمة المرور. تسجيل Google وApple يحتاج ربط عودة آمن بالنظام ولم يُفعّل بعد."
+                      : "On iPhone, sign in with email and password. Google and Apple sign-in need a secure native callback and are not yet enabled."}
+                  </p>
+                )}
                 <div className="space-y-3">
                   {social.map(item => {
                     const providerName = t.social.providers[item.id];
@@ -470,7 +480,7 @@ export default function Account() {
                       <button
                         type="button"
                         key={item.id}
-                        disabled={!providers[item.id] || working}
+                        disabled={nativeIOS || !providers[item.id] || working}
                         onClick={() => void signInSocial(item.id)}
                         aria-label={t.social.continueWith(providerName)}
                         className="flex min-h-12 w-full items-center gap-3 rounded-xl border border-amber-200/20 bg-[#0d0b08] px-4 text-start text-sm font-bold text-stone-100 enabled:hover:border-amber-300/60 disabled:cursor-not-allowed disabled:opacity-55"
