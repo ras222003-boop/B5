@@ -112,6 +112,12 @@ workflows:
         BASIRA_BUNDLE_ID: "sa.nasjalufuq.basira"
       xcode: latest
     scripts:
+      - name: Verify published Basira feature bundle and API before any upload
+        script: |
+          #!/bin/bash
+          set -euo pipefail
+          node --test scripts/mobile-release.test.mjs
+          BASIRA_MOBILE_RELEASE_TIER=internal node scripts/check-mobile-release.mjs
       - name: Generate signed iOS project
         script: |
           #!/bin/bash
