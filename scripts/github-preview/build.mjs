@@ -114,17 +114,25 @@ await build({
   },
   build: { outDir: site, emptyOutDir: false },
 });
+// --lite0-only: development-only build without the private Tiny/V3 weights. Never publishable.
+const lite0Only = process.argv.includes("--lite0-only");
+if (lite0Only && !development)
+  throw Error("--lite0-only is a development build and needs --development");
 const packageRoot = resolve(out, "model-package"),
-  admission = await prepareModels(resolve(registry), packageRoot, commit),
+  admission = lite0Only
+    ? null
+    : await prepareModels(resolve(registry), packageRoot, commit),
   profiles = [];
-for (const [id, folder, endpoint] of [
-  ["objects-yolox-tiny", "", "api/vision/object-quality"],
-  [
-    "objects-basira-v3",
-    "finetuned-v3/",
-    "api/vision/object-quality/models/objects-basira-v3",
-  ],
-]) {
+for (const [id, folder, endpoint] of lite0Only
+  ? []
+  : [
+      ["objects-yolox-tiny", "", "api/vision/object-quality"],
+      [
+        "objects-basira-v3",
+        "finetuned-v3/",
+        "api/vision/object-quality/models/objects-basira-v3",
+      ],
+    ]) {
   const profile = JSON.parse(
     await readFile(resolve(packageRoot, folder + "manifest.json"), "utf8")
   );
@@ -141,22 +149,26 @@ const json = async (path, value) => {
     flag: "wx",
   });
 };
-await json("api/vision/object-quality/manifest", {
-  enabled: true,
-  profile: profiles[0],
-  profiles,
-});
-const knowledge = JSON.parse(
-  await readFile(
-    resolve(packageRoot, "finetuned-v3/basira-knowledge.json"),
-    "utf8"
-  )
-);
-await json("api/vision/object-quality/knowledge", knowledge);
-await json(
-  "api/vision/object-quality/models/objects-basira-v3/knowledge",
-  knowledge
-);
+if (lite0Only) {
+  await json("api/vision/object-quality/manifest", { enabled: false });
+} else {
+  await json("api/vision/object-quality/manifest", {
+    enabled: true,
+    profile: profiles[0],
+    profiles,
+  });
+  const knowledge = JSON.parse(
+    await readFile(
+      resolve(packageRoot, "finetuned-v3/basira-knowledge.json"),
+      "utf8"
+    )
+  );
+  await json("api/vision/object-quality/knowledge", knowledge);
+  await json(
+    "api/vision/object-quality/models/objects-basira-v3/knowledge",
+    knowledge
+  );
+}
 await json("api/vision/experimental-models", { enabled: false, models: [] });
 await json("api/preview/status", {
   sourceCommit: commit,
@@ -178,10 +190,11 @@ await json("api/preview/status", {
   navigationEligible: false,
 });
 await mkdir(resolve(site, "model-notices"));
-await copyFile(
-  resolve(packageRoot, "preview-admission.json"),
-  resolve(site, "model-notices/preview-admission.json")
-);
+if (!lite0Only)
+  await copyFile(
+    resolve(packageRoot, "preview-admission.json"),
+    resolve(site, "model-notices/preview-admission.json")
+  );
 await writeFile(resolve(site, ".nojekyll"), "");
 const inventory = [];
 async function walk(dir) {
@@ -218,7 +231,7 @@ const receipt = {
   base,
   files: inventory,
   bytes: inventory.reduce((n, r) => n + r.bytes, 0),
-  models: admission.models,
+  models: admission ? admission.models : [],
   noDatabase: true,
   noCloudInference: true,
   privateMediaIncluded: false,
