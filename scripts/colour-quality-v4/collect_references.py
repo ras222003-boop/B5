@@ -105,7 +105,7 @@ journal=root/'acquisition.jsonl';rows=[json.loads(l) for l in journal.read_text(
 done={r['cocoId'] for r in rows};owners={r['groupId'] for r in rows};counts=Counter(r['split'] for r in rows);attempts=0;start=time.monotonic();rejected=[]
 for ident in order:
     if ident in done:continue
-    if len(rows)>=plan['maxImages'] or attempts>=plan['maxAttempts'] or time.monotonic()-start>plan['maxSeconds']:break
+    if len(rows)>=plan['maxImages'] or attempts>=plan['maxAttempts'] or time.monotonic()-start>float(os.environ.get('COLOUR_MAX_SECONDS',plan['maxSeconds'])):break
     if sum(p.stat().st_size for p in root.rglob('*') if p.is_file())>plan['maxStoredBytes']:break
     attempts+=1;im=images[ident];photo=re.search(r'/(\d+)_',im['flickr_url']).group(1)
     try:
@@ -143,8 +143,11 @@ for ident in order:
         print(json.dumps(dict(acquired=len(rows),split=split,references=len(refs),counts=dict(counts))),flush=True)
     except (ValueError,KeyError,urllib.error.HTTPError,urllib.error.URLError,TimeoutError) as err:
         reason='HTTP_'+str(err.code) if isinstance(err,urllib.error.HTTPError) else type(err).__name__+': '+str(err)[:100];rejected.append(dict(cocoId=ident,reason=reason))
-        if isinstance(err,urllib.error.HTTPError) and err.code==429:break
-    time.sleep(.5)
+        if isinstance(err,urllib.error.HTTPError) and err.code==429:
+            limited=globals().get('limited',0)+1;globals()['limited']=limited
+            if limited>5:print(json.dumps(dict(stopped='rate-limited',acquired=len(rows))),flush=True);sys.exit(3)
+            time.sleep(float(os.environ.get('COLOUR_BACKOFF','90')))
+    time.sleep(float(os.environ.get('COLOUR_DELAY','2')))
 manifest=dict(schemaVersion=1,samples=rows,scope='V4_NEW_PHOTOS_ORACLE_BOX_COLOUR_EVALUATION_NOT_END_TO_END_DETECTION',selectionUsedModelPredictions=False,attributeSource='https://homes.cs.washington.edu/~ranjay/visualgenome/',attributeLicense='CC-BY-4.0',attribution='Visual Genome: Krishna et al., IJCV 2017. COCO: Lin et al. Photo authors and original CC BY links are recorded per image.',developmentGroupsDisjoint=True,basiraHumanColourReview=False,lightingReflectionReferenceAvailable=False,protectedOldTestsUsed=False)
 encoded=json.dumps(manifest,indent=2).encode();(root/'manifest.json').write_bytes(encoded)
 (root/'cohort-lock.json').write_text(json.dumps(dict(manifestSha256=sha(encoded),planSha256=sha(plan_path.read_bytes()),frozenBeforeInference=True,counts=dict(counts),references=sum(len(r['objects']) for r in rows),humanApprovalsCreated=0),indent=2))
