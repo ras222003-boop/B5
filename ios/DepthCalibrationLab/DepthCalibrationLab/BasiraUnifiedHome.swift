@@ -11,6 +11,8 @@ private enum BasiraMainTab: Hashable {
 /// device validation. No server address or secret is embedded by default.
 struct BasiraUnifiedHome: View {
     @State private var selectedTab: BasiraMainTab = .home
+    @StateObject private var webGate = BasiraRemoteWebGate()
+    @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
         TabView(selection: $selectedTab) {
@@ -26,15 +28,15 @@ struct BasiraUnifiedHome: View {
 
             Group {
                 // Unmounting the controller stops its native ARSession on tab exit.
-                if selectedTab == .vision, BasiraWebOrigin.baseURL != nil {
+                if selectedTab == .vision, webGate.isVerified {
                     VStack(spacing: 0) {
                         if let notice = BasiraFeature.vision.integrationNotice {
                             BasiraIntegrationNotice(message: notice)
                         }
                         BasiraNativeVisionHost { selectedTab = .home }
                     }
-                } else if BasiraWebOrigin.baseURL == nil {
-                    BasiraMissingWebOrigin()
+                } else if selectedTab == .vision {
+                    BasiraWebGateScreen()
                 } else {
                     Color.clear
                 }
@@ -72,11 +74,19 @@ struct BasiraUnifiedHome: View {
         }
         .tint(.orange)
         .environment(\.layoutDirection, .rightToLeft)
+        .environmentObject(webGate)
+        .task { await webGate.ensureChecked() }
+        .onChange(of: scenePhase) { phase in
+            if phase == .active {
+                Task { await webGate.verify() }
+            }
+        }
     }
 }
 
 private struct BasiraFeatureDirectory: View {
     @Binding var selectedTab: BasiraMainTab
+    @EnvironmentObject private var webGate: BasiraRemoteWebGate
 
     var body: some View {
         List {
@@ -87,6 +97,11 @@ private struct BasiraFeatureDirectory: View {
                 Text("تنبيهات العوائق والدرج والإرشاد المكاني تجريبية، وليست وسيلة مستقلة لضمان سلامة المشي.")
                     .foregroundStyle(.orange)
                     .font(.footnote)
+                if !webGate.isVerified {
+                    Label("خدمات الويب في انتظار التحقق من إصدار الخادم. قياس LiDAR الأصلي متاح من تبويبه.", systemImage: "network.slash")
+                        .font(.footnote)
+                        .foregroundStyle(.orange)
+                }
             }
             Section("الخدمات") {
                 ForEach(BasiraFeature.everyday) { feature in
@@ -217,6 +232,48 @@ private struct BasiraMissingWebOrigin: View {
     }
 }
 
+private struct BasiraWebGateScreen: View {
+    @EnvironmentObject private var gate: BasiraRemoteWebGate
+
+    var body: some View {
+        VStack(spacing: 18) {
+            Image(systemName: "network.badge.shield.half.filled")
+                .font(.largeTitle)
+                .foregroundStyle(.orange)
+                .accessibilityHidden(true)
+            Text("التحقق من إصدار بصيرة")
+                .font(.title2.bold())
+            switch gate.phase {
+            case .notChecked, .checking:
+                ProgressView("نفحص تطابق التطبيق والمنصة...")
+                    .accessibilityLabel("جاري فحص توافق نسخة بصيرة مع الخادم")
+            case .verified:
+                Text("إصدار المنصة متطابق.")
+            case .blocked(let reason):
+                Text(reason)
+                    .multilineTextAlignment(.center)
+                    .foregroundStyle(.secondary)
+                    .accessibilityAddTraits(.isStaticText)
+            }
+            if gate.phase != .checking {
+                Button("إعادة فحص المنصة") {
+                    Task { await gate.verify() }
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(.orange)
+                .frame(minHeight: 48)
+                .accessibilityHint("يتحقق من نسخة المنصة دون تشغيل الكاميرا")
+            }
+            Text("التحقق من تطابق الإصدار لا يُثبت دقة كشف العوائق أو سلامة التنقل.")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+        }
+        .padding(24)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+}
+
 private struct BasiraIntegrationNotice: View {
     let message: String
 
@@ -232,12 +289,14 @@ private struct BasiraIntegrationNotice: View {
 
 private struct BasiraWebFeatureScreen: View {
     let feature: BasiraFeature
+    @EnvironmentObject private var webGate: BasiraRemoteWebGate
     @State private var failure: String?
     @State private var visible = false
 
     var body: some View {
         Group {
-            if let url = BasiraWebOrigin.url(for: feature),
+            if webGate.isVerified,
+               let url = BasiraWebOrigin.url(for: feature),
                let base = BasiraWebOrigin.baseURL {
                 VStack(spacing: 0) {
                     if let notice = feature.integrationNotice {
@@ -258,7 +317,7 @@ private struct BasiraWebFeatureScreen: View {
                     }
                 }
             } else {
-                BasiraMissingWebOrigin()
+                BasiraWebGateScreen()
             }
         }
         .navigationTitle(feature.name)
