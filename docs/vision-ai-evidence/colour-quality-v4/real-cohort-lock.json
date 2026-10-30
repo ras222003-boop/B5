@@ -1,0 +1,12 @@
+{
+  "manifestSha256": "1d84e3cb3ea42c066492d488abcdd67468f7bb16f766a9c1371187a428a576b8",
+  "planSha256": "0f3c3814b40cfc6e324ff2d5879dd7c8bd10e63c6380c11ff9ab86ba7dab91ef",
+  "frozenBeforeInference": true,
+  "counts": {
+    "calibration": 13,
+    "test": 22,
+    "development": 33
+  },
+  "references": 87,
+  "humanApprovalsCreated": 0
+}

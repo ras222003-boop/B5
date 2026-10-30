@@ -1,0 +1,66 @@
+{
+ "file": "C:/Users/Asus/basira-ml/data/colour-v4/synthetic/cal.jsonl",
+ "sha256": "3533de6ee3b48cc8fe763608545b1887cd5fa5fbd2ccb83dca67e2842d828a4c",
+ "rows": 800,
+ "problems": [],
+ "problemCount": 0,
+ "maskAreaMeanMinMax": [
+  0.20184941406249998,
+  0.030286458333333332,
+  0.5977604166666667
+ ],
+ "labels": {
+  "yellow": 67,
+  "white": 80,
+  "pink": 75,
+  "orange": 77,
+  "purple": 78,
+  "brown": 62,
+  "black": 61,
+  "gray": 73,
+  "green": 46,
+  "multicolor": 66,
+  "red": 62,
+  "blue": 53
+ },
+ "tags": {
+  "exposure": {
+   "normal": 364,
+   "low": 315,
+   "high": 121
+  },
+  "specular": {
+   "some": 383,
+   "none": 296,
+   "strong": 121
+  },
+  "shadow": {
+   "soft": 276,
+   "strong": 258,
+   "none": 266
+  },
+  "similarBackground": {
+   "False": 554,
+   "True": 246
+  },
+  "occluded": {
+   "False": 583,
+   "True": 217
+  },
+  "shape": {
+   "ellipse": 152,
+   "lattice": 162,
+   "circle": 147,
+   "capsule": 176,
+   "rrect": 163
+  },
+  "tint": {
+   "neutral": 657,
+   "strong": 143
+  },
+  "twoTone": {
+   "False": 734,
+   "True": 66
+  }
+ }
+}

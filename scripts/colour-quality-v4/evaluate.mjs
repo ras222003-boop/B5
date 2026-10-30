@@ -1,19 +1,34 @@
 /** Offline colour evaluation on a frozen cohort: published human colour per object vs engine output.
- * Usage: node evaluate.mjs <frames.jsonl> <engine.mjs> <mode: box|oracle-mask> <out.json> [--allow-test]
+ * Usage: node evaluate.mjs <frames.jsonl> <engine.mjs> <mode: box|oracle-mask|seg-mask> <out.json> [--allow-test]
  * Reports coverage, selective accuracy (Wilson 95%), abstention reasons and confusions. It never tunes anything.
  */
 import { readFile, writeFile } from "node:fs/promises";
+import { createReadStream } from "node:fs";
+import { createInterface } from "node:readline";
 import { createHash } from "node:crypto";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
 const [framesPath, enginePath, mode, outPath, ...flags] = process.argv.slice(2);
-if (!["box", "oracle-mask"].includes(mode)) throw Error("mode: box|oracle-mask");
+if (!["box", "oracle-mask", "seg-mask"].includes(mode)) throw Error("mode: box|oracle-mask|seg-mask");
 if (/test/i.test(framesPath) && !flags.includes("--allow-test"))
   throw Error("Frozen test frames need --allow-test; run them once after the engine is frozen");
+const fnName = (flags.find(f => f.startsWith("--fn=")) ?? "--fn=analyzeObjectColor").slice(5);
+const paramsFlag = flags.find(f => f.startsWith("--params="));
 const engine = await import(pathToFileURL(resolve(enginePath)).href);
+const overrides = paramsFlag ? JSON.parse(paramsFlag.slice(9)) : null;
+const defaults = engine.COLOUR_V4_DEFAULTS ?? null;
+const engineParams = overrides && defaults ? { ...defaults, ...overrides } : defaults;
+const analyze = (...a) => (fnName === "analyzeObjectColorV4" ? engine[fnName](...a, engineParams) : engine[fnName](...a));
 const engineBytes = await readFile(enginePath);
-const lines = (await readFile(framesPath, "utf8")).split("\n").filter(Boolean);
+const rowsFlag = flags.find(f => f.startsWith("--rows="));
+const maxRows = rowsFlag ? Number(rowsFlag.slice(7)) : Infinity;
+const lines = [];
+for await (const line of createInterface({ input: createReadStream(framesPath), crlfDelay: Infinity })) {
+  if (!line) continue;
+  if (lines.length >= maxRows) break;
+  lines.push(line);
+}
 
 const wilson = (k, n) => {
   if (!n) return null;
@@ -40,20 +55,21 @@ for (const line of lines) {
   for (const [i, o] of frame.objects.entries()) {
     const detection = detections[i];
     let mask;
-    if (mode === "oracle-mask") {
-      if (!o.mask) continue;
-      mask = {
+    if (mode !== "box") {
+      const encoded = mode === "oracle-mask" ? o.mask : o.segMask;
+      if (mode === "oracle-mask" && !encoded) continue;
+      if (encoded) mask = {
         objectId: o.objectId,
         frameId: frame.id,
         width: frame.width,
         height: frame.height,
-        data: new Uint8Array(Buffer.from(o.mask, "base64")),
+        data: new Uint8Array(Buffer.from(encoded, "base64")),
         alignmentVerified: true,
         source: "INSTANCE_SEGMENTATION",
       };
     }
     const t0 = performance.now();
-    const colour = engine.analyzeObjectColor(pixels, detection, detections, mask);
+    const colour = analyze(pixels, detection, detections, mask);
     times.push(performance.now() - t0);
     const multi = o.referenceColor === "multicolor";
     const answered = !!colour.name;
@@ -68,6 +84,8 @@ for (const line of lines) {
       status: colour.status,
       correct,
       answered,
+      tags: o.tags ?? {},
+      maskUsed: !!mask,
     });
   }
 }
@@ -88,12 +106,23 @@ for (const r of results) {
     confusion[k] = (confusion[k] ?? 0) + 1;
   }
 }
+const byTag = {};
+for (const r of results)
+  for (const [k, v] of Object.entries(r.tags)) {
+    const t = ((byTag[k] ??= {})[String(v)] ??= { total: 0, answered: 0, correct: 0 });
+    t.total++;
+    if (r.answered) t.answered++;
+    if (r.correct) t.correct++;
+  }
 times.sort((a, b) => a - b);
 const report = {
   mode,
+  fn: fnName,
+  params: fnName === "analyzeObjectColorV4" ? engineParams : null,
   frames: lines.length,
   engineSha256: createHash("sha256").update(engineBytes).digest("hex"),
-  framesSha256: createHash("sha256").update(await readFile(framesPath)).digest("hex"),
+  framesSha256: createHash("sha256").update(lines.join("\n")).digest("hex"),
+  rowsEvaluated: lines.length,
   references: total,
   sourceGroups: new Set(results.map(r => r.group)).size,
   answered: answered.length,
@@ -105,6 +134,8 @@ const report = {
   abstainReasons: reasons,
   topConfusions: Object.entries(confusion).sort((a, b) => b[1] - a[1]).slice(0, 12),
   byClass,
+  byTag,
+  maskedFraction: total ? results.filter(r => r.maskUsed).length / total : null,
   analyzeMsMedian: times[Math.floor(times.length / 2)] ?? null,
   analyzeMsP95: times[Math.floor(times.length * 0.95)] ?? null,
   note: "Oracle boxes/masks isolate the colour stage; not end-to-end detection. Offline Pillow resampling, not Chrome.",

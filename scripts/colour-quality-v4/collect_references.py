@@ -19,6 +19,12 @@ sha=lambda b:hashlib.sha256(b).hexdigest()
 if (root/'cohort-lock.json').exists():raise RuntimeError('Frozen cohort must not be overwritten')
 for name in ['images','rights','references']:(root/name).mkdir(exist_ok=True)
 coco_path=previous/'instances_val2017.json';coco=read(coco_path)
+for im in coco['images']:im['cocoSplit']='val2017'
+train_path=previous/'instances_train2017.json'
+if train_path.exists():
+    train=read(train_path)
+    for im in train['images']:im['cocoSplit']='train2017'
+    coco['images']+=train['images'];coco['annotations']+=train['annotations'];del train
 attrs_path=previous/'attributes.json.zip';meta_path=attrs_path.with_name('image_data.json.zip')
 publisher=attrs_path.with_name('publisher-home.html');assert 'creativecommons.org/licenses/by/4.0' in publisher.read_text()
 excluded=set();old_groups=set()
@@ -117,18 +123,19 @@ for ident in order:
         code=int(sha((seed+owner).encode())[:8],16)%10;split='development' if code<4 else 'calibration' if code<6 else 'test'
         if focus:split='test'
         if counts[split]>={'development':45,'calibration':25,'test':70}[split]:continue
-        with urllib.request.urlopen('https://s3.amazonaws.com/images.cocodataset.org/val2017/'+im['file_name'],timeout=15) as r:raw=r.read(4_000_001)
-        if len(raw)>4_000_000:raise ValueError('Photo budget')
-        image=Image.open(io.BytesIO(raw)).convert('RGB');assert image.size==(im['width'],im['height'])
-        image_id='coco-'+str(ident);image_path=root/'images'/f'{image_id}.png';image.save(image_path)
-        right_path=root/'rights'/f'{image_id}.html';right_path.write_bytes(page)
-        ref_path=root/'references'/f'{image_id}.json';ref_path.write_text(json.dumps(dict(image=im,annotations=boxes[ident]),indent=2))
         byid={}
         for o in candidates[ident]:
             if o['objectId'] in byid and byid[o['objectId']] is None:continue
             if o['objectId'] in byid and byid[o['objectId']]['referenceColor']!=o['referenceColor']:byid[o['objectId']]=None
             elif o['objectId'] not in byid:byid[o['objectId']]=o
         refs=[o for o in byid.values() if o]
+        if not refs:continue
+        with urllib.request.urlopen('https://s3.amazonaws.com/images.cocodataset.org/'+im['cocoSplit']+'/'+im['file_name'],timeout=15) as r:raw=r.read(4_000_001)
+        if len(raw)>4_000_000:raise ValueError('Photo budget')
+        image=Image.open(io.BytesIO(raw)).convert('RGB');assert image.size==(im['width'],im['height'])
+        image_id='coco-'+str(ident);image_path=root/'images'/f'{image_id}.png';image.save(image_path)
+        right_path=root/'rights'/f'{image_id}.html';right_path.write_bytes(page)
+        ref_path=root/'references'/f'{image_id}.json';ref_path.write_text(json.dumps(dict(image=im,annotations=boxes[ident]),indent=2))
         row=dict(id=image_id,cocoId=ident,path=str(image_path.relative_to(root)),sha256=sha(image_path.read_bytes()),width=image.width,height=image.height,groupId='flickr-'+owner,split=split,objects=refs,license='CC-BY-2.0',source=landing,author=author.get('name'),licenceEvidence=str(right_path.relative_to(root)),licenceEvidenceSha256=sha(page),attributeLicense='CC-BY-4.0',referenceDocument=str(ref_path.relative_to(root)),referenceDocumentSha256=sha(ref_path.read_bytes()),privateMedia=False)
         with journal.open('a',encoding='utf-8') as out:out.write(json.dumps(row)+'\n')
         rows.append(row);owners.add(row['groupId']);counts[split]+=1

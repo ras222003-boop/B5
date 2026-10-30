@@ -1,0 +1,620 @@
+{
+ "attributeLicense": "CC-BY-4.0",
+ "attributeSource": "https://homes.cs.washington.edu/~ranjay/visualgenome/",
+ "attribution": "Visual Genome: Krishna et al., IJCV 2017. COCO: Lin et al. Per-photo CC BY 2.0 licence verified on each Flickr page.",
+ "photosIncluded": 68,
+ "photos": [
+  {
+   "imageId": "coco-428011",
+   "author": "Bart Everson",
+   "source": "https://www.flickr.com/photos/editor/7145676617/",
+   "licence": "CC-BY-2.0",
+   "licenceEvidenceSha256": "997127d54dd34cc73a19d65bc954cc5aa917901d29ba0ef47ed8763ef9cc4606",
+   "imageSha256": "fab18c68977eb93c9adf01d06c0840337b7cd4ef9c32c96bb610edbeda06558b",
+   "split": "calibration"
+  },
+  {
+   "imageId": "coco-474049",
+   "author": "Matthew",
+   "source": "https://www.flickr.com/photos/pennpal/8706643305/",
+   "licence": "CC-BY-2.0",
+   "licenceEvidenceSha256": "fd0eeaf623a6836a6681131cee78b8b96b91b3e6860484737c2be456be10f4a3",
+   "imageSha256": "f30a5c02a476ea14f20808f3fc348ccb639a50df73a38d1da1f4a193cd51baaf",
+   "split": "calibration"
+  },
+  {
+   "imageId": "coco-394598",
+   "author": "me_2008",
+   "source": "https://www.flickr.com/photos/33515905@N05/3121679047/",
+   "licence": "CC-BY-2.0",
+   "licenceEvidenceSha256": "9e9df4079ea61d3fd921635d720bbe7481cf190b30deea3d5b597a69e140d056",
+   "imageSha256": "a8db4e95d9e35c118577d92a8678b7c384f816c669dae6e436be12e127e2712f",
+   "split": "test"
+  },
+  {
+   "imageId": "coco-374042",
+   "author": "bradhoc",
+   "source": "https://www.flickr.com/photos/bradhoc/6650665879/",
+   "licence": "CC-BY-2.0",
+   "licenceEvidenceSha256": "e7ecb41c7307bb4d5da3b8fbefd24ac2215d71e73489e7da1cbce151ab7e0046",
+   "imageSha256": "8b1af390f44491fb3d186c215b56fca046f72324b9d2a185836c4889bdabc9f6",
+   "split": "development"
+  },
+  {
+   "imageId": "coco-199158",
+   "author": "Jacob Bøtter",
+   "source": "https://www.flickr.com/photos/jakecaptive/725525193/",
+   "licence": "CC-BY-2.0",
+   "licenceEvidenceSha256": "86113dee31fa3f19293318100ebca11257b76e9293a95150ee1ba86fd734cdbd",
+   "imageSha256": "31999ee916392e0ecfd4a6f0268384858f765247c9904b59349dc590ebcccd61",
+   "split": "development"
+  },
+  {
+   "imageId": "coco-354469",
+   "author": "MR.EUGENE $$",
+   "source": "https://www.flickr.com/photos/hood/4049478124/",
+   "licence": "CC-BY-2.0",
+   "licenceEvidenceSha256": "32154fee09155ed8fe6965d55ffdd5901760d0e30ee76ac04c250d97ec7d4bff",
+   "imageSha256": "b4eb39098bcb48a5c4090b4b45fe4ebd4a275614a53c8023c12500ca19bbe7a8",
+   "split": "development"
+  },
+  {
+   "imageId": "coco-475932",
+   "author": "Jo Jakeman",
+   "source": "https://www.flickr.com/photos/jojakeman/2736005275/",
+   "licence": "CC-BY-2.0",
+   "licenceEvidenceSha256": "97bed76f362098b229d55d17942fe8c7e02ac56157b4b65b409b13796a3d675a",
+   "imageSha256": "d8d56aa63be29ce2cf2c174e5dd00d908f6343eb86e861f8ee4901047fd7d1e8",
+   "split": "test"
+  },
+  {
+   "imageId": "coco-385307",
+   "author": "Ozzy Delaney",
+   "source": "https://www.flickr.com/photos/24931020@N02/8241731971/",
+   "licence": "CC-BY-2.0",
+   "licenceEvidenceSha256": "4df44c4cf08f505d8b46a8b8db8b7b2bde17b7f00553b951abcf406eb9140111",
+   "imageSha256": "fef483b17b85c99085d9c2e1b6c10f0b71a534804de3768f326c338a5273ce08",
+   "split": "development"
+  },
+  {
+   "imageId": "coco-360246",
+   "author": "Sheila Thomson",
+   "source": "https://www.flickr.com/photos/sheilaellen/8690641122/",
+   "licence": "CC-BY-2.0",
+   "licenceEvidenceSha256": "077b48182f91ed1550630465efad360db4833e1d29c7a27ade809af8d497917e",
+   "imageSha256": "7bb52059c8f1c24c3caab775e07799f7be3484fb40fdaed1aeb3e25882bd6d47",
+   "split": "development"
+  },
+  {
+   "imageId": "coco-250137",
+   "author": "Steven Damron",
+   "source": "https://www.flickr.com/photos/sadsnaps/5028973928/",
+   "licence": "CC-BY-2.0",
+   "licenceEvidenceSha256": "0407e10170023cb2e01ed297a49c4a87adba0a62b4732a9ac85f5abb9536e46f",
+   "imageSha256": "5611251fae8832914afd0ae6768eea13009fd48aa593fa5dbe069f4cdf519e2e",
+   "split": "development"
+  },
+  {
+   "imageId": "coco-333842",
+   "author": "daveynin",
+   "source": "https://www.flickr.com/photos/daveynin/3657930265/",
+   "licence": "CC-BY-2.0",
+   "licenceEvidenceSha256": "8f7a32d1ae48ae26b6d5d0bddd6fc94cf35c078f4a74d93084c809f703cffec2",
+   "imageSha256": "9f4f0d731b427377bd6294442c60ad0167f55fe32ac1d713978890de9ae39637",
+   "split": "test"
+  },
+  {
+   "imageId": "coco-102056",
+   "author": "Bad  Kleinkirchheim",
+   "source": "https://www.flickr.com/photos/badkleinkirchheim/4378780730/",
+   "licence": "CC-BY-2.0",
+   "licenceEvidenceSha256": "4ecd6b3cdac039f599918e0ecb694921a0d4cbd8d5c3c581102dc23b77d3ad0a",
+   "imageSha256": "3510598bda4374b1a278e0ebb12ba3ab7d7891ed1c7b8c7ddb02d5f7445afb4d",
+   "split": "development"
+  },
+  {
+   "imageId": "coco-516175",
+   "author": "apasciuto",
+   "source": "https://www.flickr.com/photos/apasciuto/6813628756/",
+   "licence": "CC-BY-2.0",
+   "licenceEvidenceSha256": "a8b722b4e39148022247fe29f0cbe55b0b88e552771fd9436918b5dbc72d7f97",
+   "imageSha256": "0502c73efdc513d9868f5d327bc5da3c86f541296af433546a166fe9d147a48f",
+   "split": "development"
+  },
+  {
+   "imageId": "coco-515590",
+   "author": "elminium",
+   "source": "https://www.flickr.com/photos/lumen850/9007664808/",
+   "licence": "CC-BY-2.0",
+   "licenceEvidenceSha256": "6f353cb39f5881c7f7eaec43955ecd2420ce3da057d0aa4d587ef29d27cd5a90",
+   "imageSha256": "01db738dad8489c7c3055e8737e0e9e9d6348edbfd2f82da96aceab9e4d82ca1",
+   "split": "development"
+  },
+  {
+   "imageId": "coco-300441",
+   "author": "Graham Robertson",
+   "source": "https://www.flickr.com/photos/8782469@N05/8846087864/",
+   "licence": "CC-BY-2.0",
+   "licenceEvidenceSha256": "212a521142cccfa6f331886304c95ae701456d9a1c9b957a215c3edc6c9e1058",
+   "imageSha256": "fe3a8674827b292e79ca483c1176bd8c6deaeb2fe1116ca3d62a89a642b60bff",
+   "split": "calibration"
+  },
+  {
+   "imageId": "coco-434723",
+   "author": "George Pankewytch",
+   "source": "https://www.flickr.com/photos/gwp57/8359504273/",
+   "licence": "CC-BY-2.0",
+   "licenceEvidenceSha256": "5063d434d986c472adbde717adc5e7f2d35ba65920d893de863a09d4152079e2",
+   "imageSha256": "90a9aaa76b1b3e05b565afc7015e5c6d1703b5d45d23e3941153a0ca9292d714",
+   "split": "calibration"
+  },
+  {
+   "imageId": "coco-462993",
+   "author": "Brenda Horton",
+   "source": "https://www.flickr.com/photos/brendatellohorton/5188592277/",
+   "licence": "CC-BY-2.0",
+   "licenceEvidenceSha256": "e4c6c2fb5ffb7119f04d0939916536b8c04a26b9c08917949985a0679ad1ae44",
+   "imageSha256": "e4060e1c82a8b2637ae990a06260ae46451df31b611ee6bf569a5ab6428ce4b1",
+   "split": "development"
+  },
+  {
+   "imageId": "coco-153832",
+   "author": "Elliott Brown",
+   "source": "https://www.flickr.com/photos/ell-r-brown/9502876697/",
+   "licence": "CC-BY-2.0",
+   "licenceEvidenceSha256": "2413ceb4e3774116d21ac34dfdd855684bcb68795cb4f469b9a5c4ab1b0ac743",
+   "imageSha256": "e88e29dc8e839dc8a4426a6128f250e62041ccb6287666d32aaec131d7f42164",
+   "split": "development"
+  },
+  {
+   "imageId": "coco-139969",
+   "author": "Umberto Brayj",
+   "source": "https://www.flickr.com/photos/ubrayj02/2964554699/",
+   "licence": "CC-BY-2.0",
+   "licenceEvidenceSha256": "6fcfd7385c6054a439da8bc834fe39babf875cb2ff53013cbc8f7b0ac3597402",
+   "imageSha256": "a1db11df5b642f70c625e78a37bfde393928afd1477a9fd38de1d77945364d0a",
+   "split": "development"
+  },
+  {
+   "imageId": "coco-168368",
+   "author": "anutkak43",
+   "source": "https://www.flickr.com/photos/36917336@N00/2514277462/",
+   "licence": "CC-BY-2.0",
+   "licenceEvidenceSha256": "3e1cfa495c1339b79d0f93a1591300b660262fc0c80db4f2821079197c4b6c99",
+   "imageSha256": "6f894f8fcad86780843cb374d6069efbe1fb03be76485cbbc03cb6974b30721c",
+   "split": "test"
+  },
+  {
+   "imageId": "coco-260345",
+   "author": "James Emery",
+   "source": "https://www.flickr.com/photos/emeryjl/511119850/",
+   "licence": "CC-BY-2.0",
+   "licenceEvidenceSha256": "72c9311a657e6e11927f2bdcd0fb94d5a70206d4ebfe87f1da4402684999b53d",
+   "imageSha256": "4686ddc055c4b0c22d11fd758f5fa666fdc2bdd2a5de1db94358a703e9b54c4b",
+   "split": "calibration"
+  },
+  {
+   "imageId": "coco-358200",
+   "author": "abdallahh",
+   "source": "https://www.flickr.com/photos/husseinabdallah/4955360995/",
+   "licence": "CC-BY-2.0",
+   "licenceEvidenceSha256": "f7bf98b615635a7a7caba2f5dfaad01b72fb79c10c60818d8769fc6b90f13111",
+   "imageSha256": "9b73506d3a445eaa470678230cd656c087797ea1a1a4a1b148935b29024c9e10",
+   "split": "development"
+  },
+  {
+   "imageId": "coco-45580",
+   "author": "big-ashb",
+   "source": "https://www.flickr.com/photos/big-ashb/6827010538/",
+   "licence": "CC-BY-2.0",
+   "licenceEvidenceSha256": "7b8b989d89dc851d4f0e655f095b271a3b8ee897340bebb2f04d0bf5e9b1282f",
+   "imageSha256": "a663bb8d561bbbd58a1b77baf13a5d9997c62bf02243cdb21c36a494988847ea",
+   "split": "test"
+  },
+  {
+   "imageId": "coco-139503",
+   "author": "Łukasz Hejnak",
+   "source": "https://www.flickr.com/photos/szift/3298641196/",
+   "licence": "CC-BY-2.0",
+   "licenceEvidenceSha256": "2e97808c51eebcd2ece8f9b74d8ded355ce5760834101b7b200ccfc1d346feeb",
+   "imageSha256": "507619048eb7902811288866d92ad0ae1de2c3f1e996cf938e3b2a59f4d88c0b",
+   "split": "development"
+  },
+  {
+   "imageId": "coco-314714",
+   "author": "Mark Hillary",
+   "source": "https://www.flickr.com/photos/markhillary/486097725/",
+   "licence": "CC-BY-2.0",
+   "licenceEvidenceSha256": "f4bdf664dff3cee0bf7246289e58f54f686ccd45cb466ea6d1feb0034daa17c4",
+   "imageSha256": "ca867fa662790da35105622692424ef78b32fe0b6275d3753f7d2b5ab7b4d47f",
+   "split": "test"
+  },
+  {
+   "imageId": "coco-472930",
+   "author": "Mith Huang",
+   "source": "https://www.flickr.com/photos/mith17/6219153755/",
+   "licence": "CC-BY-2.0",
+   "licenceEvidenceSha256": "dc682798a05ebc6c10a3023dba8be8eb10db75551439c929e3fdc65916cef17b",
+   "imageSha256": "3dc92d55d946ed89f36824b5d8ab031cfcdc888f92704c2da3f77bebef3dc0fb",
+   "split": "development"
+  },
+  {
+   "imageId": "coco-54427",
+   "author": "Phil Whitehouse",
+   "source": "https://www.flickr.com/photos/philliecasablanca/6772351757/",
+   "licence": "CC-BY-2.0",
+   "licenceEvidenceSha256": "d6be8b0e16198fe2a52e2790a281394b97fe399e759ff5461270cc5f37834aa2",
+   "imageSha256": "1761c1eadc2fecb40d7d4d3bb6bb0b1dcf6ad36b7a5ae40d2d731e257de8276e",
+   "split": "development"
+  },
+  {
+   "imageId": "coco-483517",
+   "author": "Bradley Gordon",
+   "source": "https://www.flickr.com/photos/icanchangethisright/3179964062/",
+   "licence": "CC-BY-2.0",
+   "licenceEvidenceSha256": "adb4e19a49885c8a59572870cf8730a249a5311c6f3fb09bc35d9dab8f5b42ef",
+   "imageSha256": "86648fe5da1c84166694a85cb3dc7e828e8588044ea5cf382b01f1d5ca2e3fc2",
+   "split": "test"
+  },
+  {
+   "imageId": "coco-22777",
+   "author": "OER Africa",
+   "source": "https://www.flickr.com/photos/oerafrica/7794556506/",
+   "licence": "CC-BY-2.0",
+   "licenceEvidenceSha256": "8283a66e2390723f46b4c2aa675441d02e2a82004b30acce89d654a62fef9491",
+   "imageSha256": "acb9bb40464da3ced81822170c17bfff65f74f5b90705dd7b0386986af3e57dd",
+   "split": "test"
+  },
+  {
+   "imageId": "coco-256906",
+   "author": "Simon Harrod",
+   "source": "https://www.flickr.com/photos/sidibousaid/7274368716/",
+   "licence": "CC-BY-2.0",
+   "licenceEvidenceSha256": "e7bc057dd8ab9aa47df7e668de319066d05290492ced9d3c02cf3920d4f40d45",
+   "imageSha256": "bd1edc1837d5cf5ec75c04b3596fb621d68571eb31acd3d70e6dd7e7544cec53",
+   "split": "development"
+  },
+  {
+   "imageId": "coco-270789",
+   "author": "Erica Fischer",
+   "source": "https://www.flickr.com/photos/walkingsf/7013231927/",
+   "licence": "CC-BY-2.0",
+   "licenceEvidenceSha256": "53a62459e9e6271739242f315984e81adcb65b40fa5d76474bf6c1a27de92467",
+   "imageSha256": "f4d59718a88a075279f36d6d78b7bcba20790653b28cd39daf0faf36a8e8d22e",
+   "split": "development"
+  },
+  {
+   "imageId": "coco-317254",
+   "author": "Paul Sableman",
+   "source": "https://www.flickr.com/photos/pasa/8931406479/",
+   "licence": "CC-BY-2.0",
+   "licenceEvidenceSha256": "801d8a26461f2a93fc4c89083ab08ce0dbf936219024ec143152439c1b344f58",
+   "imageSha256": "2a60983eab705b2aba7042d337a4aa09005c50cf437313010a22437477ce58af",
+   "split": "test"
+  },
+  {
+   "imageId": "coco-125603",
+   "author": "Cody and Maureen",
+   "source": "https://www.flickr.com/photos/happenstancephotos/3835267109/",
+   "licence": "CC-BY-2.0",
+   "licenceEvidenceSha256": "225b7c5aa698107b1cdc29c644d2e958c73c48954150a3e1fac06d238dfa67c1",
+   "imageSha256": "43b07009d4b8c8c1e3f15614e5678a2885cb799bef8b5147acb6c49d52370f70",
+   "split": "calibration"
+  },
+  {
+   "imageId": "coco-104365",
+   "author": "Piotr Drabik",
+   "source": "https://www.flickr.com/photos/drabikpany/9555363947/",
+   "licence": "CC-BY-2.0",
+   "licenceEvidenceSha256": "0279985b660ab63faba87ed54b3ae5e492c0a7874367b7d949aa6a9615b8e28f",
+   "imageSha256": "8b8d7a0bf057e8a5e386ed1ae230f4d366dbb6c3074a756f3c19cced0d81cf1b",
+   "split": "test"
+  },
+  {
+   "imageId": "coco-166621",
+   "author": "shirokazan",
+   "source": "https://www.flickr.com/photos/shirokazan/9027447378/",
+   "licence": "CC-BY-2.0",
+   "licenceEvidenceSha256": "17cc617d369f3de55edc6c2dc11ed39f1179dde432f08f890bdd383be0029220",
+   "imageSha256": "c322f4f19aa8d5d5e402a679dc7babf911c30d31a74b5bd88c06ef423eee3a08",
+   "split": "test"
+  },
+  {
+   "imageId": "coco-76009",
+   "author": "Melinda",
+   "source": "https://www.flickr.com/photos/melindasutton/6217425935/",
+   "licence": "CC-BY-2.0",
+   "licenceEvidenceSha256": "4d5ca19a711d10351cd15f620e3fba03d518d002ff31ee3df062a9b8ea04223e",
+   "imageSha256": "701f3a0c9fb07f88dac5625a3a15d67f5be36b91ca36f32fee1261ef67dbcc21",
+   "split": "test"
+  },
+  {
+   "imageId": "coco-78410",
+   "author": "Kid  Clutch",
+   "source": "https://www.flickr.com/photos/30901506@N06/8530173012/",
+   "licence": "CC-BY-2.0",
+   "licenceEvidenceSha256": "a4c1f213cb8f0703fb3d3fba9dfa453d16debebb2e8b9a0fe6b00e587ae3d056",
+   "imageSha256": "7bc0aa92c9d94afe50777e07a8ead8cc2b8659f2a89708f4ace476305ab549fc",
+   "split": "calibration"
+  },
+  {
+   "imageId": "coco-723",
+   "author": "Henry Zbyszynski",
+   "source": "https://www.flickr.com/photos/hankzby/7385695522/",
+   "licence": "CC-BY-2.0",
+   "licenceEvidenceSha256": "2d1e8e0c9d6e28548adf72382a94f66cc639ed129467664f72882a099aa57621",
+   "imageSha256": "d98f465a3a427cd268451d1746374b1dba32224014d368b5fc911837967fa6f1",
+   "split": "test"
+  },
+  {
+   "imageId": "coco-341469",
+   "author": "Nan Palmero",
+   "source": "https://www.flickr.com/photos/nanpalmero/8659803549/",
+   "licence": "CC-BY-2.0",
+   "licenceEvidenceSha256": "f9c7b8eacc5fbec70dfbbddd9211ceb18fbad48f1f96fd5cd536bb9068fb2c93",
+   "imageSha256": "48375b8d9c1a698688da6fde73d625898f6c0cc8c8a9fc611273db95e1c9226a",
+   "split": "calibration"
+  },
+  {
+   "imageId": "coco-428291",
+   "author": "bfishadow",
+   "source": "https://www.flickr.com/photos/bfishadow/3099535921/",
+   "licence": "CC-BY-2.0",
+   "licenceEvidenceSha256": "41e025a6e94afa8a9f6d154982d6d70593a88de4701c1bb8c4dda6231ce05987",
+   "imageSha256": "2458810fbf7d0be448e8c59ce2072b224ad41ac91e32a6f9559e24f1390e4051",
+   "split": "development"
+  },
+  {
+   "imageId": "coco-231450",
+   "author": "Aaron Headly",
+   "source": "https://www.flickr.com/photos/mugland/6488093255/",
+   "licence": "CC-BY-2.0",
+   "licenceEvidenceSha256": "5c4c25d1afa06b1d0ff4818826b46addd279741fe07a576215042c15dfd10cc8",
+   "imageSha256": "3290e9ee5b85eeabf493ab70e298c1ea807af67a7f20477ddc8dd24ac7a2931d",
+   "split": "test"
+  },
+  {
+   "imageId": "coco-492104",
+   "author": "Michael Hicks",
+   "source": "https://www.flickr.com/photos/mulad/5073661482/",
+   "licence": "CC-BY-2.0",
+   "licenceEvidenceSha256": "caa57cc49f01db6c4f2eda86094379888af8e1c20dbb06e3bc34c9e40cdda63d",
+   "imageSha256": "eaf6977cfadc299ad1782bdb567364b662ab893c5ee6dbe7411384b838228951",
+   "split": "development"
+  },
+  {
+   "imageId": "coco-302353",
+   "author": "Tara Angkor Hotel",
+   "source": "https://www.flickr.com/photos/taraangkorhotel/7299559226/",
+   "licence": "CC-BY-2.0",
+   "licenceEvidenceSha256": "56d9d9f58c647cc1b3fbd1b6b2b17a23fa0eefa8191f303e1418d147fb9802dd",
+   "imageSha256": "33073b8cf390e1f52c5eea6d83df338083766197476d5c5c1e930d5440d00612",
+   "split": "calibration"
+  },
+  {
+   "imageId": "coco-465223",
+   "author": "Ján Sokoly",
+   "source": "https://www.flickr.com/photos/cruster/2638928924/",
+   "licence": "CC-BY-2.0",
+   "licenceEvidenceSha256": "8a6b55e691624c389dd870e05b1d148dbb090cad8a23bb0aefcd4612a6a44f1d",
+   "imageSha256": "fadaf402dff8e86476fcc04de4a1f725199f6bdccad8e131703fd268a38e30ca",
+   "split": "test"
+  },
+  {
+   "imageId": "coco-525880",
+   "author": "dom fellowes",
+   "source": "https://www.flickr.com/photos/domfell/9666056604/",
+   "licence": "CC-BY-2.0",
+   "licenceEvidenceSha256": "462ea9729911ad0b4e8e094d831c5fde7a6dce5db44b2d0c27e7306e9404ec8f",
+   "imageSha256": "d5783d253bdfb5d23844feb0593aac7e8ebd3e89a7c373d416560e118cdf8d6c",
+   "split": "development"
+  },
+  {
+   "imageId": "coco-152327",
+   "author": "Papooga",
+   "source": "https://www.flickr.com/photos/69221340@N04/9534245783/",
+   "licence": "CC-BY-2.0",
+   "licenceEvidenceSha256": "2f6e69b1b3567d8a7d0a906de10e4d6f5be2dafcd710040b26fedee70f10cf9a",
+   "imageSha256": "3a74ff85bf819b3abed2f275a0e9b2fc808b3e28a99100e462ad46c051a491e7",
+   "split": "test"
+  },
+  {
+   "imageId": "coco-75668",
+   "author": "Jude Lee",
+   "source": "https://www.flickr.com/photos/ichstyle/8579654182/",
+   "licence": "CC-BY-2.0",
+   "licenceEvidenceSha256": "89c0e7a8e899991af1e6e164ff60a92346d661af3cc203b8e47280478671af79",
+   "imageSha256": "6cbf33c1f0c2ffd7f2252df9638e62691c0e98f90a04f58de9c8adbec7572575",
+   "split": "development"
+  },
+  {
+   "imageId": "coco-90140",
+   "author": "bernak",
+   "source": "https://www.flickr.com/photos/29243650@N00/311600920/",
+   "licence": "CC-BY-2.0",
+   "licenceEvidenceSha256": "b1025ee868907945af7c60061775b069ae83355bc3317f82790bcbf5b613ed42",
+   "imageSha256": "362fdd15a5d507f7109a7512aa2a6b56a589f0b07400300c0244905064ee6cd4",
+   "split": "calibration"
+  },
+  {
+   "imageId": "coco-349472",
+   "author": "John S. Quarterman",
+   "source": "https://www.flickr.com/photos/98706376@N00/6226380557/",
+   "licence": "CC-BY-2.0",
+   "licenceEvidenceSha256": "c47d75c4b750ebecbbac76584f471ca2be388b6b6ba7772d4bea3c541dfa193b",
+   "imageSha256": "88e66a2cec0825bd000629aa22b0bee0d6ea64f9ed27f0ad8fc3bd6fc8354622",
+   "split": "calibration"
+  },
+  {
+   "imageId": "coco-491372",
+   "author": "Hobbies on a Budget",
+   "source": "https://www.flickr.com/photos/62030038@N02/8430826804/",
+   "licence": "CC-BY-2.0",
+   "licenceEvidenceSha256": "883bb0110f5868308222ad43bb3f603019ca7d7e42fb4cb54297d279be06e32d",
+   "imageSha256": "4889632049d75a94cf34a1b134579c838994fd95ba15e022c3dff9216389ea9f",
+   "split": "test"
+  },
+  {
+   "imageId": "coco-61624",
+   "author": "Piper",
+   "source": "https://www.flickr.com/photos/unfinishedportrait/8021823872/",
+   "licence": "CC-BY-2.0",
+   "licenceEvidenceSha256": "771b2a10c210942517e0e65823d82a22b63e4b00986e6e3418c815f42f557f15",
+   "imageSha256": "3546e05c9bd09053300f4d27ed8b77578f7c72c73fd984f1806d51795f3a402a",
+   "split": "development"
+  },
+  {
+   "imageId": "coco-93000",
+   "author": "David Wilson",
+   "source": "https://www.flickr.com/photos/davidwilson1949/8906988710/",
+   "licence": "CC-BY-2.0",
+   "licenceEvidenceSha256": "d3dd84c540603878a9146e27663c85d9561ea1832025b5f304b44756d0ff1887",
+   "imageSha256": "5b3f214209afd39892dabc73de938cf1e236b9dc4baeec7ece8345b4c0e5ce42",
+   "split": "development"
+  },
+  {
+   "imageId": "coco-432297",
+   "author": "ShellVacationsHospitality",
+   "source": "https://www.flickr.com/photos/28685147@N04/5598133507/",
+   "licence": "CC-BY-2.0",
+   "licenceEvidenceSha256": "ac8fd8b2bc37d646fb66cb5af2ab37d64dd82b30b7d21201ba46ff08bc968e4c",
+   "imageSha256": "f3eae4da574c7130eec838b48c01944ca0a069cf8a874977a630523544c936b1",
+   "split": "development"
+  },
+  {
+   "imageId": "coco-410980",
+   "author": "Charles Williams",
+   "source": "https://www.flickr.com/photos/charlesonflickr/3838660358/",
+   "licence": "CC-BY-2.0",
+   "licenceEvidenceSha256": "ca181763ca91f4af65f4e61d8e158872db8201ecec9d770290d3bca81cf3b85f",
+   "imageSha256": "438df9ee5148bbc245ad9751bfd68c4ac8b6dac92c5e55de345463e0239a250d",
+   "split": "calibration"
+  },
+  {
+   "imageId": "coco-465369",
+   "author": "Sam Beebe",
+   "source": "https://www.flickr.com/photos/sbeebe/5727312656/",
+   "licence": "CC-BY-2.0",
+   "licenceEvidenceSha256": "9e11e430df715a4245dfa7c97304bbbc3887f8631e90f31c405b8a3385fbbedf",
+   "imageSha256": "e500331f527b3ccec8dad2f14bb3c27551cb464e63f4d5f78a12353ec92f6fd6",
+   "split": "development"
+  },
+  {
+   "imageId": "coco-436981",
+   "author": "Tim Green",
+   "source": "https://www.flickr.com/photos/atoach/9922897535/",
+   "licence": "CC-BY-2.0",
+   "licenceEvidenceSha256": "82f69f53e7bc8f8ce4b08432d0cdb6d355b52646c3aa98650d4522c152369f86",
+   "imageSha256": "4cd60335c285664fc1d9b44d9d6a136dca2bb97158ff384b2ab493ef915a597c",
+   "split": "calibration"
+  },
+  {
+   "imageId": "coco-222961",
+   "author": "eric molina",
+   "source": "https://www.flickr.com/photos/iamagenious/390036254/",
+   "licence": "CC-BY-2.0",
+   "licenceEvidenceSha256": "e8dc468c8711798e2dcdf9c62f084f69751b5112e9b0330f2852c344767a6263",
+   "imageSha256": "22f04b20b06886470974f6b6c8c025dbd7d41c6298e8e6644f3699b326d93764",
+   "split": "test"
+  },
+  {
+   "imageId": "coco-160875",
+   "author": "oatsy40",
+   "source": "https://www.flickr.com/photos/oatsy40/7944403246/",
+   "licence": "CC-BY-2.0",
+   "licenceEvidenceSha256": "44bfd457ca39618439f966a3949b3c7af803b048f464e8813f8e1c69cb36f7a7",
+   "imageSha256": "d277bd284549ed8c47846096e8c6ab08a3f08783b0e8fbb367fe476e53112938",
+   "split": "test"
+  },
+  {
+   "imageId": "coco-240755",
+   "author": "Violette79",
+   "source": "https://www.flickr.com/photos/violettalough/4693476603/",
+   "licence": "CC-BY-2.0",
+   "licenceEvidenceSha256": "86247bc2fc52173a41db1276689c80b1f13bde00db109abb195aba7a594fe134",
+   "imageSha256": "5153b7c5451c4bcecb6945faa13f74f591c1d3d8262bbf1c7b8fea26e41550c0",
+   "split": "development"
+  },
+  {
+   "imageId": "coco-299930",
+   "author": "Melissa Bridgman",
+   "source": "https://www.flickr.com/photos/bridgmanpottery/529001641/",
+   "licence": "CC-BY-2.0",
+   "licenceEvidenceSha256": "5b535d605ead346c3ce6822f234cd91641c9ccb9f98bfa5cc4b0d600e0133f88",
+   "imageSha256": "c4bda069217269c037a5a80bb9f1ee18c4dbc705a003c0502f3552345aec83fe",
+   "split": "development"
+  },
+  {
+   "imageId": "coco-271235",
+   "author": "upyernoz",
+   "source": "https://www.flickr.com/photos/upyernoz/1297763970/",
+   "licence": "CC-BY-2.0",
+   "licenceEvidenceSha256": "8916d9026738621cb93ed7ef65d179c2c2dd3abfc02f42b8fe134e0d286ef89d",
+   "imageSha256": "3cff0f8d54f537b2e09006b9e8282f6b4e21dfba72ee10b8f2244464eca80b08",
+   "split": "development"
+  },
+  {
+   "imageId": "coco-17882",
+   "author": "Incase",
+   "source": "https://www.flickr.com/photos/goincase/3888147446/",
+   "licence": "CC-BY-2.0",
+   "licenceEvidenceSha256": "c961d5f0ca0aba0ca8503068c63a46e7bc3a28e0c42f346eee607d0bb6707d5c",
+   "imageSha256": "6768bf8f8599d97147987c376fa04ee6295302d9a22113407c5eed6be98bf12e",
+   "split": "test"
+  },
+  {
+   "imageId": "coco-547387",
+   "author": "Abhay gobade",
+   "source": "https://www.flickr.com/photos/abhay_gobade/9310020562/",
+   "licence": "CC-BY-2.0",
+   "licenceEvidenceSha256": "3a28e24fe608d908e20ddb63c52171f03002b84d85eee8fb84d37a3ba1fd0f5d",
+   "imageSha256": "be6347c146102fd01ab00cdf4be376989b7af1e933a143050b69fc1d8d492054",
+   "split": "development"
+  },
+  {
+   "imageId": "coco-370701",
+   "author": "Fibonacci Blue",
+   "source": "https://www.flickr.com/photos/fibonacciblue/9490830088/",
+   "licence": "CC-BY-2.0",
+   "licenceEvidenceSha256": "bfef0aa97f099096cd92b1ec226b9420973f731b0871d6f6102013aa0f2c2d40",
+   "imageSha256": "93a041bc82f82df4320437f5a6ee0e8c25cc42cbf12edce96a0b905dfef50ba5",
+   "split": "development"
+  },
+  {
+   "imageId": "coco-62195",
+   "author": "Ian Gratton",
+   "source": "https://www.flickr.com/photos/ian_a_gratton/8355679622/",
+   "licence": "CC-BY-2.0",
+   "licenceEvidenceSha256": "1ac06c4fd8d6748720e4ebaa744d8e15208c57c8a2e9a13294a12c8e00b33bdb",
+   "imageSha256": "f909b3c67ead683837124abb404a4cec97806f19f8c1c8eaadec8f900ef87373",
+   "split": "development"
+  },
+  {
+   "imageId": "coco-163447",
+   "author": "Matt Janicki",
+   "source": "https://www.flickr.com/photos/mjanicki/4544361838/",
+   "licence": "CC-BY-2.0",
+   "licenceEvidenceSha256": "34fad71f737ab0d688d18321b31836d3f3e421eb682568e94050bd65073ba757",
+   "imageSha256": "cef2d70ec603ae918f2afa9cca6c27284cbcb99c330fdc5342f08b78517676b0",
+   "split": "development"
+  },
+  {
+   "imageId": "coco-149679",
+   "author": "anita kluska",
+   "source": "https://www.flickr.com/photos/krakluski/3414743451/",
+   "licence": "CC-BY-2.0",
+   "licenceEvidenceSha256": "fb1ce11313e8eba774a6052e8de73d4ff2d7ef5f621d9f6ea4933589573dd0f1",
+   "imageSha256": "74a2448be9f8fced35654d9580c281d0f35572910c7087438a3a5142b8ab68dc",
+   "split": "test"
+  },
+  {
+   "imageId": "coco-464917",
+   "author": "Boss Tweed",
+   "source": "https://www.flickr.com/photos/bosstweed/9554068473/",
+   "licence": "CC-BY-2.0",
+   "licenceEvidenceSha256": "8189cfb4d746dc5efddc41e0abf3e1f18b2a32d5fc332afa4eca48dd801cb7cd",
+   "imageSha256": "eddfe78c5fe5c08971875a8c37d23c1776cfece65deede1ee196b50247b4e123",
+   "split": "test"
+  }
+ ]
+}

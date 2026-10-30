@@ -56,7 +56,7 @@ export interface ObjectColorObservation {
   reason:'BOX_ESTIMATE'|'ALIGNED_INSTANCE_MASK'|'LOW_LIGHT'|'CLIPPED_OR_REFLECTIVE'|'BACKGROUND_AMBIGUOUS'|'MIXED_OR_OCCLUDED'|'TOO_SMALL'|'WARMING_UP'|'CHANGING';
   supportFraction:number;samples:number;timestamp:number;stableFrames:number;calibrated:false;
   /** Pixel-quality indicators, NOT a probability or the detector's confidence. */
-  quality?:{version:'inset-grid-v2';method:'INSET_GRID'|'ALIGNED_MASK';score:number;labelSupport:number;spatialAgreement:number;usableFraction:number;clippedFraction:number;darkFraction:number;backgroundSeparation:number|null;contextSamples:number;sampledPixels:number;calibrated:false};
+  quality?:{version:'inset-grid-v2'|'mask-lab-v4';method:'INSET_GRID'|'ALIGNED_MASK'|'REFINED_BOX';score:number;labelSupport:number;spatialAgreement:number;usableFraction:number;clippedFraction:number;darkFraction:number;backgroundSeparation:number|null;contextSamples:number;sampledPixels:number;calibrated:false};
   temporal?:{windowSamples:number;agreeingSamples:number;agreement:number;spanMs:number};
 }
 export interface ObstacleDetection extends VisionDetection {

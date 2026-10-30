@@ -1,0 +1,18 @@
+{
+  "passed": true,
+  "images": 68,
+  "references": 87,
+  "sourceGroups": 68,
+  "counts": {
+    "calibration": 13,
+    "test": 22,
+    "development": 33
+  },
+  "exactDuplicateFiles": 0,
+  "crossSplitDHashWithinFourBits": [],
+  "perPhotoLicencesVerified": true,
+  "privateMedia": false,
+  "referenceOrigin": "Published human Visual Genome attributes, not model predictions",
+  "independentBasiraColourReview": false,
+  "criterion95Proven": false
+}

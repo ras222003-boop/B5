@@ -1,0 +1,71 @@
+{
+ "file": "C:/Users/Asus/basira-ml/data/colour-v4/synthetic/dev.jsonl",
+ "sha256": "05d33ec4ed5925dc5ccf4b48006da2641dce353d7f34c94d6a0a4fe59fc21ddd",
+ "rows": 1200,
+ "problems": [
+  [
+   "syn-development-1000476",
+   "mask area 0.755"
+  ]
+ ],
+ "problemCount": 1,
+ "maskAreaMeanMinMax": [
+  0.20326209852430557,
+  0.03373697916666667,
+  0.7550520833333333
+ ],
+ "labels": {
+  "brown": 111,
+  "red": 82,
+  "orange": 93,
+  "purple": 115,
+  "blue": 108,
+  "gray": 110,
+  "black": 95,
+  "multicolor": 98,
+  "pink": 108,
+  "green": 103,
+  "white": 108,
+  "yellow": 69
+ },
+ "tags": {
+  "exposure": {
+   "normal": 542,
+   "low": 509,
+   "high": 149
+  },
+  "specular": {
+   "some": 623,
+   "strong": 175,
+   "none": 402
+  },
+  "shadow": {
+   "soft": 420,
+   "none": 385,
+   "strong": 395
+  },
+  "similarBackground": {
+   "False": 834,
+   "True": 366
+  },
+  "occluded": {
+   "False": 911,
+   "True": 289
+  },
+  "shape": {
+   "lattice": 260,
+   "rrect": 249,
+   "circle": 244,
+   "capsule": 215,
+   "ellipse": 232
+  },
+  "tint": {
+   "neutral": 988,
+   "strong": 212
+  },
+  "twoTone": {
+   "False": 1102,
+   "True": 98
+  }
+ }
+}

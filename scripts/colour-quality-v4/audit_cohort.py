@@ -2,13 +2,13 @@ from pathlib import Path
 import hashlib,json,re,sys,urllib.parse
 from collections import Counter
 from PIL import Image
-root=Path(sys.argv[1]).resolve();sha=lambda p:hashlib.sha256(p.read_bytes()).hexdigest();m=json.loads((root/'manifest.json').read_text());lock=json.loads((root/'cohort-lock.json').read_text());assert sha(root/'manifest.json')==lock['manifestSha256']
+root=Path(sys.argv[1]).resolve();sha=lambda p:hashlib.sha256(p.read_bytes()).hexdigest();m=json.loads((root/'manifest.json').read_text(encoding='utf-8'));lock=json.loads((root/'cohort-lock.json').read_text());assert sha(root/'manifest.json')==lock['manifestSha256']
 groups=set();ids=set();hashes=set();fingerprints=[];problems=[]
 for r in m['samples']:
     assert r['groupId'] not in groups and r['id'] not in ids and r['sha256'] not in hashes;groups.add(r['groupId']);ids.add(r['id']);hashes.add(r['sha256'])
     assert sha(root/r['path'])==r['sha256'] and sha(root/r['licenceEvidence'])==r['licenceEvidenceSha256'] and sha(root/r['referenceDocument'])==r['referenceDocumentSha256']
     source=urllib.parse.urlparse(r['source']);assert source.scheme=='https' and source.hostname in {'www.flickr.com','flickr.com'} and not source.username and not source.password
-    evidence=(root/r['licenceEvidence']).read_text();photo=r['source'].rstrip('/').split('/')[-1];matches=[]
+    evidence=(root/r['licenceEvidence']).read_text(encoding='utf-8');photo=r['source'].rstrip('/').split('/')[-1];matches=[]
     for text in re.findall(r'<script[^>]+type=[\"\x27]application/ld\+json[\"\x27][^>]*>(.*?)</script>',evidence,re.S|re.I):
         try:d=json.loads(text)
         except ValueError:continue
