@@ -9,7 +9,7 @@ has no learned weights, so the protection that matters is freezing the algorithm
 """
 from pathlib import Path
 from collections import defaultdict,Counter
-import hashlib,io,json,re,sys,time,urllib.request,urllib.error,urllib.parse,zipfile
+import os,hashlib,io,json,re,sys,time,urllib.request,urllib.error,urllib.parse,zipfile
 from PIL import Image
 
 root=Path(sys.argv[1]).resolve();root.mkdir(parents=True,exist_ok=True)
@@ -31,7 +31,7 @@ excluded=set();old_groups=set()
 v3=read(repo/'docs/vision-ai-evidence/colour-quality-v3/DATA-ATTRIBUTIONS.json')['photos']
 for row in v3:
     excluded.add(int(row['imageId'][5:]));old_groups.add(row['source'].rstrip('/').split('/')[-2])
-for directory in []:
+for directory in [Path(p) for p in os.environ.get('COLOUR_EXCLUDE_COHORTS','').split(';') if p]:
     manifest=directory/'manifest.json'
     if manifest.is_file():
         try:old=read(manifest)
@@ -50,7 +50,8 @@ with zipfile.ZipFile(meta_path) as z:vg=json.load(z.open(z.namelist()[0]))
 mapped={v['image_id']:(v,images[v['coco_id']]) for v in vg if v.get('coco_id') in images and str(v.get('flickr_id'))==re.search(r'/(\d+)_',images[v['coco_id']]['flickr_url']).group(1)}
 colours={'black','white','red','blue','green','yellow','brown','pink','purple','orange','gray'}
 targets={'car','chair','backpack','handbag','suitcase','bottle','cup','couch','bed','bus','bicycle','book','umbrella','bowl','vase','laptop','motorcycle','truck','bench','train'}
-aliases={'sofa':'couch','bike':'bicycle'}
+targets|={t for t in os.environ.get('COLOUR_EXTRA_TARGETS','').split(',') if t}
+aliases={'sofa':'couch','bike':'bicycle','television':'tv','fridge':'refrigerator'}
 def records(stream):
     decoder=json.JSONDecoder();buffer='';started=False;eof=False
     while True:
@@ -91,7 +92,7 @@ with zipfile.ZipFile(attrs_path) as z,io.TextIOWrapper(z.open(z.namelist()[0]),e
                 x,y,w,h=a['bbox'];b=[x/im['width'],y/im['height'],w/im['width'],h/im['height']];choices.append((iou(box,b),a,b))
             if not choices:continue
             overlap,a,b=max(choices,key=lambda q:q[0])
-            if overlap<.7:continue
+            if overlap<float(os.environ.get('COLOUR_MIN_IOU','.7')):continue
             candidates[im['id']].append(dict(objectId=str(a['id']),cocoClass=category,box=b,referenceColor='multicolor' if multi else next(iter(cs)),referenceComponents=sorted(cs) if multi else [],vgObjectId=o['object_id'],vgImageId=v['image_id'],geometryIoU=overlap,sourceAttributes=attrs,referenceOrigin='PUBLISHED_HUMAN_VISUAL_GENOME_NOT_MODEL_PREDICTION',referenceReviewedByBasira=False))
 if focus:candidates={i:refs for i,refs in candidates.items() if any(r['cocoClass']=='car' and r['referenceColor'] in {'red','white'} for r in refs)}
 seed='basira-colour-v4-independent-20261030';order=sorted(candidates,key=lambda i:sha((seed+str(i)).encode()))
