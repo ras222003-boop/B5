@@ -35,6 +35,13 @@ struct BasiraSubscriptionScreen: View {
                         .background(.orange.opacity(0.1), in: RoundedRectangle(cornerRadius: 12))
                 }
 
+                if !subscriptions.checkoutEnabled {
+                    Label("الشراء معطّل حاليًا لحماية المستخدم حتى اكتمال التحقق الخادمي والتجربة في Apple Sandbox.", systemImage: "lock.shield")
+                        .font(.subheadline)
+                        .foregroundStyle(.orange)
+                        .accessibilityElement(children: .combine)
+                }
+
                 if subscriptions.products.isEmpty {
                     Label("الاشتراكات ليست متاحة للشراء في هذه النسخة حتى استكمال إعداد منتجات Apple والتحقق الخادمي.", systemImage: "info.circle")
                         .font(.subheadline)
@@ -57,7 +64,7 @@ struct BasiraSubscriptionScreen: View {
                             Button("الاشتراك عبر Apple") {
                                 Task { await subscriptions.buy(product) }
                             }
-                            .disabled(subscriptions.isBusy || !subscriptions.configurationAvailable)
+                            .disabled(subscriptions.isBusy || !subscriptions.configurationAvailable || !subscriptions.checkoutEnabled)
                             .buttonStyle(.borderedProminent)
                             .tint(.orange)
                             .accessibilityHint("سيعرض Apple سعر الاشتراك وشروطه النهائية قبل التأكيد")
