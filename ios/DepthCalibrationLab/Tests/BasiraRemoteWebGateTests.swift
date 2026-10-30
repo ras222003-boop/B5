@@ -35,6 +35,7 @@ final class BasiraRemoteWebGateTests: XCTestCase {
         return try JSONSerialization.data(withJSONObject: candidate)
     }
 
+    @MainActor
     func testMatchingWebBuildReturnsExpectedHtmlHash() throws {
         XCTAssertEqual(
             BasiraRemoteWebGate.indexDigest(for: try manifest(), expectedRevision: revision),
@@ -42,6 +43,7 @@ final class BasiraRemoteWebGateTests: XCTestCase {
         )
     }
 
+    @MainActor
     func testStaleOrUnverifiedWebBuildNeverPasses() throws {
         XCTAssertNil(BasiraRemoteWebGate.indexDigest(
             for: try manifest(source: String(repeating: "c", count: 40)),
@@ -59,6 +61,7 @@ final class BasiraRemoteWebGateTests: XCTestCase {
         ))
     }
 
+    @MainActor
     func testReadinessMustHaveCoreBackendAvailable() throws {
         XCTAssertTrue(BasiraRemoteWebGate.isReady(try ready()))
         XCTAssertFalse(BasiraRemoteWebGate.isReady(try ready(status: "DOWN")))
