@@ -57,6 +57,16 @@ export async function buildMobileManifest({
   if (requested && gitRevision && requested !== gitRevision) throw Error("Source SHA does not match checkout");
   const sourceRevision = requested || gitRevision;
   const routes = routeNames(await readFile(path.join(cwd, "client", "src", "App.tsx"), "utf8"));
+  const nativeSource = await readFile(
+    path.join(cwd, "ios", "DepthCalibrationLab", "DepthCalibrationLab", "BasiraFeatureCatalogue.swift"), "utf8"
+  );
+  const nativeRoutes = new Set([...nativeSource.matchAll(/case \\.\\w+: return "(\\/[^"]+)"/g)].map(match => match[1]));
+  // These two aliases intentionally reuse a single native catalogue item.
+  const intentionalAliases = new Set(["/teacher-panel", "/settings/privacy-permissions"]);
+  const missingNative = routes.filter(route => !nativeRoutes.has(route) && !intentionalAliases.has(route));
+  if (missingNative.length > 0) {
+    throw Error("Web routes missing from native feature catalogue: " + missingNative.join(", "));
+  }
   const required = ["/navigation/vision", "/navigation", "/navigation/guidance", "/exam-demo", "/assistant", "/account", "/settings/voice"];
   for (const entry of required) {
     if (!routes.includes(entry)) throw Error("Required Basira route missing: " + entry);
