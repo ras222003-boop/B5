@@ -1,0 +1,446 @@
+{
+ "reviewed": 58,
+ "agreed": 20,
+ "disagreed": 36,
+ "unusable": 2,
+ "agreementRate": 0.35714285714285715,
+ "byClass": {
+  "vase": {
+   "reviewed": 5,
+   "agreed": 0,
+   "disagreed": 4,
+   "unusable": 1
+  },
+  "backpack": {
+   "reviewed": 3,
+   "agreed": 1,
+   "disagreed": 2,
+   "unusable": 0
+  },
+  "bicycle": {
+   "reviewed": 3,
+   "agreed": 1,
+   "disagreed": 2,
+   "unusable": 0
+  },
+  "bus": {
+   "reviewed": 5,
+   "agreed": 3,
+   "disagreed": 2,
+   "unusable": 0
+  },
+  "cup": {
+   "reviewed": 1,
+   "agreed": 0,
+   "disagreed": 1,
+   "unusable": 0
+  },
+  "truck": {
+   "reviewed": 6,
+   "agreed": 5,
+   "disagreed": 1,
+   "unusable": 0
+  },
+  "umbrella": {
+   "reviewed": 6,
+   "agreed": 3,
+   "disagreed": 3,
+   "unusable": 0
+  },
+  "car": {
+   "reviewed": 7,
+   "agreed": 2,
+   "disagreed": 5,
+   "unusable": 0
+  },
+  "chair": {
+   "reviewed": 7,
+   "agreed": 3,
+   "disagreed": 4,
+   "unusable": 0
+  },
+  "bowl": {
+   "reviewed": 4,
+   "agreed": 1,
+   "disagreed": 3,
+   "unusable": 0
+  },
+  "laptop": {
+   "reviewed": 2,
+   "agreed": 1,
+   "disagreed": 1,
+   "unusable": 0
+  },
+  "bench": {
+   "reviewed": 3,
+   "agreed": 0,
+   "disagreed": 3,
+   "unusable": 0
+  },
+  "train": {
+   "reviewed": 2,
+   "agreed": 0,
+   "disagreed": 2,
+   "unusable": 0
+  },
+  "suitcase": {
+   "reviewed": 2,
+   "agreed": 0,
+   "disagreed": 1,
+   "unusable": 1
+  },
+  "bottle": {
+   "reviewed": 1,
+   "agreed": 0,
+   "disagreed": 1,
+   "unusable": 0
+  },
+  "couch": {
+   "reviewed": 1,
+   "agreed": 0,
+   "disagreed": 1,
+   "unusable": 0
+  }
+ },
+ "disagreements": [
+  {
+   "id": "coco-299930#1152147",
+   "published": "white",
+   "reviewer": "orange",
+   "split": "development"
+  },
+  {
+   "id": "coco-139969#1168826",
+   "published": "blue",
+   "reviewer": "red",
+   "split": "development"
+  },
+  {
+   "id": "coco-139969#126650",
+   "published": "green",
+   "reviewer": "orange",
+   "split": "development"
+  },
+  {
+   "id": "coco-102056#1165626",
+   "published": "white",
+   "reviewer": "multicolor",
+   "split": "development"
+  },
+  {
+   "id": "coco-78410#167441",
+   "published": "white",
+   "reviewer": "multicolor",
+   "split": "calibration"
+  },
+  {
+   "id": "coco-139503#679500",
+   "published": "blue",
+   "reviewer": "multicolor",
+   "split": "development"
+  },
+  {
+   "id": "coco-434723#396611",
+   "published": "black",
+   "reviewer": "multicolor",
+   "split": "calibration"
+  },
+  {
+   "id": "coco-465369#354281",
+   "published": "blue",
+   "reviewer": "purple",
+   "split": "development"
+  },
+  {
+   "id": "coco-299930#1157261",
+   "published": "yellow",
+   "reviewer": "green",
+   "split": "development"
+  },
+  {
+   "id": "coco-385307#372912",
+   "published": "brown",
+   "reviewer": "black",
+   "split": "development"
+  },
+  {
+   "id": "coco-299930#1156225",
+   "published": "blue",
+   "reviewer": "pink",
+   "split": "development"
+  },
+  {
+   "id": "coco-436981#365796",
+   "published": "blue",
+   "reviewer": "multicolor",
+   "split": "calibration"
+  },
+  {
+   "id": "coco-62195#281377",
+   "published": "blue",
+   "reviewer": "white",
+   "split": "development"
+  },
+  {
+   "id": "coco-354469#125501",
+   "published": "blue",
+   "reviewer": "multicolor",
+   "split": "development"
+  },
+  {
+   "id": "coco-163447#1154842",
+   "published": "blue",
+   "reviewer": "brown",
+   "split": "development"
+  },
+  {
+   "id": "coco-93000#1348510",
+   "published": "white",
+   "reviewer": "pink",
+   "split": "development"
+  },
+  {
+   "id": "coco-432297#1938889",
+   "published": "brown",
+   "reviewer": "red",
+   "split": "development"
+  },
+  {
+   "id": "coco-465369#361493",
+   "published": "green",
+   "reviewer": "pink",
+   "split": "development"
+  },
+  {
+   "id": "coco-525880#575293",
+   "published": "gray",
+   "reviewer": "white",
+   "split": "development"
+  },
+  {
+   "id": "coco-515590#174037",
+   "published": "white",
+   "reviewer": "multicolor",
+   "split": "development"
+  },
+  {
+   "id": "coco-153832#248835",
+   "published": "red",
+   "reviewer": "brown",
+   "split": "development"
+  },
+  {
+   "id": "coco-54427#373160",
+   "published": "black",
+   "reviewer": "multicolor",
+   "split": "development"
+  },
+  {
+   "id": "coco-360246#1811772",
+   "published": "blue",
+   "reviewer": "white",
+   "split": "development"
+  },
+  {
+   "id": "coco-341469#1186053",
+   "published": "red",
+   "reviewer": "orange",
+   "split": "calibration"
+  },
+  {
+   "id": "coco-428291#288198",
+   "published": "red",
+   "reviewer": "multicolor",
+   "split": "development"
+  },
+  {
+   "id": "coco-260345#283726",
+   "published": "pink",
+   "reviewer": "red",
+   "split": "calibration"
+  },
+  {
+   "id": "coco-432297#2223573",
+   "published": "brown",
+   "reviewer": "white",
+   "split": "development"
+  },
+  {
+   "id": "coco-300441#2040117",
+   "published": "green",
+   "reviewer": "yellow",
+   "split": "calibration"
+  },
+  {
+   "id": "coco-472930#1393906",
+   "published": "brown",
+   "reviewer": "multicolor",
+   "split": "development"
+  },
+  {
+   "id": "coco-299930#1537260",
+   "published": "green",
+   "reviewer": "white",
+   "split": "development"
+  },
+  {
+   "id": "coco-299930#1541300",
+   "published": "blue",
+   "reviewer": "purple",
+   "split": "development"
+  },
+  {
+   "id": "coco-428011#281390",
+   "published": "purple",
+   "reviewer": "pink",
+   "split": "calibration"
+  },
+  {
+   "id": "coco-474049#1099163",
+   "published": "white",
+   "reviewer": "multicolor",
+   "split": "calibration"
+  },
+  {
+   "id": "coco-139503#1535360",
+   "published": "yellow",
+   "reviewer": "orange",
+   "split": "development"
+  },
+  {
+   "id": "coco-462993#100337",
+   "published": "brown",
+   "reviewer": "multicolor",
+   "split": "development"
+  },
+  {
+   "id": "coco-75668#357440",
+   "published": "white",
+   "reviewer": "multicolor",
+   "split": "development"
+  }
+ ],
+ "agreedReferences": [
+  {
+   "id": "coco-250137#288056",
+   "label": "white",
+   "split": "development",
+   "cocoClass": "umbrella"
+  },
+  {
+   "id": "coco-358200#395118",
+   "label": "white",
+   "split": "development",
+   "cocoClass": "truck"
+  },
+  {
+   "id": "coco-199158#128194",
+   "label": "black",
+   "split": "development",
+   "cocoClass": "bicycle"
+  },
+  {
+   "id": "coco-299930#1536183",
+   "label": "white",
+   "split": "development",
+   "cocoClass": "bowl"
+  },
+  {
+   "id": "coco-256906#167701",
+   "label": "red",
+   "split": "development",
+   "cocoClass": "bus"
+  },
+  {
+   "id": "coco-302353#1937591",
+   "label": "brown",
+   "split": "calibration",
+   "cocoClass": "chair"
+  },
+  {
+   "id": "coco-75668#366198",
+   "label": "blue",
+   "split": "development",
+   "cocoClass": "bus"
+  },
+  {
+   "id": "coco-125603#281215",
+   "label": "orange",
+   "split": "calibration",
+   "cocoClass": "umbrella"
+  },
+  {
+   "id": "coco-240755#280168",
+   "label": "green",
+   "split": "development",
+   "cocoClass": "umbrella"
+  },
+  {
+   "id": "coco-547387#2052403",
+   "label": "blue",
+   "split": "development",
+   "cocoClass": "truck"
+  },
+  {
+   "id": "coco-516175#1102055",
+   "label": "black",
+   "split": "development",
+   "cocoClass": "laptop"
+  },
+  {
+   "id": "coco-270789#354951",
+   "label": "white",
+   "split": "development",
+   "cocoClass": "car"
+  },
+  {
+   "id": "coco-75668#366355",
+   "label": "red",
+   "split": "development",
+   "cocoClass": "bus"
+  },
+  {
+   "id": "coco-370701#1368659",
+   "label": "red",
+   "split": "development",
+   "cocoClass": "truck"
+  },
+  {
+   "id": "coco-410980#378119",
+   "label": "black",
+   "split": "calibration",
+   "cocoClass": "chair"
+  },
+  {
+   "id": "coco-61624#1197211",
+   "label": "white",
+   "split": "development",
+   "cocoClass": "truck"
+  },
+  {
+   "id": "coco-302353#1932858",
+   "label": "brown",
+   "split": "calibration",
+   "cocoClass": "chair"
+  },
+  {
+   "id": "coco-492104#1369411",
+   "label": "white",
+   "split": "development",
+   "cocoClass": "truck"
+  },
+  {
+   "id": "coco-271235#1164584",
+   "label": "black",
+   "split": "development",
+   "cocoClass": "backpack"
+  },
+  {
+   "id": "coco-349472#1788726",
+   "label": "red",
+   "split": "calibration",
+   "cocoClass": "car"
+  }
+ ],
+ "note": "A reviewed label that disagrees with the published one is neither promoted nor discarded; it needs a second independent reviewer."
+}

@@ -1,0 +1,751 @@
+{
+ "status": "DEVELOPMENT_AND_CALIBRATION_ONLY_SINGLE_REVIEWER_TEST_UNREAD",
+ "note": "Reference = one human reviewer (id coco); published Visual Genome agreed on 36% of decided items.",
+ "results": {
+  "hum-v3-calibration-box": {
+   "mode": "box",
+   "fn": "analyzeObjectColor",
+   "params": null,
+   "frames": 13,
+   "engineSha256": "b18e4b4a906337628bb16c27e21ff4a08897324de77b943e8724da9a0b5cd2b0",
+   "framesSha256": "c59fed612aae7f3850ee4ffd40fac201065f1941462d9dfa3145780b94181b36",
+   "rowsEvaluated": 13,
+   "references": 13,
+   "sourceGroups": 12,
+   "answered": 1,
+   "coverage": 0.07692307692307693,
+   "correct": 0,
+   "selectiveAccuracy": 0,
+   "selectiveAccuracyWilson95": [
+    0,
+    0.7934567085261071
+   ],
+   "endToEndAccuracy": 0,
+   "abstainReasons": {
+    "MIXED_OR_OCCLUDED": 9,
+    "BACKGROUND_AMBIGUOUS": 2,
+    "CLIPPED_OR_REFLECTIVE": 1
+   },
+   "topConfusions": [
+    [
+     "red->pink",
+     1
+    ]
+   ],
+   "byTag": {},
+   "maskedFraction": 0,
+   "analyzeMsMedian": 2.9788000000000068,
+   "analyzeMsP95": 7.6854999999999905,
+   "note": "Oracle boxes/masks isolate the colour stage; not end-to-end detection. Offline Pillow resampling, not Chrome."
+  },
+  "hum-v3-calibration-oracle-mask": {
+   "mode": "oracle-mask",
+   "fn": "analyzeObjectColor",
+   "params": null,
+   "frames": 13,
+   "engineSha256": "b18e4b4a906337628bb16c27e21ff4a08897324de77b943e8724da9a0b5cd2b0",
+   "framesSha256": "c59fed612aae7f3850ee4ffd40fac201065f1941462d9dfa3145780b94181b36",
+   "rowsEvaluated": 13,
+   "references": 13,
+   "sourceGroups": 12,
+   "answered": 7,
+   "coverage": 0.5384615384615384,
+   "correct": 2,
+   "selectiveAccuracy": 0.2857142857142857,
+   "selectiveAccuracyWilson95": [
+    0.08221716570901548,
+    0.6410709098517873
+   ],
+   "endToEndAccuracy": 0.15384615384615385,
+   "abstainReasons": {
+    "MIXED_OR_OCCLUDED": 5,
+    "CLIPPED_OR_REFLECTIVE": 1
+   },
+   "topConfusions": [
+    [
+     "brown->multicolor",
+     2
+    ],
+    [
+     "pink->purple",
+     1
+    ],
+    [
+     "red->pink",
+     1
+    ],
+    [
+     "orange->red",
+     1
+    ]
+   ],
+   "byTag": {},
+   "maskedFraction": 1,
+   "analyzeMsMedian": 1.520700000000005,
+   "analyzeMsP95": 3.581800000000001,
+   "note": "Oracle boxes/masks isolate the colour stage; not end-to-end detection. Offline Pillow resampling, not Chrome."
+  },
+  "hum-v3-calibration-seg-mask": {
+   "mode": "seg-mask",
+   "fn": "analyzeObjectColor",
+   "params": null,
+   "frames": 13,
+   "engineSha256": "b18e4b4a906337628bb16c27e21ff4a08897324de77b943e8724da9a0b5cd2b0",
+   "framesSha256": "c59fed612aae7f3850ee4ffd40fac201065f1941462d9dfa3145780b94181b36",
+   "rowsEvaluated": 13,
+   "references": 13,
+   "sourceGroups": 12,
+   "answered": 2,
+   "coverage": 0.15384615384615385,
+   "correct": 1,
+   "selectiveAccuracy": 0.5,
+   "selectiveAccuracyWilson95": [
+    0.09452865480086611,
+    0.905471345199134
+   ],
+   "endToEndAccuracy": 0.07692307692307693,
+   "abstainReasons": {
+    "MIXED_OR_OCCLUDED": 10,
+    "TOO_SMALL": 1
+   },
+   "topConfusions": [
+    [
+     "red->pink",
+     1
+    ]
+   ],
+   "byTag": {},
+   "maskedFraction": 0.6923076923076923,
+   "analyzeMsMedian": 0.879400000000004,
+   "analyzeMsP95": 9.024500000000018,
+   "note": "Oracle boxes/masks isolate the colour stage; not end-to-end detection. Offline Pillow resampling, not Chrome."
+  },
+  "hum-v3-development-box": {
+   "mode": "box",
+   "fn": "analyzeObjectColor",
+   "params": null,
+   "frames": 33,
+   "engineSha256": "b18e4b4a906337628bb16c27e21ff4a08897324de77b943e8724da9a0b5cd2b0",
+   "framesSha256": "9a7b91217a9af0eb069073e6dd44edf37595821123e10182e3e5688c6c28ef93",
+   "rowsEvaluated": 33,
+   "references": 43,
+   "sourceGroups": 32,
+   "answered": 10,
+   "coverage": 0.23255813953488372,
+   "correct": 2,
+   "selectiveAccuracy": 0.2,
+   "selectiveAccuracyWilson95": [
+    0.05668094798069332,
+    0.5098431532792765
+   ],
+   "endToEndAccuracy": 0.046511627906976744,
+   "abstainReasons": {
+    "BACKGROUND_AMBIGUOUS": 13,
+    "CLIPPED_OR_REFLECTIVE": 1,
+    "MIXED_OR_OCCLUDED": 19
+   },
+   "topConfusions": [
+    [
+     "purple->blue",
+     2
+    ],
+    [
+     "white->blue",
+     1
+    ],
+    [
+     "multicolor->gray",
+     1
+    ],
+    [
+     "multicolor->black",
+     1
+    ],
+    [
+     "blue->multicolor",
+     1
+    ],
+    [
+     "pink->gray",
+     1
+    ],
+    [
+     "white->green",
+     1
+    ]
+   ],
+   "byTag": {},
+   "maskedFraction": 0,
+   "analyzeMsMedian": 1.9490999999999872,
+   "analyzeMsP95": 5.525100000000009,
+   "note": "Oracle boxes/masks isolate the colour stage; not end-to-end detection. Offline Pillow resampling, not Chrome."
+  },
+  "hum-v3-development-oracle-mask": {
+   "mode": "oracle-mask",
+   "fn": "analyzeObjectColor",
+   "params": null,
+   "frames": 33,
+   "engineSha256": "b18e4b4a906337628bb16c27e21ff4a08897324de77b943e8724da9a0b5cd2b0",
+   "framesSha256": "9a7b91217a9af0eb069073e6dd44edf37595821123e10182e3e5688c6c28ef93",
+   "rowsEvaluated": 33,
+   "references": 43,
+   "sourceGroups": 32,
+   "answered": 30,
+   "coverage": 0.6976744186046512,
+   "correct": 4,
+   "selectiveAccuracy": 0.13333333333333333,
+   "selectiveAccuracyWilson95": [
+    0.05309569424218104,
+    0.2968168394441695
+   ],
+   "endToEndAccuracy": 0.09302325581395349,
+   "abstainReasons": {
+    "MIXED_OR_OCCLUDED": 11,
+    "CLIPPED_OR_REFLECTIVE": 2
+   },
+   "topConfusions": [
+    [
+     "white->multicolor",
+     5
+    ],
+    [
+     "red->multicolor",
+     4
+    ],
+    [
+     "black->multicolor",
+     3
+    ],
+    [
+     "orange->multicolor",
+     2
+    ],
+    [
+     "white->blue",
+     1
+    ],
+    [
+     "multicolor->gray",
+     1
+    ],
+    [
+     "brown->multicolor",
+     1
+    ],
+    [
+     "blue->multicolor",
+     1
+    ],
+    [
+     "white->orange",
+     1
+    ],
+    [
+     "purple->multicolor",
+     1
+    ],
+    [
+     "pink->multicolor",
+     1
+    ],
+    [
+     "orange->gray",
+     1
+    ]
+   ],
+   "byTag": {},
+   "maskedFraction": 1,
+   "analyzeMsMedian": 1.1023999999999887,
+   "analyzeMsP95": 2.3602000000000203,
+   "note": "Oracle boxes/masks isolate the colour stage; not end-to-end detection. Offline Pillow resampling, not Chrome."
+  },
+  "hum-v3-development-seg-mask": {
+   "mode": "seg-mask",
+   "fn": "analyzeObjectColor",
+   "params": null,
+   "frames": 33,
+   "engineSha256": "b18e4b4a906337628bb16c27e21ff4a08897324de77b943e8724da9a0b5cd2b0",
+   "framesSha256": "9a7b91217a9af0eb069073e6dd44edf37595821123e10182e3e5688c6c28ef93",
+   "rowsEvaluated": 33,
+   "references": 43,
+   "sourceGroups": 32,
+   "answered": 12,
+   "coverage": 0.27906976744186046,
+   "correct": 1,
+   "selectiveAccuracy": 0.08333333333333333,
+   "selectiveAccuracyWilson95": [
+    0.014864709450773488,
+    0.35388592179859524
+   ],
+   "endToEndAccuracy": 0.023255813953488372,
+   "abstainReasons": {
+    "MIXED_OR_OCCLUDED": 25,
+    "CLIPPED_OR_REFLECTIVE": 2,
+    "BACKGROUND_AMBIGUOUS": 2,
+    "TOO_SMALL": 2
+   },
+   "topConfusions": [
+    [
+     "purple->blue",
+     2
+    ],
+    [
+     "black->multicolor",
+     1
+    ],
+    [
+     "multicolor->gray",
+     1
+    ],
+    [
+     "orange->multicolor",
+     1
+    ],
+    [
+     "multicolor->black",
+     1
+    ],
+    [
+     "white->multicolor",
+     1
+    ],
+    [
+     "white->orange",
+     1
+    ],
+    [
+     "red->multicolor",
+     1
+    ],
+    [
+     "pink->multicolor",
+     1
+    ],
+    [
+     "white->green",
+     1
+    ]
+   ],
+   "byTag": {},
+   "maskedFraction": 0.7441860465116279,
+   "analyzeMsMedian": 0.9305000000000234,
+   "analyzeMsP95": 3.447599999999966,
+   "note": "Oracle boxes/masks isolate the colour stage; not end-to-end detection. Offline Pillow resampling, not Chrome."
+  },
+  "hum-v4-calibration-box": {
+   "mode": "box",
+   "fn": "analyzeObjectColorV4",
+   "params": {
+    "chromaMin": 18,
+    "chromaticFraction": 0.6,
+    "support": 0.9,
+    "minEvidence": 240,
+    "erode": false,
+    "refineBox": true,
+    "ringMatchDeltaE": 6,
+    "lowLightL": 14,
+    "whiteBalance": 0,
+    "brownL": 45,
+    "whiteL": 62,
+    "litPercentile": 0.95,
+    "pinkL": 55
+   },
+   "frames": 13,
+   "engineSha256": "64972080d170182ae58e17fbe0d700c8a2b792967c6727a04e505f1ee69fcf68",
+   "framesSha256": "c59fed612aae7f3850ee4ffd40fac201065f1941462d9dfa3145780b94181b36",
+   "rowsEvaluated": 13,
+   "references": 13,
+   "sourceGroups": 12,
+   "answered": 7,
+   "coverage": 0.5384615384615384,
+   "correct": 2,
+   "selectiveAccuracy": 0.2857142857142857,
+   "selectiveAccuracyWilson95": [
+    0.08221716570901548,
+    0.6410709098517873
+   ],
+   "endToEndAccuracy": 0.15384615384615385,
+   "abstainReasons": {
+    "MIXED_OR_OCCLUDED": 3,
+    "CLIPPED_OR_REFLECTIVE": 2,
+    "TOO_SMALL": 1
+   },
+   "topConfusions": [
+    [
+     "multicolor->white",
+     2
+    ],
+    [
+     "yellow->green",
+     1
+    ],
+    [
+     "red->pink",
+     1
+    ],
+    [
+     "orange->red",
+     1
+    ]
+   ],
+   "byTag": {},
+   "maskedFraction": 0,
+   "analyzeMsMedian": 4.245100000000008,
+   "analyzeMsP95": 14.14540000000001,
+   "note": "Oracle boxes/masks isolate the colour stage; not end-to-end detection. Offline Pillow resampling, not Chrome."
+  },
+  "hum-v4-calibration-oracle-mask": {
+   "mode": "oracle-mask",
+   "fn": "analyzeObjectColorV4",
+   "params": {
+    "chromaMin": 18,
+    "chromaticFraction": 0.6,
+    "support": 0.9,
+    "minEvidence": 240,
+    "erode": false,
+    "refineBox": true,
+    "ringMatchDeltaE": 6,
+    "lowLightL": 14,
+    "whiteBalance": 0,
+    "brownL": 45,
+    "whiteL": 62,
+    "litPercentile": 0.95,
+    "pinkL": 55
+   },
+   "frames": 13,
+   "engineSha256": "64972080d170182ae58e17fbe0d700c8a2b792967c6727a04e505f1ee69fcf68",
+   "framesSha256": "c59fed612aae7f3850ee4ffd40fac201065f1941462d9dfa3145780b94181b36",
+   "rowsEvaluated": 13,
+   "references": 13,
+   "sourceGroups": 12,
+   "answered": 7,
+   "coverage": 0.5384615384615384,
+   "correct": 2,
+   "selectiveAccuracy": 0.2857142857142857,
+   "selectiveAccuracyWilson95": [
+    0.08221716570901548,
+    0.6410709098517873
+   ],
+   "endToEndAccuracy": 0.15384615384615385,
+   "abstainReasons": {
+    "MIXED_OR_OCCLUDED": 3,
+    "TOO_SMALL": 2,
+    "CLIPPED_OR_REFLECTIVE": 1
+   },
+   "topConfusions": [
+    [
+     "multicolor->white",
+     2
+    ],
+    [
+     "red->pink",
+     2
+    ],
+    [
+     "orange->red",
+     1
+    ]
+   ],
+   "byTag": {},
+   "maskedFraction": 1,
+   "analyzeMsMedian": 2.6492000000000075,
+   "analyzeMsP95": 8.162599999999998,
+   "note": "Oracle boxes/masks isolate the colour stage; not end-to-end detection. Offline Pillow resampling, not Chrome."
+  },
+  "hum-v4-calibration-seg-mask": {
+   "mode": "seg-mask",
+   "fn": "analyzeObjectColorV4",
+   "params": {
+    "chromaMin": 18,
+    "chromaticFraction": 0.6,
+    "support": 0.9,
+    "minEvidence": 240,
+    "erode": false,
+    "refineBox": true,
+    "ringMatchDeltaE": 6,
+    "lowLightL": 14,
+    "whiteBalance": 0,
+    "brownL": 45,
+    "whiteL": 62,
+    "litPercentile": 0.95,
+    "pinkL": 55
+   },
+   "frames": 13,
+   "engineSha256": "64972080d170182ae58e17fbe0d700c8a2b792967c6727a04e505f1ee69fcf68",
+   "framesSha256": "c59fed612aae7f3850ee4ffd40fac201065f1941462d9dfa3145780b94181b36",
+   "rowsEvaluated": 13,
+   "references": 13,
+   "sourceGroups": 12,
+   "answered": 4,
+   "coverage": 0.3076923076923077,
+   "correct": 2,
+   "selectiveAccuracy": 0.5,
+   "selectiveAccuracyWilson95": [
+    0.15003570882017145,
+    0.8499642911798285
+   ],
+   "endToEndAccuracy": 0.15384615384615385,
+   "abstainReasons": {
+    "MIXED_OR_OCCLUDED": 3,
+    "TOO_SMALL": 6
+   },
+   "topConfusions": [
+    [
+     "red->pink",
+     1
+    ],
+    [
+     "multicolor->white",
+     1
+    ]
+   ],
+   "byTag": {},
+   "maskedFraction": 0.6923076923076923,
+   "analyzeMsMedian": 2.774499999999989,
+   "analyzeMsP95": 13.8022,
+   "note": "Oracle boxes/masks isolate the colour stage; not end-to-end detection. Offline Pillow resampling, not Chrome."
+  },
+  "hum-v4-development-box": {
+   "mode": "box",
+   "fn": "analyzeObjectColorV4",
+   "params": {
+    "chromaMin": 18,
+    "chromaticFraction": 0.6,
+    "support": 0.9,
+    "minEvidence": 240,
+    "erode": false,
+    "refineBox": true,
+    "ringMatchDeltaE": 6,
+    "lowLightL": 14,
+    "whiteBalance": 0,
+    "brownL": 45,
+    "whiteL": 62,
+    "litPercentile": 0.95,
+    "pinkL": 55
+   },
+   "frames": 33,
+   "engineSha256": "64972080d170182ae58e17fbe0d700c8a2b792967c6727a04e505f1ee69fcf68",
+   "framesSha256": "9a7b91217a9af0eb069073e6dd44edf37595821123e10182e3e5688c6c28ef93",
+   "rowsEvaluated": 33,
+   "references": 43,
+   "sourceGroups": 32,
+   "answered": 14,
+   "coverage": 0.32558139534883723,
+   "correct": 4,
+   "selectiveAccuracy": 0.2857142857142857,
+   "selectiveAccuracyWilson95": [
+    0.11721187910109102,
+    0.546495411724844
+   ],
+   "endToEndAccuracy": 0.09302325581395349,
+   "abstainReasons": {
+    "MIXED_OR_OCCLUDED": 23,
+    "TOO_SMALL": 5,
+    "CLIPPED_OR_REFLECTIVE": 1
+   },
+   "topConfusions": [
+    [
+     "purple->blue",
+     2
+    ],
+    [
+     "white->blue",
+     1
+    ],
+    [
+     "white->gray",
+     1
+    ],
+    [
+     "blue->multicolor",
+     1
+    ],
+    [
+     "multicolor->white",
+     1
+    ],
+    [
+     "orange->white",
+     1
+    ],
+    [
+     "green->multicolor",
+     1
+    ],
+    [
+     "pink->white",
+     1
+    ],
+    [
+     "white->green",
+     1
+    ]
+   ],
+   "byTag": {},
+   "maskedFraction": 0,
+   "analyzeMsMedian": 3.3181000000000154,
+   "analyzeMsP95": 6.930300000000017,
+   "note": "Oracle boxes/masks isolate the colour stage; not end-to-end detection. Offline Pillow resampling, not Chrome."
+  },
+  "hum-v4-development-oracle-mask": {
+   "mode": "oracle-mask",
+   "fn": "analyzeObjectColorV4",
+   "params": {
+    "chromaMin": 18,
+    "chromaticFraction": 0.6,
+    "support": 0.9,
+    "minEvidence": 240,
+    "erode": false,
+    "refineBox": true,
+    "ringMatchDeltaE": 6,
+    "lowLightL": 14,
+    "whiteBalance": 0,
+    "brownL": 45,
+    "whiteL": 62,
+    "litPercentile": 0.95,
+    "pinkL": 55
+   },
+   "frames": 33,
+   "engineSha256": "64972080d170182ae58e17fbe0d700c8a2b792967c6727a04e505f1ee69fcf68",
+   "framesSha256": "9a7b91217a9af0eb069073e6dd44edf37595821123e10182e3e5688c6c28ef93",
+   "rowsEvaluated": 33,
+   "references": 43,
+   "sourceGroups": 32,
+   "answered": 19,
+   "coverage": 0.4418604651162791,
+   "correct": 6,
+   "selectiveAccuracy": 0.3157894736842105,
+   "selectiveAccuracyWilson95": [
+    0.15364171004428598,
+    0.5398998982493537
+   ],
+   "endToEndAccuracy": 0.13953488372093023,
+   "abstainReasons": {
+    "MIXED_OR_OCCLUDED": 18,
+    "CLIPPED_OR_REFLECTIVE": 4,
+    "TOO_SMALL": 2
+   },
+   "topConfusions": [
+    [
+     "purple->blue",
+     2
+    ],
+    [
+     "white->blue",
+     1
+    ],
+    [
+     "brown->red",
+     1
+    ],
+    [
+     "blue->multicolor",
+     1
+    ],
+    [
+     "multicolor->white",
+     1
+    ],
+    [
+     "white->gray",
+     1
+    ],
+    [
+     "pink->white",
+     1
+    ],
+    [
+     "white->orange",
+     1
+    ],
+    [
+     "orange->white",
+     1
+    ],
+    [
+     "green->multicolor",
+     1
+    ],
+    [
+     "white->green",
+     1
+    ],
+    [
+     "brown->multicolor",
+     1
+    ]
+   ],
+   "byTag": {},
+   "maskedFraction": 1,
+   "analyzeMsMedian": 2.279799999999966,
+   "analyzeMsP95": 4.716000000000008,
+   "note": "Oracle boxes/masks isolate the colour stage; not end-to-end detection. Offline Pillow resampling, not Chrome."
+  },
+  "hum-v4-development-seg-mask": {
+   "mode": "seg-mask",
+   "fn": "analyzeObjectColorV4",
+   "params": {
+    "chromaMin": 18,
+    "chromaticFraction": 0.6,
+    "support": 0.9,
+    "minEvidence": 240,
+    "erode": false,
+    "refineBox": true,
+    "ringMatchDeltaE": 6,
+    "lowLightL": 14,
+    "whiteBalance": 0,
+    "brownL": 45,
+    "whiteL": 62,
+    "litPercentile": 0.95,
+    "pinkL": 55
+   },
+   "frames": 33,
+   "engineSha256": "64972080d170182ae58e17fbe0d700c8a2b792967c6727a04e505f1ee69fcf68",
+   "framesSha256": "9a7b91217a9af0eb069073e6dd44edf37595821123e10182e3e5688c6c28ef93",
+   "rowsEvaluated": 33,
+   "references": 43,
+   "sourceGroups": 32,
+   "answered": 10,
+   "coverage": 0.23255813953488372,
+   "correct": 4,
+   "selectiveAccuracy": 0.4,
+   "selectiveAccuracyWilson95": [
+    0.16817758120350967,
+    0.6873304525498135
+   ],
+   "endToEndAccuracy": 0.09302325581395349,
+   "abstainReasons": {
+    "MIXED_OR_OCCLUDED": 17,
+    "CLIPPED_OR_REFLECTIVE": 1,
+    "TOO_SMALL": 15
+   },
+   "topConfusions": [
+    [
+     "purple->blue",
+     2
+    ],
+    [
+     "blue->multicolor",
+     1
+    ],
+    [
+     "multicolor->white",
+     1
+    ],
+    [
+     "white->green",
+     1
+    ],
+    [
+     "brown->multicolor",
+     1
+    ]
+   ],
+   "byTag": {},
+   "maskedFraction": 0.7441860465116279,
+   "analyzeMsMedian": 2.5638999999999896,
+   "analyzeMsP95": 5.5896999999999935,
+   "note": "Oracle boxes/masks isolate the colour stage; not end-to-end detection. Offline Pillow resampling, not Chrome."
+  }
+ }
+}

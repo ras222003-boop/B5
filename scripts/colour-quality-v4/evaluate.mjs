@@ -16,6 +16,14 @@ if (/test/i.test(framesPath) && !flags.includes("--allow-test"))
 const fnName = (flags.find(f => f.startsWith("--fn=")) ?? "--fn=analyzeObjectColor").slice(5);
 const paramsFlag = flags.find(f => f.startsWith("--params="));
 const engine = await import(pathToFileURL(resolve(enginePath)).href);
+const labelsFlag = flags.find(f => f.startsWith("--labels="));
+const humanLabels = new Map();
+if (labelsFlag) {
+  for (const line of (await readFile(labelsFlag.slice(9), "utf8")).split(/\r?\n/).filter(Boolean)) {
+    const r = JSON.parse(line);
+    humanLabels.set(r.itemId, r.label);
+  }
+}
 const overrides = paramsFlag ? JSON.parse(paramsFlag.slice(9)) : null;
 const defaults = engine.COLOUR_V4_DEFAULTS ?? null;
 const engineParams = overrides && defaults ? { ...defaults, ...overrides } : defaults;
@@ -53,6 +61,11 @@ for (const line of lines) {
     timestamp: 1000,
   }));
   for (const [i, o] of frame.objects.entries()) {
+    if (labelsFlag) {
+      const human = humanLabels.get(frame.id + "#" + o.objectId);
+      if (!human || human === "unsure" || human === "bad-mask") continue;
+      o.referenceColor = human;
+    }
     const detection = detections[i];
     let mask;
     if (mode !== "box") {
