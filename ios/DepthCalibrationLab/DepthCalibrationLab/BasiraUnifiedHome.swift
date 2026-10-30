@@ -409,6 +409,15 @@ private struct BasiraEmbeddedWebPage: UIViewRepresentable {
             forMainFrameOnly: true
         ))
         BasiraWebMediaLifecycle.install(in: config.userContentController)
+        // Browser print popups cannot be relied upon inside an embedded WebView.
+        // Print requests are accepted by the native delegate only from the
+        // approved /exam-demo main frame; the message itself is not trusted.
+        config.userContentController.add(context.coordinator, name: "basiraNativePrint")
+        config.userContentController.addUserScript(WKUserScript(
+            source: "Object.defineProperty(window, 'BasiraNativePrint', { value: Object.freeze({ printHTML: html => window.webkit.messageHandlers.basiraNativePrint.postMessage({html}) }), writable: false });",
+            injectionTime: .atDocumentStart,
+            forMainFrameOnly: true
+        ))
         let view = WKWebView(frame: .zero, configuration: config)
         view.navigationDelegate = context.coordinator
         view.uiDelegate = context.coordinator
@@ -429,10 +438,11 @@ private struct BasiraEmbeddedWebPage: UIViewRepresentable {
         view.uiDelegate = nil
     }
 
-    final class Coordinator: NSObject, WKNavigationDelegate, WKUIDelegate {
+    final class Coordinator: NSObject, WKNavigationDelegate, WKUIDelegate, WKScriptMessageHandler {
         let allowedOrigin: URL
         let onFailure: (String) -> Void
         private weak var webView: WKWebView?
+        private var isPresentingPrint = false
 
         init(allowedOrigin: URL, onFailure: @escaping (String) -> Void) {
             self.allowedOrigin = allowedOrigin
@@ -449,6 +459,7 @@ private struct BasiraEmbeddedWebPage: UIViewRepresentable {
 
         func detach() {
             BasiraWebMediaLifecycle.suspend(webView)
+            webView?.configuration.userContentController.removeScriptMessageHandler(forName: "basiraNativePrint")
             webView = nil
             NotificationCenter.default.removeObserver(self)
         }
@@ -461,6 +472,41 @@ private struct BasiraEmbeddedWebPage: UIViewRepresentable {
         }
 
         deinit { NotificationCenter.default.removeObserver(self) }
+
+        func userContentController(_ userContentController: WKUserContentController,
+                                   didReceive message: WKScriptMessage) {
+            guard message.name == "basiraNativePrint",
+                  let payload = message.body as? [String: Any],
+                  let html = payload["html"] as? String,
+                  let activePage = webView?.url,
+                  BasiraExamPrintPolicy.allows(
+                    source: message.frameInfo.request.url, activePage: activePage,
+                    origin: allowedOrigin, isMainFrame: message.frameInfo.isMainFrame,
+                    html: html
+                  ),
+                  UIApplication.shared.applicationState == .active,
+                  webView?.window != nil,
+                  !isPresentingPrint
+            else { return }
+
+            let job = UIPrintInfo(dictionary: nil)
+            job.outputType = .general
+            job.jobName = "بصيرة - اختبار"
+            let printer = UIPrintInteractionController.shared
+            printer.printInfo = job
+            printer.printFormatter = UIMarkupTextPrintFormatter(markupText: html)
+            isPresentingPrint = true
+            let displayed = printer.present(animated: true) { [weak self] _, _, error in
+                self?.isPresentingPrint = false
+                if error != nil {
+                    self?.onFailure("تعذرت طباعة الاختبار. لم يتم حفظ ملف PDF تلقائيًا.")
+                }
+            }
+            if !displayed {
+                isPresentingPrint = false
+                onFailure("تعذر فتح نافذة الطباعة على الجهاز.")
+            }
+        }
 
         func webView(_ webView: WKWebView,
                      requestMediaCapturePermissionFor origin: WKSecurityOrigin,
