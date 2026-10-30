@@ -1,0 +1,214 @@
+{
+  "schemaVersion": 1,
+  "purpose": "Offline intake and independent evaluation readiness for Basira object/shape recognition; this does not authorize training or navigation.",
+  "baseline": {
+    "source": "docs/vision-ai-evidence/object-finetune-v3/results.json",
+    "model": "objects-basira-v3",
+    "referenceModel": "yolox-tiny",
+    "consumedFinal": true
+  },
+  "modelStart": {
+    "kind": "original-publisher-tiny",
+    "sha256": "9de513de589ac98bb92d3bca53b5af7b9acfa9b0bacb831f7999d0f7afaee8f0",
+    "forbiddenAncestors": [
+      "BDD100K",
+      "objects-basira-v1",
+      "objects-basira-v2"
+    ]
+  },
+  "allowedLicenses": [
+    "OWNED-WITH-RELEASE",
+    "CC0-1.0",
+    "CC-BY-2.0",
+    "CC-BY-4.0",
+    "MIT"
+  ],
+  "shapeAttributes": [
+    "round",
+    "rectangular",
+    "triangular",
+    "cylindrical",
+    "flat",
+    "irregular",
+    "uncertain"
+  ],
+  "targets": [
+    {
+      "key": "chair",
+      "ar": "كرسي",
+      "kind": "coco80",
+      "priority": 1,
+      "v3References": 6,
+      "v3TruePositive": 0,
+      "region": "bbox",
+      "reason": "6/6 missed"
+    },
+    {
+      "key": "book",
+      "ar": "كتاب",
+      "kind": "coco80",
+      "priority": 1,
+      "v3References": 20,
+      "v3TruePositive": 0,
+      "region": "bbox",
+      "reason": "20/20 missed"
+    },
+    {
+      "key": "bench",
+      "ar": "مقعد",
+      "kind": "coco80",
+      "priority": 1,
+      "v3References": 0,
+      "v3TruePositive": 0,
+      "region": "bbox",
+      "reason": "no held-out positives"
+    },
+    {
+      "key": "dining table",
+      "ar": "طاولة",
+      "kind": "coco80",
+      "priority": 1,
+      "v3References": 4,
+      "v3TruePositive": 2,
+      "region": "bbox",
+      "reason": "daily-use barriers"
+    },
+    {
+      "key": "cup",
+      "ar": "كوب",
+      "kind": "coco80",
+      "priority": 2,
+      "v3References": 4,
+      "v3TruePositive": 1,
+      "region": "bbox",
+      "reason": "small everyday object"
+    },
+    {
+      "key": "backpack",
+      "ar": "حقيبة ظهر",
+      "kind": "coco80",
+      "priority": 2,
+      "v3References": 5,
+      "v3TruePositive": 1,
+      "region": "bbox",
+      "reason": "floor and indoor use"
+    },
+    {
+      "key": "suitcase",
+      "ar": "حقيبة سفر",
+      "kind": "coco80",
+      "priority": 2,
+      "v3References": 1,
+      "v3TruePositive": 0,
+      "region": "bbox",
+      "reason": "frequent low obstacle"
+    },
+    {
+      "key": "bottle",
+      "ar": "زجاجة",
+      "kind": "coco80",
+      "priority": 2,
+      "v3References": 6,
+      "v3TruePositive": 4,
+      "region": "bbox",
+      "reason": "small daily object"
+    },
+    {
+      "key": "person",
+      "ar": "شخص",
+      "kind": "coco80",
+      "priority": 2,
+      "v3References": 21,
+      "v3TruePositive": 14,
+      "region": "bbox",
+      "reason": "preserve existing recall"
+    },
+    {
+      "key": "car",
+      "ar": "سيارة",
+      "kind": "coco80",
+      "priority": 2,
+      "v3References": 0,
+      "v3TruePositive": 0,
+      "region": "bbox",
+      "reason": "iPhone misses reported; final lacks positive reference"
+    },
+    {
+      "key": "tree",
+      "ar": "شجرة",
+      "kind": "new-class",
+      "priority": 1,
+      "v3References": null,
+      "v3TruePositive": null,
+      "region": "bbox",
+      "reason": "not a COCO80 category"
+    },
+    {
+      "key": "door",
+      "ar": "باب",
+      "kind": "new-class",
+      "priority": 1,
+      "v3References": null,
+      "v3TruePositive": null,
+      "region": "bbox",
+      "reason": "not a COCO80 category"
+    },
+    {
+      "key": "ground_obstacle",
+      "ar": "عائق منخفض على الأرض",
+      "kind": "new-class",
+      "priority": 1,
+      "v3References": null,
+      "v3TruePositive": null,
+      "region": "bbox",
+      "reason": "new supervised label, never equate detection to safe walking"
+    },
+    {
+      "key": "curb_edge",
+      "ar": "حافة رصيف",
+      "kind": "segmentation-required",
+      "priority": 1,
+      "v3References": null,
+      "v3TruePositive": null,
+      "region": "polygon",
+      "reason": "boundary must not be approximated by an ordinary COCO80 box"
+    },
+    {
+      "key": "stair_edge",
+      "ar": "حافة درجة",
+      "kind": "segmentation-required",
+      "priority": 1,
+      "v3References": null,
+      "v3TruePositive": null,
+      "region": "polygon",
+      "reason": "stair study remains separate; no step guidance"
+    }
+  ],
+  "splitPolicy": {
+    "separateBy": "captureGroupId",
+    "forbidReusingConsumedFinal": true,
+    "train": true,
+    "validation": true,
+    "test": true,
+    "minimumSourceGroupsPerSplit": 2,
+    "minimumReviewedImagesPerSplit": {
+      "train": 40,
+      "validation": 15,
+      "test": 20
+    }
+  },
+  "promotion": {
+    "trainingMustBeSeparate": true,
+    "selectOnValidationOnly": true,
+    "neverTuneToConsumedFinal": true,
+    "noProductionOrNavigationFromIntake": true,
+    "requireFreshIndependentFinal": true,
+    "requirePhysicalIPhoneAndVoiceOverEvaluation": true
+  },
+  "deniedDatasetIds": [
+    "bdd100k",
+    "bosch-small-traffic-lights",
+    "udacity-sdc-annotations",
+    "unknown-source"
+  ]
+}

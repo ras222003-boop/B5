@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "experimentKind": "coco80",
+  "selectedTargets": [
+    "chair",
+    "book"
+  ],
+  "modelInitialization": {
+    "kind": "original-publisher-tiny",
+    "sha256": "9de513de589ac98bb92d3bca53b5af7b9acfa9b0bacb831f7999d0f7afaee8f0"
+  },
+  "description": "Local non-sensitive template only: add real owner-reviewed image records outside GitHub. Empty records intentionally FAIL the preflight.",
+  "records": []
+}
