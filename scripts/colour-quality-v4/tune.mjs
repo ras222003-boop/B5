@@ -8,7 +8,9 @@ import { createInterface } from "node:readline";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
-const [enginePath, maxRowsArg, costArg, ...specs] = process.argv.slice(2);
+const [enginePath, maxRowsArg, costArg, ...rest] = process.argv.slice(2);
+const secondaryObjective = rest.includes("--objective=secondary");
+const specs = rest.filter(s => !s.startsWith("--"));
 if (specs.some(s => /test/i.test(s))) throw Error("Tuning must never touch test data");
 const engine = await import(pathToFileURL(resolve(enginePath)).href);
 const maxRows = Number(maxRowsArg),
@@ -51,6 +53,7 @@ async function load(spec) {
             }
           : undefined,
         ref: o.referenceColor,
+        refSecondary: "referenceSecondary" in o ? (o.referenceSecondary ?? "none") : null,
       });
     });
   }
@@ -59,7 +62,27 @@ async function load(spec) {
 const sets = [];
 for (const s of specs) sets.push(await load(s));
 
+function scoreSecondary(params) {
+  const per = sets.map(({ items }) => {
+    let tp = 0, fp = 0, refHas = 0, correctN = 0;
+    for (const it of items) {
+      if (it.refSecondary === null) continue;
+      const out = engine.analyzeObjectColorV4(it.pixels, it.detection, it.others, it.mask, params);
+      if (out.name !== it.ref) continue;
+      correctN++;
+      if (it.refSecondary !== "none") refHas++;
+      if (out.secondary) {
+        if (out.secondary === it.refSecondary) tp++;
+        else fp++;
+      }
+    }
+    return { tp, fp, refHas, correctN };
+  });
+  const J = per.reduce((s, p) => s + (p.tp - wrongCost * p.fp) / Math.max(1, p.refHas), 0) / per.length;
+  return { J, per };
+}
 function score(params) {
+  if (secondaryObjective) return scoreSecondary(params);
   const per = sets.map(({ items }) => {
     let correct = 0,
       wrong = 0;
@@ -75,7 +98,14 @@ function score(params) {
   return { J, per };
 }
 
-const grid = {
+const grid = secondaryObjective ? {
+  secondaryShare: [0.12, 0.18, 0.22, 0.3, 0.4],
+  secondaryMinPixels: [12, 24, 48, 96],
+  secondaryCells: [1, 2, 3],
+  secondaryCellShare: [0.45, 0.6, 0.75],
+  erode: [true, false],
+  secondaryRequiresMask: [true, false],
+} : {
   chromaMin: [8, 12, 18, 24],
   support: [0.6, 0.7, 0.8, 0.9],
   minEvidence: [30, 60, 120, 240],

@@ -43,6 +43,13 @@ export interface ColourV4Params {
   /** Runner-up reported as secondary colour at this share of the chromatic mass. */
   secondaryShare: number;
   secondaryMinPixels: number;
+  /** Grid cells (3x3 over the evidence extent) in which the secondary must be the local majority. */
+  secondaryCells: number;
+  secondaryCellShare: number;
+  /** Report a secondary colour only with a verified mask: in a box, occluders and background look like it. */
+  secondaryRequiresMask: boolean;
+  /** Bright low-chroma pixels above this share of the object are material, not specular highlights. */
+  highlightMaxShare: number;
 }
 export const COLOUR_V4_DEFAULTS: ColourV4Params = {
   // Tuned on development data only (real photos + synthetic), wrong answers weighted 5x silence.
@@ -61,8 +68,12 @@ export const COLOUR_V4_DEFAULTS: ColourV4Params = {
   pinkL: 55,
   dominantShare: 0.5,
   dominanceRatio: 1.3,
-  secondaryShare: 0.22,
+  secondaryShare: 0.18,
   secondaryMinPixels: 12,
+  secondaryCells: 2,
+  secondaryCellShare: 0.6,
+  secondaryRequiresMask: true,
+  highlightMaxShare: 0.18,
 };
 
 type Lab = [number, number, number];
@@ -300,14 +311,15 @@ export function analyzeObjectColorV4(
   const bodyChroma = chromatic0.length
     ? median(chromatic0.map(chromaOf))
     : 0;
-  const evidence = lit.filter(
-    p =>
-      !(
-        bodyChroma >= params.chromaMin &&
-        p.lab[0] > objectL + 18 &&
-        chromaOf(p) < bodyChroma * 0.45
-      )
-  );
+  const isHighlight = (p: Px) =>
+    bodyChroma >= params.chromaMin &&
+    p.lab[0] > objectL + 18 &&
+    chromaOf(p) < bodyChroma * 0.45;
+  // A highlight is a small blob. When bright low-chroma pixels cover a large share they are a white material
+  // region (a white panel on a blue body), not shine, so they stay as evidence.
+  const highlightShare = lit.filter(isHighlight).length / Math.max(1, lit.length);
+  const evidence =
+    highlightShare >= params.highlightMaxShare ? lit : lit.filter(p => !isHighlight(p));
   const usable = evidence.length / Math.max(1, attempted);
   if (evidence.length < params.minEvidence)
     return unclear("CLIPPED_OR_REFLECTIVE", evidence.length);
@@ -354,6 +366,25 @@ export function analyzeObjectColorV4(
     ).length;
     return consistent / list.length >= params.support ? n : null;
   };
+  /** A real second colour forms a region; scattered edge or noise pixels do not. */
+  const isRegion = (members: Px[]) => {
+    if (params.secondaryCells <= 0) return true;
+    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+    for (const p of evidence) {
+      x0 = Math.min(x0, p.x); y0 = Math.min(y0, p.y);
+      x1 = Math.max(x1, p.x); y1 = Math.max(y1, p.y);
+    }
+    const cw = (x1 - x0 + 1) / 3, ch = (y1 - y0 + 1) / 3;
+    const cell = (p: Px) => Math.min(2, Math.floor((p.x - x0) / cw)) + 3 * Math.min(2, Math.floor((p.y - y0) / ch));
+    const total = new Array(9).fill(0), hit = new Array(9).fill(0);
+    for (const p of evidence) total[cell(p)]++;
+    for (const p of members) hit[cell(p)]++;
+    let regions = 0;
+    for (let i = 0; i < 9; i++)
+      if (total[i] >= 6 && hit[i] / total[i] >= params.secondaryCellShare) regions++;
+    return regions >= params.secondaryCells;
+  };
+  const allowSecondary = aligned || !params.secondaryRequiresMask;
   const chromaticGroups = groupsOf(chromatic);
   const chromaticMass = chromatic.length,
     neutralMass = neutralPx.length;
@@ -376,11 +407,12 @@ export function analyzeObjectColorV4(
     supportFraction = share * Math.min(1, chromaticShare / params.chromaticFraction);
     if (next && next[1] / chromaticMass >= params.secondaryShare && next[1] >= params.secondaryMinPixels) {
       const sec = nameOfGroup(next[0], chromatic);
-      if (sec !== name) secondary = sec;
+      if (allowSecondary && sec !== name && isRegion(chromatic.filter(p => hueGroup(hueOf(p)) === next[0])))
+        secondary = sec;
     }
-    if (!secondary && neutralMass / evidence.length >= params.secondaryShare) {
+    if (allowSecondary && !secondary && neutralMass / evidence.length >= params.secondaryShare) {
       const sec = neutralOf(neutralPx);
-      if (sec) secondary = sec;
+      if (sec && isRegion(neutralPx)) secondary = sec;
     }
     if (name !== "brown") {
       const L = litLOf(chromatic.filter(p => hueGroup(hueOf(p)) === top[0]));
@@ -396,7 +428,7 @@ export function analyzeObjectColorV4(
     supportFraction = neutralMass / evidence.length;
     const top = chromaticGroups[0];
     if (top && top[1] / evidence.length >= params.secondaryShare * 0.6 && top[1] >= params.secondaryMinPixels)
-      secondary = nameOfGroup(top[0], chromatic);
+      secondary = allowSecondary && isRegion(chromatic) ? nameOfGroup(top[0], chromatic) : undefined;
     if (supportFraction < params.dominantShare * 0.9) return unclear("MIXED_OR_OCCLUDED", evidence.length);
   } else return unclear("MIXED_OR_OCCLUDED", evidence.length);
 

@@ -50,6 +50,7 @@ const wilson = (k, n) => {
 const results = [];
 let unresolved = 0;
 const pairs = [];
+const secStats = { n: 0, refHas: 0, predHas: 0, tp: 0, fp: 0 };
 const times = [];
 for (const line of lines) {
   const frame = JSON.parse(line);
@@ -99,9 +100,21 @@ for (const line of lines) {
     const accepted = isMulti ? comps : [o.referenceColor];
     const answered = !!colour.name;
     const correct = answered && accepted.includes(colour.name);
-    const refSecondary = o.referenceSecondary ?? null;
+    const refSecondary = "referenceSecondary" in o ? (o.referenceSecondary ?? "none") : null;
     const pair = refSecondary !== null && answered ? { agree: correct && (colour.secondary ?? "none") === refSecondary } : null;
     if (pair) pairs.push(pair.agree);
+    if (refSecondary !== null && correct) {
+      const predicted = colour.secondary ?? "none";
+      if (refSecondary !== "none") {
+        secStats.refHas++;
+        if (predicted === refSecondary) secStats.tp++;
+      }
+      if (predicted !== "none") {
+        secStats.predHas++;
+        if (predicted !== refSecondary) secStats.fp++;
+      }
+      secStats.n++;
+    }
     results.push({
       secondaryPredicted: colour.secondary ?? null,
       image: frame.id,
@@ -155,6 +168,14 @@ const report = {
   unresolvedMulticolorReferences: unresolved,
   secondaryPairAgreement: pairs.length ? pairs.filter(Boolean).length / pairs.length : null,
   secondaryPairN: pairs.length,
+  secondary: {
+    primaryCorrectN: secStats.n,
+    referenceHasSecondary: secStats.refHas,
+    reportedSecondary: secStats.predHas,
+    precision: secStats.predHas ? secStats.tp / secStats.predHas : null,
+    recall: secStats.refHas ? secStats.tp / secStats.refHas : null,
+    falsePositives: secStats.fp,
+  },
   secondaryReportedFraction: answered.length ? answered.filter(r => r.secondaryPredicted).length / answered.length : null,
   references: total,
   sourceGroups: new Set(results.map(r => r.group)).size,

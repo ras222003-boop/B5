@@ -144,4 +144,24 @@ describe("colour V4", () => {
     );
     expect(out.name).toBeNull();
   });
+  it("reports a secondary colour only for a verified mask and a real region", () => {
+    const twoTone = (x: number, y: number) =>
+      inside(x, y) ? (x < 125 ? [30, 70, 210] : [235, 235, 235]) : [60, 130, 60];
+    const params = { ...COLOUR_V4_DEFAULTS, minEvidence: 40 };
+    const masked = analyzeObjectColorV4(frame(twoTone), detection, [], maskOf(inside), params);
+    expect(masked.name).toBe("blue");
+    expect(masked.secondary).toBe("white");
+    const boxed = analyzeObjectColorV4(frame(twoTone), detection, [], undefined, params);
+    expect(boxed.secondary).toBeUndefined();
+    const scattered = analyzeObjectColorV4(
+      frame((x, y) =>
+        inside(x, y) ? ((x * 7 + y * 13) % 11 === 0 ? [235, 235, 235] : [30, 70, 210]) : [60, 130, 60]
+      ),
+      detection,
+      [],
+      maskOf(inside),
+      params
+    );
+    expect(scattered.secondary).toBeUndefined();
+  });
 });

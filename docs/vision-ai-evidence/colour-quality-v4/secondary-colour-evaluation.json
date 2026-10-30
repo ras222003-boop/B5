@@ -1,0 +1,2866 @@
+{
+ "policy": "dominant+secondary",
+ "bundles": {
+  "v4-c": "before secondary tuning",
+  "v4-f": "tuned secondary: mask required, region rule, highlight-share rule"
+ },
+ "note": "f-* = synthetic dev2 (tuned on); c2-* = synthetic calibration cal2 (held out); h3-* = real human review (6 reference secondaries, too few to measure)",
+ "results": {
+  "c2-baseline-v3-cal2-box": {
+   "mode": "box",
+   "fn": "analyzeObjectColor",
+   "params": null,
+   "frames": 800,
+   "engineSha256": "b18e4b4a906337628bb16c27e21ff4a08897324de77b943e8724da9a0b5cd2b0",
+   "framesSha256": "7cc5bfc994fd5b90f482d23c4bb21635d97b695735abc157adb51848c414b619",
+   "rowsEvaluated": 800,
+   "unresolvedMulticolorReferences": 0,
+   "secondaryPairAgreement": 0.6220472440944882,
+   "secondaryPairN": 381,
+   "secondary": {
+    "primaryCorrectN": 241,
+    "referenceHasSecondary": 4,
+    "reportedSecondary": 0,
+    "precision": null,
+    "recall": 0,
+    "falsePositives": 0
+   },
+   "secondaryReportedFraction": 0,
+   "references": 800,
+   "sourceGroups": 800,
+   "answered": 381,
+   "coverage": 0.47625,
+   "correct": 241,
+   "selectiveAccuracy": 0.6325459317585301,
+   "selectiveAccuracyWilson95": [
+    0.5830362062191989,
+    0.6794094337531948
+   ],
+   "endToEndAccuracy": 0.30125,
+   "abstainReasons": {
+    "MIXED_OR_OCCLUDED": 97,
+    "BACKGROUND_AMBIGUOUS": 258,
+    "LOW_LIGHT": 33,
+    "CLIPPED_OR_REFLECTIVE": 31
+   },
+   "topConfusions": [
+    [
+     "white->gray",
+     24
+    ],
+    [
+     "yellow->brown",
+     22
+    ],
+    [
+     "orange->brown",
+     18
+    ],
+    [
+     "red->multicolor",
+     11
+    ],
+    [
+     "orange->multicolor",
+     11
+    ],
+    [
+     "gray->black",
+     9
+    ],
+    [
+     "yellow->multicolor",
+     7
+    ],
+    [
+     "green->multicolor",
+     6
+    ],
+    [
+     "pink->multicolor",
+     5
+    ],
+    [
+     "pink->red",
+     5
+    ],
+    [
+     "brown->black",
+     4
+    ],
+    [
+     "blue->multicolor",
+     4
+    ]
+   ],
+   "byTag": {
+    "exposure": {
+     "normal": {
+      "total": 364,
+      "answered": 183,
+      "correct": 128
+     },
+     "low": {
+      "total": 315,
+      "answered": 131,
+      "correct": 57
+     },
+     "high": {
+      "total": 121,
+      "answered": 67,
+      "correct": 56
+     }
+    },
+    "specular": {
+     "some": {
+      "total": 383,
+      "answered": 184,
+      "correct": 113
+     },
+     "none": {
+      "total": 296,
+      "answered": 141,
+      "correct": 90
+     },
+     "strong": {
+      "total": 121,
+      "answered": 56,
+      "correct": 38
+     }
+    },
+    "shadow": {
+     "soft": {
+      "total": 283,
+      "answered": 136,
+      "correct": 85
+     },
+     "strong": {
+      "total": 264,
+      "answered": 120,
+      "correct": 77
+     },
+     "none": {
+      "total": 253,
+      "answered": 125,
+      "correct": 79
+     }
+    },
+    "similarBackground": {
+     "false": {
+      "total": 551,
+      "answered": 342,
+      "correct": 219
+     },
+     "true": {
+      "total": 249,
+      "answered": 39,
+      "correct": 22
+     }
+    },
+    "occluded": {
+     "false": {
+      "total": 591,
+      "answered": 296,
+      "correct": 194
+     },
+     "true": {
+      "total": 209,
+      "answered": 85,
+      "correct": 47
+     }
+    },
+    "shape": {
+     "ellipse": {
+      "total": 152,
+      "answered": 88,
+      "correct": 54
+     },
+     "lattice": {
+      "total": 162,
+      "answered": 53,
+      "correct": 33
+     },
+     "circle": {
+      "total": 147,
+      "answered": 94,
+      "correct": 58
+     },
+     "capsule": {
+      "total": 176,
+      "answered": 48,
+      "correct": 25
+     },
+     "rrect": {
+      "total": 163,
+      "answered": 98,
+      "correct": 71
+     }
+    },
+    "tint": {
+     "neutral": {
+      "total": 657,
+      "answered": 310,
+      "correct": 203
+     },
+     "strong": {
+      "total": 143,
+      "answered": 71,
+      "correct": 38
+     }
+    },
+    "twoTone": {
+     "false": {
+      "total": 734,
+      "answered": 355,
+      "correct": 237
+     },
+     "true": {
+      "total": 66,
+      "answered": 26,
+      "correct": 4
+     }
+    }
+   },
+   "maskedFraction": 0,
+   "analyzeMsMedian": 0.7368000000001302,
+   "analyzeMsP95": 1.6277999999999793,
+   "note": "Oracle boxes/masks isolate the colour stage; not end-to-end detection. Offline Pillow resampling, not Chrome."
+  },
+  "c2-baseline-v3-cal2-oracle-mask": {
+   "mode": "oracle-mask",
+   "fn": "analyzeObjectColor",
+   "params": null,
+   "frames": 800,
+   "engineSha256": "b18e4b4a906337628bb16c27e21ff4a08897324de77b943e8724da9a0b5cd2b0",
+   "framesSha256": "7cc5bfc994fd5b90f482d23c4bb21635d97b695735abc157adb51848c414b619",
+   "rowsEvaluated": 800,
+   "unresolvedMulticolorReferences": 0,
+   "secondaryPairAgreement": 0.5497896213183731,
+   "secondaryPairN": 713,
+   "secondary": {
+    "primaryCorrectN": 392,
+    "referenceHasSecondary": 0,
+    "reportedSecondary": 0,
+    "precision": null,
+    "recall": null,
+    "falsePositives": 0
+   },
+   "secondaryReportedFraction": 0,
+   "references": 800,
+   "sourceGroups": 800,
+   "answered": 713,
+   "coverage": 0.89125,
+   "correct": 392,
+   "selectiveAccuracy": 0.5497896213183731,
+   "selectiveAccuracyWilson95": [
+    0.5131009334655233,
+    0.5859446576385644
+   ],
+   "endToEndAccuracy": 0.49,
+   "abstainReasons": {
+    "LOW_LIGHT": 36,
+    "CLIPPED_OR_REFLECTIVE": 38,
+    "MIXED_OR_OCCLUDED": 13
+   },
+   "topConfusions": [
+    [
+     "white->gray",
+     41
+    ],
+    [
+     "yellow->brown",
+     35
+    ],
+    [
+     "orange->brown",
+     35
+    ],
+    [
+     "orange->multicolor",
+     29
+    ],
+    [
+     "yellow->multicolor",
+     26
+    ],
+    [
+     "gray->black",
+     22
+    ],
+    [
+     "gray->multicolor",
+     18
+    ],
+    [
+     "brown->multicolor",
+     17
+    ],
+    [
+     "red->multicolor",
+     15
+    ],
+    [
+     "white->multicolor",
+     13
+    ],
+    [
+     "blue->multicolor",
+     11
+    ],
+    [
+     "pink->multicolor",
+     11
+    ]
+   ],
+   "byTag": {
+    "exposure": {
+     "normal": {
+      "total": 364,
+      "answered": 344,
+      "correct": 205
+     },
+     "low": {
+      "total": 315,
+      "answered": 266,
+      "correct": 102
+     },
+     "high": {
+      "total": 121,
+      "answered": 103,
+      "correct": 85
+     }
+    },
+    "specular": {
+     "some": {
+      "total": 383,
+      "answered": 345,
+      "correct": 181
+     },
+     "none": {
+      "total": 296,
+      "answered": 262,
+      "correct": 154
+     },
+     "strong": {
+      "total": 121,
+      "answered": 106,
+      "correct": 57
+     }
+    },
+    "shadow": {
+     "soft": {
+      "total": 283,
+      "answered": 259,
+      "correct": 141
+     },
+     "strong": {
+      "total": 264,
+      "answered": 229,
+      "correct": 132
+     },
+     "none": {
+      "total": 253,
+      "answered": 225,
+      "correct": 119
+     }
+    },
+    "similarBackground": {
+     "false": {
+      "total": 551,
+      "answered": 497,
+      "correct": 286
+     },
+     "true": {
+      "total": 249,
+      "answered": 216,
+      "correct": 106
+     }
+    },
+    "occluded": {
+     "false": {
+      "total": 591,
+      "answered": 528,
+      "correct": 295
+     },
+     "true": {
+      "total": 209,
+      "answered": 185,
+      "correct": 97
+     }
+    },
+    "shape": {
+     "ellipse": {
+      "total": 152,
+      "answered": 138,
+      "correct": 70
+     },
+     "lattice": {
+      "total": 162,
+      "answered": 140,
+      "correct": 80
+     },
+     "circle": {
+      "total": 147,
+      "answered": 133,
+      "correct": 62
+     },
+     "capsule": {
+      "total": 176,
+      "answered": 154,
+      "correct": 87
+     },
+     "rrect": {
+      "total": 163,
+      "answered": 148,
+      "correct": 93
+     }
+    },
+    "tint": {
+     "neutral": {
+      "total": 657,
+      "answered": 587,
+      "correct": 336
+     },
+     "strong": {
+      "total": 143,
+      "answered": 126,
+      "correct": 56
+     }
+    },
+    "twoTone": {
+     "false": {
+      "total": 734,
+      "answered": 656,
+      "correct": 392
+     },
+     "true": {
+      "total": 66,
+      "answered": 57,
+      "correct": 0
+     }
+    }
+   },
+   "maskedFraction": 1,
+   "analyzeMsMedian": 0.2947999999998956,
+   "analyzeMsP95": 1.018500000000131,
+   "note": "Oracle boxes/masks isolate the colour stage; not end-to-end detection. Offline Pillow resampling, not Chrome."
+  },
+  "c2-v4-c-cal2-box": {
+   "mode": "box",
+   "fn": "analyzeObjectColorV4",
+   "params": {
+    "chromaMin": 18,
+    "chromaticFraction": 0.6,
+    "support": 0.9,
+    "minEvidence": 240,
+    "erode": false,
+    "refineBox": true,
+    "ringMatchDeltaE": 6,
+    "lowLightL": 14,
+    "whiteBalance": 0,
+    "brownL": 45,
+    "whiteL": 62,
+    "litPercentile": 0.95,
+    "pinkL": 55,
+    "dominantShare": 0.5,
+    "dominanceRatio": 1.3,
+    "secondaryShare": 0.22,
+    "secondaryMinPixels": 12
+   },
+   "frames": 800,
+   "engineSha256": "bdc0e9612ed8c4f65cbf2c2121372f6f6d0c7073fe453c0ac8469309dc55d359",
+   "framesSha256": "7cc5bfc994fd5b90f482d23c4bb21635d97b695735abc157adb51848c414b619",
+   "rowsEvaluated": 800,
+   "unresolvedMulticolorReferences": 0,
+   "secondaryPairAgreement": 0.6688632619439868,
+   "secondaryPairN": 607,
+   "secondary": {
+    "primaryCorrectN": 456,
+    "referenceHasSecondary": 41,
+    "reportedSecondary": 48,
+    "precision": 0.3541666666666667,
+    "recall": 0.4146341463414634,
+    "falsePositives": 31
+   },
+   "secondaryReportedFraction": 0.14497528830313014,
+   "references": 800,
+   "sourceGroups": 800,
+   "answered": 607,
+   "coverage": 0.75875,
+   "correct": 456,
+   "selectiveAccuracy": 0.7512355848434926,
+   "selectiveAccuracyWilson95": [
+    0.7153365486777988,
+    0.7839745656929317
+   ],
+   "endToEndAccuracy": 0.57,
+   "abstainReasons": {
+    "LOW_LIGHT": 88,
+    "CLIPPED_OR_REFLECTIVE": 49,
+    "MIXED_OR_OCCLUDED": 56
+   },
+   "topConfusions": [
+    [
+     "orange->brown",
+     31
+    ],
+    [
+     "white->gray",
+     25
+    ],
+    [
+     "pink->red",
+     25
+    ],
+    [
+     "gray->white",
+     10
+    ],
+    [
+     "brown->black",
+     8
+    ],
+    [
+     "pink->purple",
+     7
+    ],
+    [
+     "gray->black",
+     6
+    ],
+    [
+     "orange->red",
+     5
+    ],
+    [
+     "pink->gray",
+     5
+    ],
+    [
+     "brown->red",
+     3
+    ],
+    [
+     "brown->gray",
+     2
+    ],
+    [
+     "brown->orange",
+     2
+    ]
+   ],
+   "byTag": {
+    "exposure": {
+     "normal": {
+      "total": 364,
+      "answered": 303,
+      "correct": 266
+     },
+     "low": {
+      "total": 315,
+      "answered": 194,
+      "correct": 98
+     },
+     "high": {
+      "total": 121,
+      "answered": 110,
+      "correct": 92
+     }
+    },
+    "specular": {
+     "some": {
+      "total": 383,
+      "answered": 290,
+      "correct": 223
+     },
+     "none": {
+      "total": 296,
+      "answered": 225,
+      "correct": 165
+     },
+     "strong": {
+      "total": 121,
+      "answered": 92,
+      "correct": 68
+     }
+    },
+    "shadow": {
+     "soft": {
+      "total": 283,
+      "answered": 218,
+      "correct": 157
+     },
+     "strong": {
+      "total": 264,
+      "answered": 190,
+      "correct": 146
+     },
+     "none": {
+      "total": 253,
+      "answered": 199,
+      "correct": 153
+     }
+    },
+    "similarBackground": {
+     "false": {
+      "total": 551,
+      "answered": 433,
+      "correct": 325
+     },
+     "true": {
+      "total": 249,
+      "answered": 174,
+      "correct": 131
+     }
+    },
+    "occluded": {
+     "false": {
+      "total": 591,
+      "answered": 457,
+      "correct": 356
+     },
+     "true": {
+      "total": 209,
+      "answered": 150,
+      "correct": 100
+     }
+    },
+    "shape": {
+     "ellipse": {
+      "total": 152,
+      "answered": 122,
+      "correct": 92
+     },
+     "lattice": {
+      "total": 162,
+      "answered": 112,
+      "correct": 84
+     },
+     "circle": {
+      "total": 147,
+      "answered": 111,
+      "correct": 84
+     },
+     "capsule": {
+      "total": 176,
+      "answered": 125,
+      "correct": 94
+     },
+     "rrect": {
+      "total": 163,
+      "answered": 137,
+      "correct": 102
+     }
+    },
+    "tint": {
+     "neutral": {
+      "total": 657,
+      "answered": 505,
+      "correct": 389
+     },
+     "strong": {
+      "total": 143,
+      "answered": 102,
+      "correct": 67
+     }
+    },
+    "twoTone": {
+     "false": {
+      "total": 734,
+      "answered": 552,
+      "correct": 415
+     },
+     "true": {
+      "total": 66,
+      "answered": 55,
+      "correct": 41
+     }
+    }
+   },
+   "maskedFraction": 0,
+   "analyzeMsMedian": 1.2726000000000113,
+   "analyzeMsP95": 2.3773000000001048,
+   "note": "Oracle boxes/masks isolate the colour stage; not end-to-end detection. Offline Pillow resampling, not Chrome."
+  },
+  "c2-v4-c-cal2-oracle-mask": {
+   "mode": "oracle-mask",
+   "fn": "analyzeObjectColorV4",
+   "params": {
+    "chromaMin": 18,
+    "chromaticFraction": 0.6,
+    "support": 0.9,
+    "minEvidence": 240,
+    "erode": false,
+    "refineBox": true,
+    "ringMatchDeltaE": 6,
+    "lowLightL": 14,
+    "whiteBalance": 0,
+    "brownL": 45,
+    "whiteL": 62,
+    "litPercentile": 0.95,
+    "pinkL": 55,
+    "dominantShare": 0.5,
+    "dominanceRatio": 1.3,
+    "secondaryShare": 0.22,
+    "secondaryMinPixels": 12
+   },
+   "frames": 800,
+   "engineSha256": "bdc0e9612ed8c4f65cbf2c2121372f6f6d0c7073fe453c0ac8469309dc55d359",
+   "framesSha256": "7cc5bfc994fd5b90f482d23c4bb21635d97b695735abc157adb51848c414b619",
+   "rowsEvaluated": 800,
+   "unresolvedMulticolorReferences": 0,
+   "secondaryPairAgreement": 0.7360406091370558,
+   "secondaryPairN": 591,
+   "secondary": {
+    "primaryCorrectN": 457,
+    "referenceHasSecondary": 45,
+    "reportedSecondary": 40,
+    "precision": 0.7,
+    "recall": 0.6222222222222222,
+    "falsePositives": 12
+   },
+   "secondaryReportedFraction": 0.10490693739424704,
+   "references": 800,
+   "sourceGroups": 800,
+   "answered": 591,
+   "coverage": 0.73875,
+   "correct": 457,
+   "selectiveAccuracy": 0.7732656514382402,
+   "selectiveAccuracyWilson95": [
+    0.7378051177234108,
+    0.8051965822249451
+   ],
+   "endToEndAccuracy": 0.57125,
+   "abstainReasons": {
+    "CLIPPED_OR_REFLECTIVE": 61,
+    "LOW_LIGHT": 94,
+    "MIXED_OR_OCCLUDED": 54
+   },
+   "topConfusions": [
+    [
+     "orange->brown",
+     36
+    ],
+    [
+     "pink->red",
+     24
+    ],
+    [
+     "white->gray",
+     23
+    ],
+    [
+     "gray->white",
+     10
+    ],
+    [
+     "pink->purple",
+     8
+    ],
+    [
+     "brown->black",
+     7
+    ],
+    [
+     "gray->black",
+     6
+    ],
+    [
+     "pink->gray",
+     4
+    ],
+    [
+     "orange->red",
+     4
+    ],
+    [
+     "brown->red",
+     3
+    ],
+    [
+     "white->green",
+     2
+    ],
+    [
+     "brown->purple",
+     2
+    ]
+   ],
+   "byTag": {
+    "exposure": {
+     "normal": {
+      "total": 364,
+      "answered": 300,
+      "correct": 273
+     },
+     "low": {
+      "total": 315,
+      "answered": 184,
+      "correct": 91
+     },
+     "high": {
+      "total": 121,
+      "answered": 107,
+      "correct": 93
+     }
+    },
+    "specular": {
+     "some": {
+      "total": 383,
+      "answered": 285,
+      "correct": 222
+     },
+     "none": {
+      "total": 296,
+      "answered": 223,
+      "correct": 167
+     },
+     "strong": {
+      "total": 121,
+      "answered": 83,
+      "correct": 68
+     }
+    },
+    "shadow": {
+     "soft": {
+      "total": 283,
+      "answered": 211,
+      "correct": 155
+     },
+     "strong": {
+      "total": 264,
+      "answered": 184,
+      "correct": 145
+     },
+     "none": {
+      "total": 253,
+      "answered": 196,
+      "correct": 157
+     }
+    },
+    "similarBackground": {
+     "false": {
+      "total": 551,
+      "answered": 414,
+      "correct": 320
+     },
+     "true": {
+      "total": 249,
+      "answered": 177,
+      "correct": 137
+     }
+    },
+    "occluded": {
+     "false": {
+      "total": 591,
+      "answered": 441,
+      "correct": 350
+     },
+     "true": {
+      "total": 209,
+      "answered": 150,
+      "correct": 107
+     }
+    },
+    "shape": {
+     "ellipse": {
+      "total": 152,
+      "answered": 118,
+      "correct": 93
+     },
+     "lattice": {
+      "total": 162,
+      "answered": 114,
+      "correct": 84
+     },
+     "circle": {
+      "total": 147,
+      "answered": 106,
+      "correct": 83
+     },
+     "capsule": {
+      "total": 176,
+      "answered": 124,
+      "correct": 97
+     },
+     "rrect": {
+      "total": 163,
+      "answered": 129,
+      "correct": 100
+     }
+    },
+    "tint": {
+     "neutral": {
+      "total": 657,
+      "answered": 495,
+      "correct": 393
+     },
+     "strong": {
+      "total": 143,
+      "answered": 96,
+      "correct": 64
+     }
+    },
+    "twoTone": {
+     "false": {
+      "total": 734,
+      "answered": 535,
+      "correct": 412
+     },
+     "true": {
+      "total": 66,
+      "answered": 56,
+      "correct": 45
+     }
+    }
+   },
+   "maskedFraction": 1,
+   "analyzeMsMedian": 0.9100000000000819,
+   "analyzeMsP95": 1.9267999999999574,
+   "note": "Oracle boxes/masks isolate the colour stage; not end-to-end detection. Offline Pillow resampling, not Chrome."
+  },
+  "c2-v4-f-cal2-box": {
+   "mode": "box",
+   "fn": "analyzeObjectColorV4",
+   "params": {
+    "chromaMin": 18,
+    "chromaticFraction": 0.6,
+    "support": 0.9,
+    "minEvidence": 240,
+    "erode": false,
+    "refineBox": true,
+    "ringMatchDeltaE": 6,
+    "lowLightL": 14,
+    "whiteBalance": 0,
+    "brownL": 45,
+    "whiteL": 62,
+    "litPercentile": 0.95,
+    "pinkL": 55,
+    "dominantShare": 0.5,
+    "dominanceRatio": 1.3,
+    "secondaryShare": 0.18,
+    "secondaryMinPixels": 12,
+    "secondaryCells": 2,
+    "secondaryCellShare": 0.6,
+    "secondaryRequiresMask": true,
+    "highlightMaxShare": 0.18
+   },
+   "frames": 800,
+   "engineSha256": "a5bafac7d835849f9f35b1555893f9b1eabeabb67226327def12907aa3675977",
+   "framesSha256": "7cc5bfc994fd5b90f482d23c4bb21635d97b695735abc157adb51848c414b619",
+   "rowsEvaluated": 800,
+   "unresolvedMulticolorReferences": 0,
+   "secondaryPairAgreement": 0.684297520661157,
+   "secondaryPairN": 605,
+   "secondary": {
+    "primaryCorrectN": 455,
+    "referenceHasSecondary": 41,
+    "reportedSecondary": 0,
+    "precision": null,
+    "recall": 0,
+    "falsePositives": 0
+   },
+   "secondaryReportedFraction": 0,
+   "references": 800,
+   "sourceGroups": 800,
+   "answered": 605,
+   "coverage": 0.75625,
+   "correct": 455,
+   "selectiveAccuracy": 0.7520661157024794,
+   "selectiveAccuracyWilson95": [
+    0.7161383498940909,
+    0.7848129648649532
+   ],
+   "endToEndAccuracy": 0.56875,
+   "abstainReasons": {
+    "LOW_LIGHT": 87,
+    "CLIPPED_OR_REFLECTIVE": 45,
+    "MIXED_OR_OCCLUDED": 63
+   },
+   "topConfusions": [
+    [
+     "orange->brown",
+     31
+    ],
+    [
+     "white->gray",
+     25
+    ],
+    [
+     "pink->red",
+     25
+    ],
+    [
+     "gray->white",
+     10
+    ],
+    [
+     "brown->black",
+     8
+    ],
+    [
+     "pink->purple",
+     7
+    ],
+    [
+     "gray->black",
+     6
+    ],
+    [
+     "orange->red",
+     5
+    ],
+    [
+     "pink->gray",
+     5
+    ],
+    [
+     "brown->red",
+     3
+    ],
+    [
+     "brown->gray",
+     2
+    ],
+    [
+     "brown->orange",
+     2
+    ]
+   ],
+   "byTag": {
+    "exposure": {
+     "normal": {
+      "total": 364,
+      "answered": 300,
+      "correct": 264
+     },
+     "low": {
+      "total": 315,
+      "answered": 195,
+      "correct": 99
+     },
+     "high": {
+      "total": 121,
+      "answered": 110,
+      "correct": 92
+     }
+    },
+    "specular": {
+     "some": {
+      "total": 383,
+      "answered": 290,
+      "correct": 223
+     },
+     "none": {
+      "total": 296,
+      "answered": 225,
+      "correct": 165
+     },
+     "strong": {
+      "total": 121,
+      "answered": 90,
+      "correct": 67
+     }
+    },
+    "shadow": {
+     "soft": {
+      "total": 283,
+      "answered": 218,
+      "correct": 157
+     },
+     "strong": {
+      "total": 264,
+      "answered": 188,
+      "correct": 145
+     },
+     "none": {
+      "total": 253,
+      "answered": 199,
+      "correct": 153
+     }
+    },
+    "similarBackground": {
+     "false": {
+      "total": 551,
+      "answered": 432,
+      "correct": 325
+     },
+     "true": {
+      "total": 249,
+      "answered": 173,
+      "correct": 130
+     }
+    },
+    "occluded": {
+     "false": {
+      "total": 591,
+      "answered": 456,
+      "correct": 355
+     },
+     "true": {
+      "total": 209,
+      "answered": 149,
+      "correct": 100
+     }
+    },
+    "shape": {
+     "ellipse": {
+      "total": 152,
+      "answered": 123,
+      "correct": 93
+     },
+     "lattice": {
+      "total": 162,
+      "answered": 112,
+      "correct": 84
+     },
+     "circle": {
+      "total": 147,
+      "answered": 111,
+      "correct": 84
+     },
+     "capsule": {
+      "total": 176,
+      "answered": 124,
+      "correct": 93
+     },
+     "rrect": {
+      "total": 163,
+      "answered": 135,
+      "correct": 101
+     }
+    },
+    "tint": {
+     "neutral": {
+      "total": 657,
+      "answered": 503,
+      "correct": 388
+     },
+     "strong": {
+      "total": 143,
+      "answered": 102,
+      "correct": 67
+     }
+    },
+    "twoTone": {
+     "false": {
+      "total": 734,
+      "answered": 550,
+      "correct": 414
+     },
+     "true": {
+      "total": 66,
+      "answered": 55,
+      "correct": 41
+     }
+    }
+   },
+   "maskedFraction": 0,
+   "analyzeMsMedian": 1.3301000000001295,
+   "analyzeMsP95": 2.634999999999991,
+   "note": "Oracle boxes/masks isolate the colour stage; not end-to-end detection. Offline Pillow resampling, not Chrome."
+  },
+  "c2-v4-f-cal2-oracle-mask": {
+   "mode": "oracle-mask",
+   "fn": "analyzeObjectColorV4",
+   "params": {
+    "chromaMin": 18,
+    "chromaticFraction": 0.6,
+    "support": 0.9,
+    "minEvidence": 240,
+    "erode": false,
+    "refineBox": true,
+    "ringMatchDeltaE": 6,
+    "lowLightL": 14,
+    "whiteBalance": 0,
+    "brownL": 45,
+    "whiteL": 62,
+    "litPercentile": 0.95,
+    "pinkL": 55,
+    "dominantShare": 0.5,
+    "dominanceRatio": 1.3,
+    "secondaryShare": 0.18,
+    "secondaryMinPixels": 12,
+    "secondaryCells": 2,
+    "secondaryCellShare": 0.6,
+    "secondaryRequiresMask": true,
+    "highlightMaxShare": 0.18
+   },
+   "frames": 800,
+   "engineSha256": "a5bafac7d835849f9f35b1555893f9b1eabeabb67226327def12907aa3675977",
+   "framesSha256": "7cc5bfc994fd5b90f482d23c4bb21635d97b695735abc157adb51848c414b619",
+   "rowsEvaluated": 800,
+   "unresolvedMulticolorReferences": 0,
+   "secondaryPairAgreement": 0.7445008460236887,
+   "secondaryPairN": 591,
+   "secondary": {
+    "primaryCorrectN": 457,
+    "referenceHasSecondary": 45,
+    "reportedSecondary": 38,
+    "precision": 0.7894736842105263,
+    "recall": 0.6666666666666666,
+    "falsePositives": 8
+   },
+   "secondaryReportedFraction": 0.07952622673434856,
+   "references": 800,
+   "sourceGroups": 800,
+   "answered": 591,
+   "coverage": 0.73875,
+   "correct": 457,
+   "selectiveAccuracy": 0.7732656514382402,
+   "selectiveAccuracyWilson95": [
+    0.7378051177234108,
+    0.8051965822249451
+   ],
+   "endToEndAccuracy": 0.57125,
+   "abstainReasons": {
+    "CLIPPED_OR_REFLECTIVE": 59,
+    "LOW_LIGHT": 92,
+    "MIXED_OR_OCCLUDED": 58
+   },
+   "topConfusions": [
+    [
+     "orange->brown",
+     36
+    ],
+    [
+     "pink->red",
+     24
+    ],
+    [
+     "white->gray",
+     23
+    ],
+    [
+     "gray->white",
+     10
+    ],
+    [
+     "pink->purple",
+     8
+    ],
+    [
+     "brown->black",
+     7
+    ],
+    [
+     "gray->black",
+     6
+    ],
+    [
+     "pink->gray",
+     4
+    ],
+    [
+     "orange->red",
+     4
+    ],
+    [
+     "brown->red",
+     3
+    ],
+    [
+     "white->green",
+     2
+    ],
+    [
+     "brown->purple",
+     2
+    ]
+   ],
+   "byTag": {
+    "exposure": {
+     "normal": {
+      "total": 364,
+      "answered": 300,
+      "correct": 273
+     },
+     "low": {
+      "total": 315,
+      "answered": 184,
+      "correct": 91
+     },
+     "high": {
+      "total": 121,
+      "answered": 107,
+      "correct": 93
+     }
+    },
+    "specular": {
+     "some": {
+      "total": 383,
+      "answered": 284,
+      "correct": 221
+     },
+     "none": {
+      "total": 296,
+      "answered": 223,
+      "correct": 167
+     },
+     "strong": {
+      "total": 121,
+      "answered": 84,
+      "correct": 69
+     }
+    },
+    "shadow": {
+     "soft": {
+      "total": 283,
+      "answered": 211,
+      "correct": 155
+     },
+     "strong": {
+      "total": 264,
+      "answered": 184,
+      "correct": 145
+     },
+     "none": {
+      "total": 253,
+      "answered": 196,
+      "correct": 157
+     }
+    },
+    "similarBackground": {
+     "false": {
+      "total": 551,
+      "answered": 413,
+      "correct": 319
+     },
+     "true": {
+      "total": 249,
+      "answered": 178,
+      "correct": 138
+     }
+    },
+    "occluded": {
+     "false": {
+      "total": 591,
+      "answered": 441,
+      "correct": 350
+     },
+     "true": {
+      "total": 209,
+      "answered": 150,
+      "correct": 107
+     }
+    },
+    "shape": {
+     "ellipse": {
+      "total": 152,
+      "answered": 118,
+      "correct": 93
+     },
+     "lattice": {
+      "total": 162,
+      "answered": 114,
+      "correct": 84
+     },
+     "circle": {
+      "total": 147,
+      "answered": 105,
+      "correct": 82
+     },
+     "capsule": {
+      "total": 176,
+      "answered": 124,
+      "correct": 97
+     },
+     "rrect": {
+      "total": 163,
+      "answered": 130,
+      "correct": 101
+     }
+    },
+    "tint": {
+     "neutral": {
+      "total": 657,
+      "answered": 494,
+      "correct": 392
+     },
+     "strong": {
+      "total": 143,
+      "answered": 97,
+      "correct": 65
+     }
+    },
+    "twoTone": {
+     "false": {
+      "total": 734,
+      "answered": 535,
+      "correct": 412
+     },
+     "true": {
+      "total": 66,
+      "answered": 56,
+      "correct": 45
+     }
+    }
+   },
+   "maskedFraction": 1,
+   "analyzeMsMedian": 0.9459999999999127,
+   "analyzeMsP95": 2.0387000000000626,
+   "note": "Oracle boxes/masks isolate the colour stage; not end-to-end detection. Offline Pillow resampling, not Chrome."
+  },
+  "h3-v4f-calibration-box": {
+   "mode": "box",
+   "fn": "analyzeObjectColorV4",
+   "params": {
+    "chromaMin": 18,
+    "chromaticFraction": 0.6,
+    "support": 0.9,
+    "minEvidence": 240,
+    "erode": false,
+    "refineBox": true,
+    "ringMatchDeltaE": 6,
+    "lowLightL": 14,
+    "whiteBalance": 0,
+    "brownL": 45,
+    "whiteL": 62,
+    "litPercentile": 0.95,
+    "pinkL": 55,
+    "dominantShare": 0.5,
+    "dominanceRatio": 1.3,
+    "secondaryShare": 0.18,
+    "secondaryMinPixels": 12,
+    "secondaryCells": 2,
+    "secondaryCellShare": 0.6,
+    "secondaryRequiresMask": true,
+    "highlightMaxShare": 0.18
+   },
+   "frames": 13,
+   "engineSha256": "a5bafac7d835849f9f35b1555893f9b1eabeabb67226327def12907aa3675977",
+   "framesSha256": "c59fed612aae7f3850ee4ffd40fac201065f1941462d9dfa3145780b94181b36",
+   "rowsEvaluated": 13,
+   "unresolvedMulticolorReferences": 0,
+   "secondaryPairAgreement": 0.375,
+   "secondaryPairN": 8,
+   "secondary": {
+    "primaryCorrectN": 4,
+    "referenceHasSecondary": 1,
+    "reportedSecondary": 0,
+    "precision": null,
+    "recall": 0,
+    "falsePositives": 0
+   },
+   "secondaryReportedFraction": 0,
+   "references": 13,
+   "sourceGroups": 12,
+   "answered": 8,
+   "coverage": 0.6153846153846154,
+   "correct": 4,
+   "selectiveAccuracy": 0.5,
+   "selectiveAccuracyWilson95": [
+    0.2152125268244419,
+    0.7847874731755581
+   ],
+   "endToEndAccuracy": 0.3076923076923077,
+   "abstainReasons": {
+    "MIXED_OR_OCCLUDED": 2,
+    "CLIPPED_OR_REFLECTIVE": 2,
+    "TOO_SMALL": 1
+   },
+   "topConfusions": [
+    [
+     "orange->red",
+     2
+    ],
+    [
+     "yellow->green",
+     1
+    ],
+    [
+     "red->pink",
+     1
+    ]
+   ],
+   "byTag": {},
+   "maskedFraction": 0,
+   "analyzeMsMedian": 2.900899999999993,
+   "analyzeMsP95": 7.783500000000004,
+   "note": "Oracle boxes/masks isolate the colour stage; not end-to-end detection. Offline Pillow resampling, not Chrome."
+  },
+  "h3-v4f-calibration-oracle-mask": {
+   "mode": "oracle-mask",
+   "fn": "analyzeObjectColorV4",
+   "params": {
+    "chromaMin": 18,
+    "chromaticFraction": 0.6,
+    "support": 0.9,
+    "minEvidence": 240,
+    "erode": false,
+    "refineBox": true,
+    "ringMatchDeltaE": 6,
+    "lowLightL": 14,
+    "whiteBalance": 0,
+    "brownL": 45,
+    "whiteL": 62,
+    "litPercentile": 0.95,
+    "pinkL": 55,
+    "dominantShare": 0.5,
+    "dominanceRatio": 1.3,
+    "secondaryShare": 0.18,
+    "secondaryMinPixels": 12,
+    "secondaryCells": 2,
+    "secondaryCellShare": 0.6,
+    "secondaryRequiresMask": true,
+    "highlightMaxShare": 0.18
+   },
+   "frames": 13,
+   "engineSha256": "a5bafac7d835849f9f35b1555893f9b1eabeabb67226327def12907aa3675977",
+   "framesSha256": "c59fed612aae7f3850ee4ffd40fac201065f1941462d9dfa3145780b94181b36",
+   "rowsEvaluated": 13,
+   "unresolvedMulticolorReferences": 0,
+   "secondaryPairAgreement": 0.375,
+   "secondaryPairN": 8,
+   "secondary": {
+    "primaryCorrectN": 4,
+    "referenceHasSecondary": 1,
+    "reportedSecondary": 0,
+    "precision": null,
+    "recall": 0,
+    "falsePositives": 0
+   },
+   "secondaryReportedFraction": 0,
+   "references": 13,
+   "sourceGroups": 12,
+   "answered": 8,
+   "coverage": 0.6153846153846154,
+   "correct": 4,
+   "selectiveAccuracy": 0.5,
+   "selectiveAccuracyWilson95": [
+    0.2152125268244419,
+    0.7847874731755581
+   ],
+   "endToEndAccuracy": 0.3076923076923077,
+   "abstainReasons": {
+    "MIXED_OR_OCCLUDED": 2,
+    "TOO_SMALL": 2,
+    "CLIPPED_OR_REFLECTIVE": 1
+   },
+   "topConfusions": [
+    [
+     "orange->red",
+     2
+    ],
+    [
+     "yellow->green",
+     1
+    ],
+    [
+     "red->pink",
+     1
+    ]
+   ],
+   "byTag": {},
+   "maskedFraction": 1,
+   "analyzeMsMedian": 2.5108999999999924,
+   "analyzeMsP95": 6.385200000000012,
+   "note": "Oracle boxes/masks isolate the colour stage; not end-to-end detection. Offline Pillow resampling, not Chrome."
+  },
+  "h3-v4f-calibration-seg-mask": {
+   "mode": "seg-mask",
+   "fn": "analyzeObjectColorV4",
+   "params": {
+    "chromaMin": 18,
+    "chromaticFraction": 0.6,
+    "support": 0.9,
+    "minEvidence": 240,
+    "erode": false,
+    "refineBox": true,
+    "ringMatchDeltaE": 6,
+    "lowLightL": 14,
+    "whiteBalance": 0,
+    "brownL": 45,
+    "whiteL": 62,
+    "litPercentile": 0.95,
+    "pinkL": 55,
+    "dominantShare": 0.5,
+    "dominanceRatio": 1.3,
+    "secondaryShare": 0.18,
+    "secondaryMinPixels": 12,
+    "secondaryCells": 2,
+    "secondaryCellShare": 0.6,
+    "secondaryRequiresMask": true,
+    "highlightMaxShare": 0.18
+   },
+   "frames": 13,
+   "engineSha256": "a5bafac7d835849f9f35b1555893f9b1eabeabb67226327def12907aa3675977",
+   "framesSha256": "c59fed612aae7f3850ee4ffd40fac201065f1941462d9dfa3145780b94181b36",
+   "rowsEvaluated": 13,
+   "unresolvedMulticolorReferences": 0,
+   "secondaryPairAgreement": 0.4,
+   "secondaryPairN": 5,
+   "secondary": {
+    "primaryCorrectN": 3,
+    "referenceHasSecondary": 1,
+    "reportedSecondary": 0,
+    "precision": null,
+    "recall": 0,
+    "falsePositives": 0
+   },
+   "secondaryReportedFraction": 0,
+   "references": 13,
+   "sourceGroups": 12,
+   "answered": 5,
+   "coverage": 0.38461538461538464,
+   "correct": 3,
+   "selectiveAccuracy": 0.6,
+   "selectiveAccuracyWilson95": [
+    0.23071993220883702,
+    0.8823817688407467
+   ],
+   "endToEndAccuracy": 0.23076923076923078,
+   "abstainReasons": {
+    "MIXED_OR_OCCLUDED": 2,
+    "TOO_SMALL": 6
+   },
+   "topConfusions": [
+    [
+     "red->pink",
+     1
+    ],
+    [
+     "orange->red",
+     1
+    ]
+   ],
+   "byTag": {},
+   "maskedFraction": 0.6923076923076923,
+   "analyzeMsMedian": 1.5416000000000025,
+   "analyzeMsP95": 7.088700000000003,
+   "note": "Oracle boxes/masks isolate the colour stage; not end-to-end detection. Offline Pillow resampling, not Chrome."
+  },
+  "h3-v4f-development-box": {
+   "mode": "box",
+   "fn": "analyzeObjectColorV4",
+   "params": {
+    "chromaMin": 18,
+    "chromaticFraction": 0.6,
+    "support": 0.9,
+    "minEvidence": 240,
+    "erode": false,
+    "refineBox": true,
+    "ringMatchDeltaE": 6,
+    "lowLightL": 14,
+    "whiteBalance": 0,
+    "brownL": 45,
+    "whiteL": 62,
+    "litPercentile": 0.95,
+    "pinkL": 55,
+    "dominantShare": 0.5,
+    "dominanceRatio": 1.3,
+    "secondaryShare": 0.18,
+    "secondaryMinPixels": 12,
+    "secondaryCells": 2,
+    "secondaryCellShare": 0.6,
+    "secondaryRequiresMask": true,
+    "highlightMaxShare": 0.18
+   },
+   "frames": 33,
+   "engineSha256": "a5bafac7d835849f9f35b1555893f9b1eabeabb67226327def12907aa3675977",
+   "framesSha256": "9a7b91217a9af0eb069073e6dd44edf37595821123e10182e3e5688c6c28ef93",
+   "rowsEvaluated": 33,
+   "unresolvedMulticolorReferences": 0,
+   "secondaryPairAgreement": 0.47058823529411764,
+   "secondaryPairN": 17,
+   "secondary": {
+    "primaryCorrectN": 8,
+    "referenceHasSecondary": 0,
+    "reportedSecondary": 0,
+    "precision": null,
+    "recall": null,
+    "falsePositives": 0
+   },
+   "secondaryReportedFraction": 0,
+   "references": 43,
+   "sourceGroups": 32,
+   "answered": 17,
+   "coverage": 0.3953488372093023,
+   "correct": 8,
+   "selectiveAccuracy": 0.47058823529411764,
+   "selectiveAccuracyWilson95": [
+    0.26164801196088106,
+    0.6903710268845051
+   ],
+   "endToEndAccuracy": 0.18604651162790697,
+   "abstainReasons": {
+    "MIXED_OR_OCCLUDED": 21,
+    "TOO_SMALL": 5
+   },
+   "topConfusions": [
+    [
+     "purple->blue",
+     2
+    ],
+    [
+     "white->blue",
+     1
+    ],
+    [
+     "white->orange",
+     1
+    ],
+    [
+     "orange->white",
+     1
+    ],
+    [
+     "green->yellow",
+     1
+    ],
+    [
+     "pink->white",
+     1
+    ],
+    [
+     "white->green",
+     1
+    ],
+    [
+     "brown->orange",
+     1
+    ]
+   ],
+   "byTag": {},
+   "maskedFraction": 0,
+   "analyzeMsMedian": 2.114599999999996,
+   "analyzeMsP95": 4.5548,
+   "note": "Oracle boxes/masks isolate the colour stage; not end-to-end detection. Offline Pillow resampling, not Chrome."
+  },
+  "h3-v4f-development-oracle-mask": {
+   "mode": "oracle-mask",
+   "fn": "analyzeObjectColorV4",
+   "params": {
+    "chromaMin": 18,
+    "chromaticFraction": 0.6,
+    "support": 0.9,
+    "minEvidence": 240,
+    "erode": false,
+    "refineBox": true,
+    "ringMatchDeltaE": 6,
+    "lowLightL": 14,
+    "whiteBalance": 0,
+    "brownL": 45,
+    "whiteL": 62,
+    "litPercentile": 0.95,
+    "pinkL": 55,
+    "dominantShare": 0.5,
+    "dominanceRatio": 1.3,
+    "secondaryShare": 0.18,
+    "secondaryMinPixels": 12,
+    "secondaryCells": 2,
+    "secondaryCellShare": 0.6,
+    "secondaryRequiresMask": true,
+    "highlightMaxShare": 0.18
+   },
+   "frames": 33,
+   "engineSha256": "a5bafac7d835849f9f35b1555893f9b1eabeabb67226327def12907aa3675977",
+   "framesSha256": "9a7b91217a9af0eb069073e6dd44edf37595821123e10182e3e5688c6c28ef93",
+   "rowsEvaluated": 33,
+   "unresolvedMulticolorReferences": 0,
+   "secondaryPairAgreement": 0.5263157894736842,
+   "secondaryPairN": 19,
+   "secondary": {
+    "primaryCorrectN": 10,
+    "referenceHasSecondary": 0,
+    "reportedSecondary": 0,
+    "precision": null,
+    "recall": null,
+    "falsePositives": 0
+   },
+   "secondaryReportedFraction": 0.05263157894736842,
+   "references": 43,
+   "sourceGroups": 32,
+   "answered": 19,
+   "coverage": 0.4418604651162791,
+   "correct": 10,
+   "selectiveAccuracy": 0.5263157894736842,
+   "selectiveAccuracyWilson95": [
+    0.31707482511825114,
+    0.7267049451255145
+   ],
+   "endToEndAccuracy": 0.23255813953488372,
+   "abstainReasons": {
+    "MIXED_OR_OCCLUDED": 20,
+    "CLIPPED_OR_REFLECTIVE": 2,
+    "TOO_SMALL": 2
+   },
+   "topConfusions": [
+    [
+     "purple->blue",
+     2
+    ],
+    [
+     "white->blue",
+     1
+    ],
+    [
+     "brown->red",
+     1
+    ],
+    [
+     "white->orange",
+     1
+    ],
+    [
+     "orange->white",
+     1
+    ],
+    [
+     "green->yellow",
+     1
+    ],
+    [
+     "white->green",
+     1
+    ],
+    [
+     "brown->orange",
+     1
+    ]
+   ],
+   "byTag": {},
+   "maskedFraction": 1,
+   "analyzeMsMedian": 1.5971999999999866,
+   "analyzeMsP95": 4.282900000000012,
+   "note": "Oracle boxes/masks isolate the colour stage; not end-to-end detection. Offline Pillow resampling, not Chrome."
+  },
+  "h3-v4f-development-seg-mask": {
+   "mode": "seg-mask",
+   "fn": "analyzeObjectColorV4",
+   "params": {
+    "chromaMin": 18,
+    "chromaticFraction": 0.6,
+    "support": 0.9,
+    "minEvidence": 240,
+    "erode": false,
+    "refineBox": true,
+    "ringMatchDeltaE": 6,
+    "lowLightL": 14,
+    "whiteBalance": 0,
+    "brownL": 45,
+    "whiteL": 62,
+    "litPercentile": 0.95,
+    "pinkL": 55,
+    "dominantShare": 0.5,
+    "dominanceRatio": 1.3,
+    "secondaryShare": 0.18,
+    "secondaryMinPixels": 12,
+    "secondaryCells": 2,
+    "secondaryCellShare": 0.6,
+    "secondaryRequiresMask": true,
+    "highlightMaxShare": 0.18
+   },
+   "frames": 33,
+   "engineSha256": "a5bafac7d835849f9f35b1555893f9b1eabeabb67226327def12907aa3675977",
+   "framesSha256": "9a7b91217a9af0eb069073e6dd44edf37595821123e10182e3e5688c6c28ef93",
+   "rowsEvaluated": 33,
+   "unresolvedMulticolorReferences": 0,
+   "secondaryPairAgreement": 0.5882352941176471,
+   "secondaryPairN": 17,
+   "secondary": {
+    "primaryCorrectN": 12,
+    "referenceHasSecondary": 1,
+    "reportedSecondary": 1,
+    "precision": 0,
+    "recall": 0,
+    "falsePositives": 1
+   },
+   "secondaryReportedFraction": 0.11764705882352941,
+   "references": 43,
+   "sourceGroups": 32,
+   "answered": 17,
+   "coverage": 0.3953488372093023,
+   "correct": 12,
+   "selectiveAccuracy": 0.7058823529411765,
+   "selectiveAccuracyWilson95": [
+    0.468664666737861,
+    0.8672020613444361
+   ],
+   "endToEndAccuracy": 0.27906976744186046,
+   "abstainReasons": {
+    "MIXED_OR_OCCLUDED": 11,
+    "TOO_SMALL": 15
+   },
+   "topConfusions": [
+    [
+     "purple->blue",
+     2
+    ],
+    [
+     "white->orange",
+     1
+    ],
+    [
+     "white->green",
+     1
+    ],
+    [
+     "brown->orange",
+     1
+    ]
+   ],
+   "byTag": {},
+   "maskedFraction": 0.7441860465116279,
+   "analyzeMsMedian": 1.587299999999999,
+   "analyzeMsP95": 4.060699999999997,
+   "note": "Oracle boxes/masks isolate the colour stage; not end-to-end detection. Offline Pillow resampling, not Chrome."
+  },
+  "f-v4-c-dev2-box": {
+   "mode": "box",
+   "fn": "analyzeObjectColorV4",
+   "params": {
+    "chromaMin": 18,
+    "chromaticFraction": 0.6,
+    "support": 0.9,
+    "minEvidence": 240,
+    "erode": false,
+    "refineBox": true,
+    "ringMatchDeltaE": 6,
+    "lowLightL": 14,
+    "whiteBalance": 0,
+    "brownL": 45,
+    "whiteL": 62,
+    "litPercentile": 0.95,
+    "pinkL": 55,
+    "dominantShare": 0.5,
+    "dominanceRatio": 1.3,
+    "secondaryShare": 0.22,
+    "secondaryMinPixels": 12
+   },
+   "frames": 600,
+   "engineSha256": "bdc0e9612ed8c4f65cbf2c2121372f6f6d0c7073fe453c0ac8469309dc55d359",
+   "framesSha256": "ec3c576c16fe8078c38908377466d64c52846fd46f217fe8c0e93273ed4af76e",
+   "rowsEvaluated": 600,
+   "unresolvedMulticolorReferences": 0,
+   "secondaryPairAgreement": 0.6072234762979684,
+   "secondaryPairN": 443,
+   "secondary": {
+    "primaryCorrectN": 322,
+    "referenceHasSecondary": 28,
+    "reportedSecondary": 50,
+    "precision": 0.2,
+    "recall": 0.35714285714285715,
+    "falsePositives": 40
+   },
+   "secondaryReportedFraction": 0.16478555304740405,
+   "references": 600,
+   "sourceGroups": 600,
+   "answered": 443,
+   "coverage": 0.7383333333333333,
+   "correct": 322,
+   "selectiveAccuracy": 0.7268623024830699,
+   "selectiveAccuracyWilson95": [
+    0.6835520053703555,
+    0.7662718248191344
+   ],
+   "endToEndAccuracy": 0.5366666666666666,
+   "abstainReasons": {
+    "LOW_LIGHT": 70,
+    "CLIPPED_OR_REFLECTIVE": 43,
+    "MIXED_OR_OCCLUDED": 44
+   },
+   "topConfusions": [
+    [
+     "white->gray",
+     27
+    ],
+    [
+     "pink->red",
+     22
+    ],
+    [
+     "orange->brown",
+     21
+    ],
+    [
+     "gray->white",
+     9
+    ],
+    [
+     "pink->purple",
+     8
+    ],
+    [
+     "brown->black",
+     6
+    ],
+    [
+     "orange->red",
+     4
+    ],
+    [
+     "brown->orange",
+     2
+    ],
+    [
+     "brown->red",
+     2
+    ],
+    [
+     "gray->black",
+     2
+    ],
+    [
+     "white->purple",
+     1
+    ],
+    [
+     "purple->red",
+     1
+    ]
+   ],
+   "byTag": {
+    "exposure": {
+     "normal": {
+      "total": 271,
+      "answered": 217,
+      "correct": 189
+     },
+     "low": {
+      "total": 250,
+      "answered": 161,
+      "correct": 77
+     },
+     "high": {
+      "total": 79,
+      "answered": 65,
+      "correct": 56
+     }
+    },
+    "specular": {
+     "some": {
+      "total": 329,
+      "answered": 247,
+      "correct": 178
+     },
+     "strong": {
+      "total": 71,
+      "answered": 47,
+      "correct": 33
+     },
+     "none": {
+      "total": 200,
+      "answered": 149,
+      "correct": 111
+     }
+    },
+    "shadow": {
+     "soft": {
+      "total": 215,
+      "answered": 162,
+      "correct": 117
+     },
+     "none": {
+      "total": 199,
+      "answered": 142,
+      "correct": 106
+     },
+     "strong": {
+      "total": 186,
+      "answered": 139,
+      "correct": 99
+     }
+    },
+    "similarBackground": {
+     "false": {
+      "total": 427,
+      "answered": 319,
+      "correct": 231
+     },
+     "true": {
+      "total": 173,
+      "answered": 124,
+      "correct": 91
+     }
+    },
+    "occluded": {
+     "false": {
+      "total": 458,
+      "answered": 338,
+      "correct": 247
+     },
+     "true": {
+      "total": 142,
+      "answered": 105,
+      "correct": 75
+     }
+    },
+    "shape": {
+     "lattice": {
+      "total": 134,
+      "answered": 86,
+      "correct": 63
+     },
+     "rrect": {
+      "total": 123,
+      "answered": 91,
+      "correct": 64
+     },
+     "circle": {
+      "total": 122,
+      "answered": 92,
+      "correct": 68
+     },
+     "capsule": {
+      "total": 100,
+      "answered": 79,
+      "correct": 53
+     },
+     "ellipse": {
+      "total": 121,
+      "answered": 95,
+      "correct": 74
+     }
+    },
+    "tint": {
+     "neutral": {
+      "total": 504,
+      "answered": 376,
+      "correct": 281
+     },
+     "strong": {
+      "total": 96,
+      "answered": 67,
+      "correct": 41
+     }
+    },
+    "twoTone": {
+     "false": {
+      "total": 551,
+      "answered": 405,
+      "correct": 294
+     },
+     "true": {
+      "total": 49,
+      "answered": 38,
+      "correct": 28
+     }
+    }
+   },
+   "maskedFraction": 0,
+   "analyzeMsMedian": 1.7835000000000036,
+   "analyzeMsP95": 3.332300000000032,
+   "note": "Oracle boxes/masks isolate the colour stage; not end-to-end detection. Offline Pillow resampling, not Chrome."
+  },
+  "f-v4-c-dev2-oracle-mask": {
+   "mode": "oracle-mask",
+   "fn": "analyzeObjectColorV4",
+   "params": {
+    "chromaMin": 18,
+    "chromaticFraction": 0.6,
+    "support": 0.9,
+    "minEvidence": 240,
+    "erode": false,
+    "refineBox": true,
+    "ringMatchDeltaE": 6,
+    "lowLightL": 14,
+    "whiteBalance": 0,
+    "brownL": 45,
+    "whiteL": 62,
+    "litPercentile": 0.95,
+    "pinkL": 55,
+    "dominantShare": 0.5,
+    "dominanceRatio": 1.3,
+    "secondaryShare": 0.22,
+    "secondaryMinPixels": 12
+   },
+   "frames": 600,
+   "engineSha256": "bdc0e9612ed8c4f65cbf2c2121372f6f6d0c7073fe453c0ac8469309dc55d359",
+   "framesSha256": "ec3c576c16fe8078c38908377466d64c52846fd46f217fe8c0e93273ed4af76e",
+   "rowsEvaluated": 600,
+   "unresolvedMulticolorReferences": 0,
+   "secondaryPairAgreement": 0.6959459459459459,
+   "secondaryPairN": 444,
+   "secondary": {
+    "primaryCorrectN": 333,
+    "referenceHasSecondary": 29,
+    "reportedSecondary": 27,
+    "precision": 0.5555555555555556,
+    "recall": 0.5172413793103449,
+    "falsePositives": 12
+   },
+   "secondaryReportedFraction": 0.0945945945945946,
+   "references": 600,
+   "sourceGroups": 600,
+   "answered": 444,
+   "coverage": 0.74,
+   "correct": 333,
+   "selectiveAccuracy": 0.75,
+   "selectiveAccuracyWilson95": [
+    0.7076935683379976,
+    0.7880174151883207
+   ],
+   "endToEndAccuracy": 0.555,
+   "abstainReasons": {
+    "LOW_LIGHT": 80,
+    "CLIPPED_OR_REFLECTIVE": 44,
+    "MIXED_OR_OCCLUDED": 32
+   },
+   "topConfusions": [
+    [
+     "white->gray",
+     26
+    ],
+    [
+     "pink->red",
+     23
+    ],
+    [
+     "orange->brown",
+     20
+    ],
+    [
+     "brown->black",
+     8
+    ],
+    [
+     "gray->white",
+     8
+    ],
+    [
+     "pink->purple",
+     8
+    ],
+    [
+     "orange->red",
+     4
+    ],
+    [
+     "green->black",
+     2
+    ],
+    [
+     "brown->red",
+     2
+    ],
+    [
+     "gray->black",
+     2
+    ],
+    [
+     "white->purple",
+     1
+    ],
+    [
+     "white->pink",
+     1
+    ]
+   ],
+   "byTag": {
+    "exposure": {
+     "normal": {
+      "total": 271,
+      "answered": 224,
+      "correct": 201
+     },
+     "low": {
+      "total": 250,
+      "answered": 151,
+      "correct": 71
+     },
+     "high": {
+      "total": 79,
+      "answered": 69,
+      "correct": 61
+     }
+    },
+    "specular": {
+     "some": {
+      "total": 329,
+      "answered": 242,
+      "correct": 180
+     },
+     "strong": {
+      "total": 71,
+      "answered": 46,
+      "correct": 33
+     },
+     "none": {
+      "total": 200,
+      "answered": 156,
+      "correct": 120
+     }
+    },
+    "shadow": {
+     "soft": {
+      "total": 215,
+      "answered": 163,
+      "correct": 124
+     },
+     "none": {
+      "total": 199,
+      "answered": 142,
+      "correct": 107
+     },
+     "strong": {
+      "total": 186,
+      "answered": 139,
+      "correct": 102
+     }
+    },
+    "similarBackground": {
+     "false": {
+      "total": 427,
+      "answered": 321,
+      "correct": 236
+     },
+     "true": {
+      "total": 173,
+      "answered": 123,
+      "correct": 97
+     }
+    },
+    "occluded": {
+     "false": {
+      "total": 458,
+      "answered": 336,
+      "correct": 254
+     },
+     "true": {
+      "total": 142,
+      "answered": 108,
+      "correct": 79
+     }
+    },
+    "shape": {
+     "lattice": {
+      "total": 134,
+      "answered": 91,
+      "correct": 69
+     },
+     "rrect": {
+      "total": 123,
+      "answered": 92,
+      "correct": 67
+     },
+     "circle": {
+      "total": 122,
+      "answered": 90,
+      "correct": 68
+     },
+     "capsule": {
+      "total": 100,
+      "answered": 78,
+      "correct": 55
+     },
+     "ellipse": {
+      "total": 121,
+      "answered": 93,
+      "correct": 74
+     }
+    },
+    "tint": {
+     "neutral": {
+      "total": 504,
+      "answered": 378,
+      "correct": 288
+     },
+     "strong": {
+      "total": 96,
+      "answered": 66,
+      "correct": 45
+     }
+    },
+    "twoTone": {
+     "false": {
+      "total": 551,
+      "answered": 410,
+      "correct": 304
+     },
+     "true": {
+      "total": 49,
+      "answered": 34,
+      "correct": 29
+     }
+    }
+   },
+   "maskedFraction": 1,
+   "analyzeMsMedian": 1.3692000000000917,
+   "analyzeMsP95": 2.7058999999999287,
+   "note": "Oracle boxes/masks isolate the colour stage; not end-to-end detection. Offline Pillow resampling, not Chrome."
+  },
+  "f-v4-f-dev2-box": {
+   "mode": "box",
+   "fn": "analyzeObjectColorV4",
+   "params": {
+    "chromaMin": 18,
+    "chromaticFraction": 0.6,
+    "support": 0.9,
+    "minEvidence": 240,
+    "erode": false,
+    "refineBox": true,
+    "ringMatchDeltaE": 6,
+    "lowLightL": 14,
+    "whiteBalance": 0,
+    "brownL": 45,
+    "whiteL": 62,
+    "litPercentile": 0.95,
+    "pinkL": 55,
+    "dominantShare": 0.5,
+    "dominanceRatio": 1.3,
+    "secondaryShare": 0.18,
+    "secondaryMinPixels": 12,
+    "secondaryCells": 2,
+    "secondaryCellShare": 0.6,
+    "secondaryRequiresMask": true,
+    "highlightMaxShare": 0.18
+   },
+   "frames": 600,
+   "engineSha256": "a5bafac7d835849f9f35b1555893f9b1eabeabb67226327def12907aa3675977",
+   "framesSha256": "ec3c576c16fe8078c38908377466d64c52846fd46f217fe8c0e93273ed4af76e",
+   "rowsEvaluated": 600,
+   "unresolvedMulticolorReferences": 0,
+   "secondaryPairAgreement": 0.6606741573033708,
+   "secondaryPairN": 445,
+   "secondary": {
+    "primaryCorrectN": 322,
+    "referenceHasSecondary": 28,
+    "reportedSecondary": 0,
+    "precision": null,
+    "recall": 0,
+    "falsePositives": 0
+   },
+   "secondaryReportedFraction": 0,
+   "references": 600,
+   "sourceGroups": 600,
+   "answered": 445,
+   "coverage": 0.7416666666666667,
+   "correct": 322,
+   "selectiveAccuracy": 0.7235955056179775,
+   "selectiveAccuracyWilson95": [
+    0.6802632963250198,
+    0.7631002421705206
+   ],
+   "endToEndAccuracy": 0.5366666666666666,
+   "abstainReasons": {
+    "LOW_LIGHT": 71,
+    "CLIPPED_OR_REFLECTIVE": 41,
+    "MIXED_OR_OCCLUDED": 43
+   },
+   "topConfusions": [
+    [
+     "white->gray",
+     27
+    ],
+    [
+     "pink->red",
+     22
+    ],
+    [
+     "orange->brown",
+     21
+    ],
+    [
+     "gray->white",
+     9
+    ],
+    [
+     "pink->purple",
+     8
+    ],
+    [
+     "brown->black",
+     6
+    ],
+    [
+     "orange->red",
+     4
+    ],
+    [
+     "brown->orange",
+     2
+    ],
+    [
+     "brown->red",
+     2
+    ],
+    [
+     "gray->black",
+     2
+    ],
+    [
+     "white->purple",
+     1
+    ],
+    [
+     "purple->red",
+     1
+    ]
+   ],
+   "byTag": {
+    "exposure": {
+     "normal": {
+      "total": 271,
+      "answered": 217,
+      "correct": 188
+     },
+     "low": {
+      "total": 250,
+      "answered": 162,
+      "correct": 77
+     },
+     "high": {
+      "total": 79,
+      "answered": 66,
+      "correct": 57
+     }
+    },
+    "specular": {
+     "some": {
+      "total": 329,
+      "answered": 247,
+      "correct": 178
+     },
+     "strong": {
+      "total": 71,
+      "answered": 49,
+      "correct": 33
+     },
+     "none": {
+      "total": 200,
+      "answered": 149,
+      "correct": 111
+     }
+    },
+    "shadow": {
+     "soft": {
+      "total": 215,
+      "answered": 162,
+      "correct": 116
+     },
+     "none": {
+      "total": 199,
+      "answered": 143,
+      "correct": 106
+     },
+     "strong": {
+      "total": 186,
+      "answered": 140,
+      "correct": 100
+     }
+    },
+    "similarBackground": {
+     "false": {
+      "total": 427,
+      "answered": 320,
+      "correct": 231
+     },
+     "true": {
+      "total": 173,
+      "answered": 125,
+      "correct": 91
+     }
+    },
+    "occluded": {
+     "false": {
+      "total": 458,
+      "answered": 340,
+      "correct": 247
+     },
+     "true": {
+      "total": 142,
+      "answered": 105,
+      "correct": 75
+     }
+    },
+    "shape": {
+     "lattice": {
+      "total": 134,
+      "answered": 88,
+      "correct": 65
+     },
+     "rrect": {
+      "total": 123,
+      "answered": 91,
+      "correct": 64
+     },
+     "circle": {
+      "total": 122,
+      "answered": 92,
+      "correct": 68
+     },
+     "capsule": {
+      "total": 100,
+      "answered": 80,
+      "correct": 53
+     },
+     "ellipse": {
+      "total": 121,
+      "answered": 94,
+      "correct": 72
+     }
+    },
+    "tint": {
+     "neutral": {
+      "total": 504,
+      "answered": 378,
+      "correct": 281
+     },
+     "strong": {
+      "total": 96,
+      "answered": 67,
+      "correct": 41
+     }
+    },
+    "twoTone": {
+     "false": {
+      "total": 551,
+      "answered": 407,
+      "correct": 294
+     },
+     "true": {
+      "total": 49,
+      "answered": 38,
+      "correct": 28
+     }
+    }
+   },
+   "maskedFraction": 0,
+   "analyzeMsMedian": 1.7679000000000542,
+   "analyzeMsP95": 3.463999999999942,
+   "note": "Oracle boxes/masks isolate the colour stage; not end-to-end detection. Offline Pillow resampling, not Chrome."
+  },
+  "f-v4-f-dev2-oracle-mask": {
+   "mode": "oracle-mask",
+   "fn": "analyzeObjectColorV4",
+   "params": {
+    "chromaMin": 18,
+    "chromaticFraction": 0.6,
+    "support": 0.9,
+    "minEvidence": 240,
+    "erode": false,
+    "refineBox": true,
+    "ringMatchDeltaE": 6,
+    "lowLightL": 14,
+    "whiteBalance": 0,
+    "brownL": 45,
+    "whiteL": 62,
+    "litPercentile": 0.95,
+    "pinkL": 55,
+    "dominantShare": 0.5,
+    "dominanceRatio": 1.3,
+    "secondaryShare": 0.18,
+    "secondaryMinPixels": 12,
+    "secondaryCells": 2,
+    "secondaryCellShare": 0.6,
+    "secondaryRequiresMask": true,
+    "highlightMaxShare": 0.18
+   },
+   "frames": 600,
+   "engineSha256": "a5bafac7d835849f9f35b1555893f9b1eabeabb67226327def12907aa3675977",
+   "framesSha256": "ec3c576c16fe8078c38908377466d64c52846fd46f217fe8c0e93273ed4af76e",
+   "rowsEvaluated": 600,
+   "unresolvedMulticolorReferences": 0,
+   "secondaryPairAgreement": 0.7178329571106095,
+   "secondaryPairN": 443,
+   "secondary": {
+    "primaryCorrectN": 332,
+    "referenceHasSecondary": 29,
+    "reportedSecondary": 25,
+    "precision": 0.76,
+    "recall": 0.6551724137931034,
+    "falsePositives": 6
+   },
+   "secondaryReportedFraction": 0.0744920993227991,
+   "references": 600,
+   "sourceGroups": 600,
+   "answered": 443,
+   "coverage": 0.7383333333333333,
+   "correct": 332,
+   "selectiveAccuracy": 0.7494356659142212,
+   "selectiveAccuracyWilson95": [
+    0.7070543808688946,
+    0.7875280393892012
+   ],
+   "endToEndAccuracy": 0.5533333333333333,
+   "abstainReasons": {
+    "LOW_LIGHT": 80,
+    "CLIPPED_OR_REFLECTIVE": 43,
+    "MIXED_OR_OCCLUDED": 34
+   },
+   "topConfusions": [
+    [
+     "white->gray",
+     26
+    ],
+    [
+     "pink->red",
+     23
+    ],
+    [
+     "orange->brown",
+     20
+    ],
+    [
+     "brown->black",
+     8
+    ],
+    [
+     "gray->white",
+     8
+    ],
+    [
+     "pink->purple",
+     8
+    ],
+    [
+     "orange->red",
+     4
+    ],
+    [
+     "green->black",
+     2
+    ],
+    [
+     "brown->red",
+     2
+    ],
+    [
+     "gray->black",
+     2
+    ],
+    [
+     "white->purple",
+     1
+    ],
+    [
+     "white->pink",
+     1
+    ]
+   ],
+   "byTag": {
+    "exposure": {
+     "normal": {
+      "total": 271,
+      "answered": 223,
+      "correct": 200
+     },
+     "low": {
+      "total": 250,
+      "answered": 151,
+      "correct": 71
+     },
+     "high": {
+      "total": 79,
+      "answered": 69,
+      "correct": 61
+     }
+    },
+    "specular": {
+     "some": {
+      "total": 329,
+      "answered": 242,
+      "correct": 180
+     },
+     "strong": {
+      "total": 71,
+      "answered": 45,
+      "correct": 32
+     },
+     "none": {
+      "total": 200,
+      "answered": 156,
+      "correct": 120
+     }
+    },
+    "shadow": {
+     "soft": {
+      "total": 215,
+      "answered": 162,
+      "correct": 123
+     },
+     "none": {
+      "total": 199,
+      "answered": 142,
+      "correct": 107
+     },
+     "strong": {
+      "total": 186,
+      "answered": 139,
+      "correct": 102
+     }
+    },
+    "similarBackground": {
+     "false": {
+      "total": 427,
+      "answered": 320,
+      "correct": 235
+     },
+     "true": {
+      "total": 173,
+      "answered": 123,
+      "correct": 97
+     }
+    },
+    "occluded": {
+     "false": {
+      "total": 458,
+      "answered": 335,
+      "correct": 253
+     },
+     "true": {
+      "total": 142,
+      "answered": 108,
+      "correct": 79
+     }
+    },
+    "shape": {
+     "lattice": {
+      "total": 134,
+      "answered": 91,
+      "correct": 69
+     },
+     "rrect": {
+      "total": 123,
+      "answered": 91,
+      "correct": 66
+     },
+     "circle": {
+      "total": 122,
+      "answered": 90,
+      "correct": 68
+     },
+     "capsule": {
+      "total": 100,
+      "answered": 78,
+      "correct": 55
+     },
+     "ellipse": {
+      "total": 121,
+      "answered": 93,
+      "correct": 74
+     }
+    },
+    "tint": {
+     "neutral": {
+      "total": 504,
+      "answered": 377,
+      "correct": 287
+     },
+     "strong": {
+      "total": 96,
+      "answered": 66,
+      "correct": 45
+     }
+    },
+    "twoTone": {
+     "false": {
+      "total": 551,
+      "answered": 409,
+      "correct": 303
+     },
+     "true": {
+      "total": 49,
+      "answered": 34,
+      "correct": 29
+     }
+    }
+   },
+   "maskedFraction": 1,
+   "analyzeMsMedian": 1.3308999999999287,
+   "analyzeMsP95": 2.4778000000001157,
+   "note": "Oracle boxes/masks isolate the colour stage; not end-to-end detection. Offline Pillow resampling, not Chrome."
+  }
+ }
+}
