@@ -19,6 +19,12 @@ final class BasiraAppleSubscriptions: ObservableObject {
     private var updates: Task<Void, Never>?
     private var loadTask: Task<Void, Never>?
 
+    /// Checkout is intentionally off until signed transactions are checked by
+    /// our authenticated backend and linked to the customer's account.
+    var checkoutEnabled: Bool {
+        Bundle.main.object(forInfoDictionaryKey: "BasiraStoreKitCheckoutEnabled") as? Bool == true
+    }
+
     private var ids: [String] {
         guard let data = Bundle.main.object(forInfoDictionaryKey: "BasiraSubscriptionProductIDs") as? [String]
         else { return [] }
@@ -84,7 +90,7 @@ final class BasiraAppleSubscriptions: ObservableObject {
     }
 
     func buy(_ product: Product) async {
-        guard ids.contains(product.id), configurationAvailable, !isBusy else { return }
+        guard checkoutEnabled, ids.contains(product.id), configurationAvailable, !isBusy else { return }
         isBusy = true
         defer { isBusy = false }
         do {
