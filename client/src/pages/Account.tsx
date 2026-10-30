@@ -197,6 +197,19 @@ export default function Account() {
       </section>
       <div className="container max-w-5xl py-12 sm:py-16">
         <section className="mb-8 rounded-2xl border border-amber-200/20 bg-card p-6">
+          <h2 className="text-xl font-bold text-white">
+            {lang === 'ar' ? 'اشتراكات بصيرة' : lang === 'en' ? 'Basira subscriptions' : 'Basira 订阅'}
+          </h2>
+          <p className="mt-2 text-sm text-stone-300">
+            {lang === 'ar'
+              ? 'الاشتراكات الرقمية في تطبيق iPhone تستخدم Apple. لا يمكن تفعيل الميزات المدفوعة دون تحقق الخادم.'
+              : 'iPhone digital subscriptions use Apple. Paid services require backend verification.'}
+          </p>
+          <Link href="/billing" className="mt-3 inline-flex min-h-12 items-center rounded-xl border border-amber-300/40 px-4 font-bold text-amber-200">
+            {lang === 'ar' ? 'عرض خطط الاشتراك' : 'View subscription plans'}
+          </Link>
+        </section>
+        <section className="mb-8 rounded-2xl border border-amber-200/20 bg-card p-6">
           <h2 className="text-xl font-bold text-white">{navigation.permissions}</h2>
           <Link href="/settings/privacy-permissions" className="mt-3 inline-flex min-h-12 items-center rounded-xl border border-amber-300/40 px-4 font-bold text-amber-200 hover:bg-amber-300/10">{navigation.permissionTitle}</Link>
         </section>
