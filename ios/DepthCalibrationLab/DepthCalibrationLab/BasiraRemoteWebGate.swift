@@ -73,7 +73,7 @@ final class BasiraRemoteWebGate: ObservableObject {
               Self.requiredRoutes.allSatisfy(manifest.declaredRoutes.contains),
               // The unified iPhone app must not mount a backend whose shipped
               // web bundle omits any advertised native service route.
-              Set(BasiraFeature.allCases.map(\\.path)).isSubset(
+              Set(BasiraFeature.allCases.map(\.path)).isSubset(
                   of: Set(manifest.declaredRoutes)
               )
         else { return nil }
