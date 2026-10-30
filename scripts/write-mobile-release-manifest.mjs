@@ -79,7 +79,8 @@ export async function buildMobileManifest({
     product: "basira",
     sourceRevision: sourceRevision || null,
     sourceVerified: Boolean(sourceRevision),
-    webBundle: { assetCount: files.length, totalBytes, sha256: assetDigest },
+    webBundle: { assetCount: files.length, totalBytes, sha256: assetDigest,
+      indexSha256: assetEntries.find(entry => entry[0] === "index.html")?.[2] },
     declaredRoutes: routes,
     disclaimer: "Build identity and route declarations only; no live feature or physical safety verification.",
   };
