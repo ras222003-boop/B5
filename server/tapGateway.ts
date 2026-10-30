@@ -23,7 +23,24 @@ export interface TapMerchantTestCredentials {
   merchantId: string;
 }
 
-const SAFE_URL = /^https:\/\/[a-z0-9.-]+(?:\/[^\s?#]*)?$/i;
+// Require paired HTTPS callback URLs on the same public origin; never
+// allow private/loopback hosts or authentication credentials in callbacks.
+function publicCallbackOrigin(value: string): string | null {
+  try {
+    const url = new URL(value);
+    if (url.protocol !== "https:" || url.username || url.password || url.port ||
+        url.search || url.hash || url.pathname === "/" || value !== url.href) return null;
+    const hostname = url.hostname.toLowerCase();
+    const labels = hostname.split(".");
+    if (hostname.length > 253 || labels.length < 2 ||
+        !/[a-z]/.test(hostname) ||
+        /\\.(localhost|local|example|invalid|test)$/.test(hostname) ||
+        labels.some(label => !/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(label))) return null;
+    return url.origin;
+  } catch {
+    return null;
+  }
+}
 const ORDER_ID = /^[a-zA-Z0-9_-]{10,90}$/;
 
 export function validTapHostedChargeInput(value: TapHostedChargeInput): boolean {
@@ -35,8 +52,8 @@ export function validTapHostedChargeInput(value: TapHostedChargeInput): boolean 
     && value.email.length <= 254
     && value.firstName.length >= 1 && value.firstName.length <= 120
     && value.lastName.length >= 1 && value.lastName.length <= 120
-    && SAFE_URL.test(value.returnUrl)
-    && SAFE_URL.test(value.webhookUrl);
+    && publicCallbackOrigin(value.returnUrl) !== null
+    && publicCallbackOrigin(value.returnUrl) === publicCallbackOrigin(value.webhookUrl);
 }
 
 export async function createTapSandboxHostedCharge(
@@ -84,13 +101,14 @@ export async function createTapSandboxHostedCharge(
     transaction?: { url?: unknown };
   };
   const checkoutUrl = typeof payload.transaction?.url === "string" ? payload.transaction.url : "";
-  let host: string;
-  try { host = new URL(checkoutUrl).hostname; } catch { throw new Error("tap_invalid_checkout_url"); }
+  let checkout: URL;
+  try { checkout = new URL(checkoutUrl); } catch { throw new Error("tap_invalid_checkout_url"); }
   if (payload.live_mode !== false ||
       typeof payload.id !== "string" || !/^chg_[a-zA-Z0-9_-]{10,}$/.test(payload.id) ||
       !["INITIATED", "IN_PROGRESS"].includes(String(payload.status)) ||
-      !/^([a-z0-9.-]+\.)?tap\.company$/i.test(host) ||
-      !checkoutUrl.startsWith("https://")) {
+      !/^([a-z0-9-]+\\.)*tap\\.company$/i.test(checkout.hostname) ||
+      checkout.protocol !== "https:" || checkout.username || checkout.password ||
+      checkout.port || checkout.hash || !checkoutUrl.startsWith("https://")) {
     throw new Error("tap_untrusted_checkout_response");
   }
   return { chargeId: payload.id, checkoutUrl };
