@@ -41,9 +41,11 @@ final class BasiraAppleSubscriptions: ObservableObject {
                 guard !Task.isCancelled else { break }
                 switch result {
                 case .verified(let transaction):
-                    // Apple verification is necessary but NOT sufficient for
-                    // giving the customer server-side paid privileges.
-                    await transaction.finish()
+                    // Do not finish until the authenticated Basira backend
+                    // verifies and delivers the paid entitlement. Checkout is
+                    // currently hard-disabled, so keep any unexpected verified
+                    // transaction pending for future reconciliation.
+                    _ = transaction
                     await self?.refreshEntitlements()
                 case .unverified:
                     self?.message = "تعذر التحقق من المعاملة عبر Apple. لن تُفعّل أي صلاحيات مدفوعة."
@@ -97,9 +99,11 @@ final class BasiraAppleSubscriptions: ObservableObject {
             let result = try await product.purchase()
             switch result {
             case .success(.verified(let transaction)):
-                await transaction.finish()
+                // Apple-signed but not yet delivered. The backend must persist
+                // and authorize the subscription before this can be finished.
+                _ = transaction
                 await refreshEntitlements()
-                message = "أكدت Apple عملية الشراء. تفعيل مزايا الحساب المدفوعة يتطلب التحقق الخادمي من الاشتراك."
+                message = "وثّقت Apple الشراء، لكن خادم بصيرة لم يؤكد تفعيل الاشتراك. لن نُنهي المعاملة قبل إكمال التفعيل."
             case .success(.unverified):
                 message = "تعذر توثيق عملية الشراء. لم نفعّل أي مزايا مدفوعة."
             case .pending:
