@@ -19,6 +19,7 @@ workflows:
           command -v xcodegen >/dev/null || brew install xcodegen
           python3 ios/DepthCalibrationLab/scripts/generate-lab-icon.py
           python3 ios/DepthCalibrationLab/scripts/test_configure_web_origin.py
+          python3 ios/DepthCalibrationLab/scripts/test_configure_storekit.py
           bash ios/DepthCalibrationLab/scripts/configure-web-origin.sh
           python3 ios/DepthCalibrationLab/scripts/configure_storekit.py
           cd ios/DepthCalibrationLab
