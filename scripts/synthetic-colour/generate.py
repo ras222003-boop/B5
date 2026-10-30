@@ -152,7 +152,9 @@ def render(seed):
     albedo_img = np.ones((H * SS, W * SS, 3)) * albedos[0]
     if two_tone:
         split_angle = rng.uniform(0, math.pi)
-        side = ((X - cx) * math.cos(split_angle) + (Y - cy) * math.sin(split_angle)) > 0
+        # Dominant + secondary policy: the minor colour covers roughly 25-40% of the object, not half.
+        offset = rng.uniform(0.15, 0.45) * size * rng.choice([-1, 1])
+        side = ((X - cx) * math.cos(split_angle) + (Y - cy) * math.sin(split_angle)) > offset
         albedo_img = np.where(side[..., None], albedos[1], albedos[0])
     shade = (ambient + kd * ndotl)[..., None]
     obj_lin = albedo_img * shade * exposure * tint + (spec * exposure)[..., None] * tint
@@ -204,13 +206,23 @@ def render(seed):
     if not (0.02 * W * H <= len(xs) <= 0.7 * W * H):
         return None
     box = [xs.min() / W, ys.min() / H, (xs.max() + 1 - xs.min()) / W, (ys.max() + 1 - ys.min()) / H]
+    # Primary = the class whose pixels cover more of the visible object (two-tone objects only differ by area).
+    primary_label, secondary_label = classes[0], None
+    if two_tone:
+        covers = [float((visible & ((side) if k == 1 else ~side)).sum()) for k in (0, 1)]
+        order = [0, 1] if covers[0] >= covers[1] else [1, 0]
+        primary_label, secondary_label = classes[order[0]], classes[order[1]]
+        minor = min(covers) / max(1.0, sum(covers))
+        if minor < 0.12:
+            secondary_label = None
     exposure_bucket = "low" if exposure < 0.35 else "high" if exposure > 1.2 else "normal"
     return dict(
         frame=frame,
         mask=mask,
         box=box,
-        label="multicolor" if two_tone else classes[0],
-        components=sorted(classes) if two_tone else [],
+        label=primary_label,
+        components=[],
+        secondary=secondary_label,
         tags=dict(
             exposure=exposure_bucket,
             specular="strong" if ks >= 0.8 else "some" if ks >= 0.1 else "none",
@@ -257,7 +269,8 @@ def main():
                         "cocoClass": "synthetic",
                         "box": r["box"],
                         "referenceColor": r["label"],
-                        "referenceComponents": r["components"],
+                        "referenceSecondary": r["secondary"],
+                        "referenceComponents": [],
                         "mask": base64.b64encode(r["mask"].astype(np.uint8).tobytes()).decode(),
                         "segMask": None,
                         "tags": r["tags"],

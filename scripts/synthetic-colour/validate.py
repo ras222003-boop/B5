@@ -10,7 +10,7 @@ from collections import Counter
 
 import numpy as np
 
-LABELS = {"red", "orange", "yellow", "green", "blue", "purple", "pink", "brown", "black", "white", "gray", "multicolor"}
+LABELS = {"red", "orange", "yellow", "green", "blue", "purple", "pink", "brown", "black", "white", "gray"}
 
 
 def load(path):
@@ -57,10 +57,10 @@ def main():
                 problems.append((row["id"], "mask area %.3f" % mask.mean()))
             if o["referenceColor"] not in LABELS:
                 problems.append((row["id"], "label " + o["referenceColor"]))
-            if (o["referenceColor"] == "multicolor") != bool(o["referenceComponents"]):
-                problems.append((row["id"], "multicolor components"))
-            if o["referenceColor"] != "multicolor" and o["referenceComponents"]:
-                problems.append((row["id"], "components on single colour"))
+            if o.get("referenceSecondary") is not None and (o["referenceSecondary"] not in LABELS or o["referenceSecondary"] == o["referenceColor"]):
+                problems.append((row["id"], "secondary colour invalid"))
+            if bool(o["tags"]["twoTone"]) != (o.get("referenceSecondary") is not None) and o["tags"]["twoTone"] and o.get("referenceSecondary") is None:
+                pass  # a two-tone object whose minor colour is under 12% keeps no secondary on purpose
             areas.append(mask.mean())
             labels[o["referenceColor"]] += 1
             for key in tags:

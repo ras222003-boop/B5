@@ -53,6 +53,8 @@ export type ObjectColorName='red'|'blue'|'green'|'yellow'|'orange'|'purple'|'pin
 export interface ObjectColorObservation {
   name:ObjectColorName|null;status:'ESTIMATED'|'MASK_SUPPORTED'|'UNCLEAR';
     components?:ObjectColorName[];shade?:'LIGHT'|'DARK';
+    /** Second most prominent material colour, reported alongside the dominant name; never averaged into it. */
+    secondary?:ObjectColorName;
   reason:'BOX_ESTIMATE'|'ALIGNED_INSTANCE_MASK'|'LOW_LIGHT'|'CLIPPED_OR_REFLECTIVE'|'BACKGROUND_AMBIGUOUS'|'MIXED_OR_OCCLUDED'|'TOO_SMALL'|'WARMING_UP'|'CHANGING';
   supportFraction:number;samples:number;timestamp:number;stableFrames:number;calibrated:false;
   /** Pixel-quality indicators, NOT a probability or the detector's confidence. */

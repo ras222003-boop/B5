@@ -28,15 +28,16 @@
 <body>
 <main>
   <header>
-    <h1>ما لون هذا الجسم؟</h1>
+    <h1>ما اللون الغالب لهذا الجسم؟</h1>
     <div class="meta" id="progress" role="status" aria-live="polite"></div>
   </header>
-  <p class="meta">الجسم داخل الإطار الأخضر، والمنطقة المظلمة خارجه ليست من الجسم. اختر لون <b>مادة الجسم نفسه</b> كما تراه، لا لون الخلفية أو الظل. إن لم تستطع الجزم فاختر «غير متأكد». لن تُرسل الصور إلى أي جهة.</p>
+  <p class="meta">الجسم داخل الإطار الأخضر، والمنطقة المظلمة خارجه ليست من الجسم. اختر <b>اللون الغالب</b> على مادة الجسم نفسه كما تراه، لا لون الخلفية أو الظل. ثم اختر لونًا <b>ثانويًا</b> فقط إن كان ظاهرًا بوضوح (مثل: حافلة بيضاء بزخارف زرقاء). إن لم تستطع الجزم فاختر «غير متأكد». لن تُرسل الصور إلى أي جهة.</p>
   <div class="views">
     <canvas id="crop" width="640" height="480" role="img" aria-label="الجسم المطلوب مراجعته"></canvas>
     <canvas id="whole" width="320" height="240" role="img" aria-label="الصورة كاملة"></canvas>
   </div>
   <div class="meta" id="cls"></div>
+  <div class="meta" id="step" role="status" aria-live="polite"></div>
   <div class="grid" id="buttons"></div>
   <div class="row">
     <label>اسم المراجع <input id="reviewer" maxlength="40" autocomplete="off"></label>
@@ -49,21 +50,46 @@
 const NAMES = { red:"أحمر", orange:"برتقالي", yellow:"أصفر", green:"أخضر", blue:"أزرق", purple:"بنفسجي", pink:"وردي", brown:"بني", black:"أسود", white:"أبيض", gray:"رمادي", multicolor:"متعدد الألوان", unsure:"غير متأكد", "bad-mask":"الإطار لا يطابق الجسم" };
 const SWATCH = { red:"#d02030", orange:"#f08a00", yellow:"#f2d600", green:"#22a050", blue:"#2858d8", purple:"#7a30a0", pink:"#f08cb8", brown:"#7a4a22", black:"#101010", white:"#f8f8f8", gray:"#808080", multicolor:"linear-gradient(90deg,#d02030,#f2d600,#22a050,#2858d8)" };
 const CLASS_AR = { car:"سيارة", chair:"كرسي", backpack:"حقيبة ظهر", handbag:"حقيبة يد", suitcase:"حقيبة سفر", bottle:"زجاجة", cup:"كوب", couch:"أريكة", bed:"سرير", bus:"حافلة", bicycle:"دراجة", book:"كتاب", umbrella:"مظلة", bowl:"وعاء", vase:"مزهرية", laptop:"حاسوب محمول", motorcycle:"دراجة نارية", truck:"شاحنة", bench:"مقعد", train:"قطار" };
-let queue = [], total = 0, done = 0, current = null, last = null, loaded = null;
+let queue = [], total = 0, done = 0, current = null, last = null, loaded = null, COLOURS = [], LABELS = [], primary = null;
 const $ = id => document.getElementById(id);
 $("reviewer").value = localStorage.getItem("reviewer") ?? "";
 $("reviewer").addEventListener("change", () => localStorage.setItem("reviewer", $("reviewer").value.trim()));
 
-function buildButtons(labels) {
+function buildButtons() {
   const box = $("buttons"); box.innerHTML = "";
-  labels.forEach((l, i) => {
+  primary = null;
+  $("step").textContent = "الخطوة 1: اللون الغالب";
+  LABELS.forEach((l, i) => {
     const b = document.createElement("button");
     b.type = "button"; b.dataset.label = l;
     const sw = SWATCH[l] ? `<span class="sw" style="background:${SWATCH[l]}" aria-hidden="true"></span>` : "";
     b.innerHTML = `${sw}<span>${NAMES[l]}</span><kbd>${i < 9 ? i + 1 : i === 9 ? "0" : ""}</kbd>`;
-    b.addEventListener("click", () => submit(l));
+    b.addEventListener("click", () => choosePrimary(l));
     box.appendChild(b);
   });
+}
+function buildSecondary() {
+  const box = $("buttons"); box.innerHTML = "";
+  $("step").textContent = `الخطوة 2: لون ثانوي واضح؟ (الغالب: ${NAMES[primary]})`;
+  const none = document.createElement("button");
+  none.type = "button"; none.dataset.label = "none";
+  none.innerHTML = `<span>لا يوجد لون ثانوي واضح</span><kbd>0</kbd>`;
+  none.addEventListener("click", () => submit(primary, null));
+  box.appendChild(none);
+  COLOURS.filter(c => c !== primary).forEach((l, i) => {
+    const b = document.createElement("button");
+    b.type = "button"; b.dataset.label = l;
+    b.innerHTML = `<span class="sw" style="background:${SWATCH[l]}" aria-hidden="true"></span><span>${NAMES[l]}</span><kbd>${i < 9 ? i + 1 : ""}</kbd>`;
+    b.addEventListener("click", () => submit(primary, l));
+    box.appendChild(b);
+  });
+  none.focus();
+}
+function choosePrimary(l) {
+  if (!current) return;
+  if (!$("reviewer").value.trim()) { $("status").textContent = "اكتب اسم المراجع أولًا."; $("reviewer").focus(); return; }
+  if (l === "unsure" || l === "bad-mask") { submit(l, null); return; }
+  primary = l; buildSecondary();
 }
 function draw(item, img) {
   const [bx, by, bw, bh] = item.box, W = item.width, H = item.height;
@@ -96,6 +122,7 @@ async function show() {
   current = queue[0];
   if (!current) { $("progress").textContent = `اكتملت المراجعة: ${done} من ${total}`; $("buttons").innerHTML = ""; $("cls").textContent = "لا توجد عناصر متبقية."; return; }
   $("progress").textContent = `${done + 1} من ${total}`;
+  buildButtons();
   $("cls").textContent = `نوع الجسم: ${CLASS_AR[current.cocoClass] ?? current.cocoClass}`;
   const img = new Image();
   img.src = "/img/" + encodeURIComponent(current.image);
@@ -103,14 +130,14 @@ async function show() {
   loaded = img; draw(current, img);
   $("note").value = "";
 }
-async function submit(label) {
+async function submit(label, secondary) {
   const reviewer = $("reviewer").value.trim();
   if (!current) return;
   if (!reviewer) { $("status").textContent = "اكتب اسم المراجع أولًا."; $("reviewer").focus(); return; }
-  const res = await fetch("/api/review", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ itemId: current.id, label, reviewer, note: $("note").value }) });
+  const res = await fetch("/api/review", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ itemId: current.id, label, secondary, reviewer, note: $("note").value }) });
   if (!res.ok) { $("status").textContent = "تعذر الحفظ."; return; }
   last = current; queue.shift(); done++;
-  $("status").textContent = `حُفظ: ${NAMES[label]}`;
+  $("status").textContent = `حُفظ: ${NAMES[label]}${secondary ? " مع " + NAMES[secondary] : ""}`;
   show();
 }
 $("undo").addEventListener("click", () => {
@@ -120,10 +147,16 @@ $("undo").addEventListener("click", () => {
 addEventListener("keydown", e => {
   if (["INPUT", "TEXTAREA"].includes(document.activeElement?.tagName)) return;
   const labels = [...document.querySelectorAll("#buttons button")].map(b => b.dataset.label);
+  if (primary) {
+    if (e.key === "0") return submit(primary, null);
+    const cs = labels.filter(l => l !== "none"), n = Number(e.key);
+    if (Number.isInteger(n) && n >= 1 && n <= cs.length) submit(primary, cs[n - 1]);
+    return;
+  }
   const i = e.key === "0" ? 9 : Number(e.key) - 1;
-  if (Number.isInteger(i) && i >= 0 && i < labels.length) submit(labels[i]);
+  if (Number.isInteger(i) && i >= 0 && i < labels.length) choosePrimary(labels[i]);
 });
-fetch("/api/items").then(r => r.json()).then(d => { total = d.total; done = d.done; queue = d.items; buildButtons(d.labels); show(); });
+fetch("/api/items").then(r => r.json()).then(d => { total = d.total; done = d.done; queue = d.items; LABELS = d.labels; COLOURS = d.colours; show(); });
 </script>
 </body>
 </html>

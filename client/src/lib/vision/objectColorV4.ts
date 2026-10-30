@@ -36,6 +36,13 @@ export interface ColourV4Params {
   litPercentile: number;
   /** Lit L above which a light red/purple hue is pink. */
   pinkL: number;
+  /** Dominant colour must hold at least this share of its mass pool. */
+  dominantShare: number;
+  /** Dominant colour must outweigh the runner-up by this ratio, else the object is ambiguous. */
+  dominanceRatio: number;
+  /** Runner-up reported as secondary colour at this share of the chromatic mass. */
+  secondaryShare: number;
+  secondaryMinPixels: number;
 }
 export const COLOUR_V4_DEFAULTS: ColourV4Params = {
   // Tuned on development data only (real photos + synthetic), wrong answers weighted 5x silence.
@@ -52,6 +59,10 @@ export const COLOUR_V4_DEFAULTS: ColourV4Params = {
   whiteL: 62,
   litPercentile: 0.95,
   pinkL: 55,
+  dominantShare: 0.5,
+  dominanceRatio: 1.3,
+  secondaryShare: 0.22,
+  secondaryMinPixels: 12,
 };
 
 type Lab = [number, number, number];
@@ -306,9 +317,10 @@ export function analyzeObjectColorV4(
     return unclear("LOW_LIGHT", evidence.length);
 
   const chromatic = evidence.filter(p => chromaOf(p) >= params.chromaMin);
+  const neutralPx = evidence.filter(p => chromaOf(p) < params.chromaMin);
   const chromaticShare = chromatic.length / evidence.length;
   let name: ObjectColorName | null = null,
-    components: ObjectColorName[] | undefined,
+    secondary: ObjectColorName | undefined,
     supportFraction = 0,
     shade: "LIGHT" | "DARK" | undefined;
   const hueOf = (p: Px) =>
@@ -321,54 +333,71 @@ export function analyzeObjectColorV4(
     const mh = median(hues);
     return groupName(group, (mh + 360) % 360, litLOf(members), params);
   };
-  if (chromaticShare >= params.chromaticFraction && chromatic.length >= 24) {
+  const groupsOf = (list: Px[]) => {
     const tally = new Map<HueGroup, number>();
-    for (const p of chromatic) {
+    for (const p of list) {
       const g = hueGroup(hueOf(p));
       tally.set(g, (tally.get(g) ?? 0) + 1);
     }
-    const ranked = Array.from(tally).sort((p, q) => q[1] - p[1]),
-      top = ranked[0],
-      second = ranked[1];
-    const share = top[1] / chromatic.length;
-    if (share >= params.support) {
-      name = nameOfGroup(top[0], chromatic);
-      supportFraction = share * chromaticShare;
-    } else if (
-      second &&
-      (top[1] + second[1]) / chromatic.length >= 0.85 &&
-      second[1] / chromatic.length >= 0.25
-    ) {
-      name = "multicolor";
-      components = [
-        nameOfGroup(top[0], chromatic),
-        nameOfGroup(second[0], chromatic),
-      ].sort();
-      supportFraction = (top[1] + second[1]) / chromatic.length;
-    } else return unclear("MIXED_OR_OCCLUDED", evidence.length);
-    if (name !== "multicolor" && name !== "brown") {
-      const L = litLOf(chromatic.filter(p => hueGroup(hueOf(p)) === top[0]));
-      shade = L < 35 ? "DARK" : L > 75 ? "LIGHT" : undefined;
-    }
-  } else if (chromaticShare < 0.2) {
-    // Neutral material: name from the object's lit lightness, so a white object in partial shade is still white.
-    const litL = litLOf(evidence),
-      n = neutralName(litL, params.whiteL);
-    // Share of evidence consistent with that name, allowing the natural shading range of one material.
-    const consistent = evidence.filter(p =>
+    return Array.from(tally).sort((x, y) => y[1] - x[1]);
+  };
+  /** Neutral material named from its lit lightness; null when its own shading range is not coherent. */
+  const neutralOf = (list: Px[]): ObjectColorName | null => {
+    if (list.length < params.secondaryMinPixels) return null;
+    const n = neutralName(litLOf(list), params.whiteL);
+    const consistent = list.filter(p =>
       n === "black"
         ? p.lab[0] < 40
         : n === "white"
           ? p.lab[0] >= params.whiteL - 28
           : p.lab[0] >= 22 && p.lab[0] < params.whiteL + 12
     ).length;
-    const share = consistent / evidence.length;
-    if (share < params.support) return unclear("MIXED_OR_OCCLUDED", evidence.length);
+    return consistent / list.length >= params.support ? n : null;
+  };
+  const chromaticGroups = groupsOf(chromatic);
+  const chromaticMass = chromatic.length,
+    neutralMass = neutralPx.length;
+  // Dominant colour = the larger mass; the other significant mass is reported as secondary, never averaged in.
+  const neutralDominant =
+    neutralMass > chromaticMass ||
+    (chromaticShare < 0.2 && neutralMass >= params.minEvidence / 2);
+  if (!neutralDominant && chromaticMass >= 24) {
+    const top = chromaticGroups[0],
+      next = chromaticGroups[1];
+    const share = top[1] / chromaticMass;
+    if (
+      share < params.dominantShare ||
+      (next && top[1] < params.dominanceRatio * next[1])
+    )
+      return unclear("MIXED_OR_OCCLUDED", evidence.length);
+    if (chromaticShare < params.chromaticFraction && neutralMass > 0.5 * chromaticMass)
+      return unclear("MIXED_OR_OCCLUDED", evidence.length);
+    name = nameOfGroup(top[0], chromatic);
+    supportFraction = share * Math.min(1, chromaticShare / params.chromaticFraction);
+    if (next && next[1] / chromaticMass >= params.secondaryShare && next[1] >= params.secondaryMinPixels) {
+      const sec = nameOfGroup(next[0], chromatic);
+      if (sec !== name) secondary = sec;
+    }
+    if (!secondary && neutralMass / evidence.length >= params.secondaryShare) {
+      const sec = neutralOf(neutralPx);
+      if (sec) secondary = sec;
+    }
+    if (name !== "brown") {
+      const L = litLOf(chromatic.filter(p => hueGroup(hueOf(p)) === top[0]));
+      shade = L < 35 ? "DARK" : L > 75 ? "LIGHT" : undefined;
+    }
+  } else if (neutralDominant) {
+    const n = neutralOf(neutralPx.length >= params.minEvidence / 2 ? neutralPx : evidence);
+    if (!n) return unclear("MIXED_OR_OCCLUDED", evidence.length);
     // A uniformly dark neutral in a dark scene could be any colour.
     if (n === "black" && sceneMedianL < 22)
       return unclear("LOW_LIGHT", evidence.length);
     name = n;
-    supportFraction = share;
+    supportFraction = neutralMass / evidence.length;
+    const top = chromaticGroups[0];
+    if (top && top[1] / evidence.length >= params.secondaryShare * 0.6 && top[1] >= params.secondaryMinPixels)
+      secondary = nameOfGroup(top[0], chromatic);
+    if (supportFraction < params.dominantShare * 0.9) return unclear("MIXED_OR_OCCLUDED", evidence.length);
   } else return unclear("MIXED_OR_OCCLUDED", evidence.length);
 
   const quality: NonNullable<ObjectColorObservation["quality"]> = {
@@ -387,7 +416,7 @@ export function analyzeObjectColorV4(
   };
   return {
     name,
-    ...(components ? { components } : {}),
+    ...(secondary ? { secondary } : {}),
     ...(shade ? { shade } : {}),
     status: aligned ? "MASK_SUPPORTED" : "ESTIMATED",
     reason: aligned ? "ALIGNED_INSTANCE_MASK" : "BOX_ESTIMATE",

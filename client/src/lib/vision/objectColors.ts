@@ -60,7 +60,11 @@ export function colorDescription(detection: VisionDetection) {
         ? " داكنة"
         : " داكن"
     : "";
-  return `${colorWord(color.name, feminine)}${shade}${components}${color.status === "ESTIMATED" ? " (تقدير من الصورة)" : color.status === "MASK_SUPPORTED" ? " (من قناع آلي تجريبي)" : ""}`;
+  const secondary =
+    color.secondary && color.secondary !== color.name && color.name !== "multicolor"
+      ? ` مع ${colorWord(color.secondary)}`
+      : "";
+  return `${colorWord(color.name, feminine)}${shade}${secondary}${components}${color.status === "ESTIMATED" ? " (تقدير من الصورة)" : color.status === "MASK_SUPPORTED" ? " (من قناع آلي تجريبي)" : ""}`;
 }
 export function sampleColorFrame(
   source: HTMLVideoElement | HTMLCanvasElement | OffscreenCanvas,
@@ -105,7 +109,12 @@ export class ObjectColorTracker {
       identity: string;
       at: number;
       box: VisionDetection["boundingBox"];
-      history: { name: string | null; shade?: "LIGHT" | "DARK"; at: number }[];
+      history: {
+        name: string | null;
+        shade?: "LIGHT" | "DARK";
+        secondary?: string;
+        at: number;
+      }[];
     }
   >();
   reset() {
@@ -174,7 +183,7 @@ export class ObjectColorTracker {
       : null;
     const history = [
       ...(previous?.history ?? []),
-      { name: signature, shade: o.shade, at: o.timestamp },
+      { name: signature, shade: o.shade, secondary: o.secondary, at: o.timestamp },
     ].slice(-4);
     this.tracks.set(id, {
       identity,
@@ -204,6 +213,8 @@ export class ObjectColorTracker {
       };
     const result = { ...o, stableFrames: votes.length, temporal };
     if (votes.filter(v => v.shade === o.shade).length < 3) delete result.shade;
+    // A secondary colour is only spoken when it persisted, so one noisy frame cannot add or swap it.
+    if (votes.filter(v => v.secondary === o.secondary).length < 3) delete result.secondary;
     return result;
   }
 }

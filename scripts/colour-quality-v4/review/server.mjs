@@ -16,7 +16,10 @@ const cohort = resolve(cohortArg),
   reviewsPath = resolve(reviewsArg),
   splits = (flags.find(f => f.startsWith("--splits=")) ?? "--splits=development,calibration").slice(9).split(","),
   port = Number((flags.find(f => f.startsWith("--port=")) ?? "--port=4390").slice(7));
-const LABELS = ["red", "orange", "yellow", "green", "blue", "purple", "pink", "brown", "black", "white", "gray", "multicolor", "unsure", "bad-mask"];
+const COLOURS = ["red", "orange", "yellow", "green", "blue", "purple", "pink", "brown", "black", "white", "gray"];
+// Policy (2026-10-31): dominant + optional secondary colour; "multicolor" is no longer a primary answer.
+const LABELS = [...COLOURS, "unsure", "bad-mask"];
+const rereview = flags.includes("--rereview-multicolor");
 const manifest = JSON.parse(await readFile(join(cohort, "manifest.json"), "utf8"));
 const order = id => createHash("sha256").update("review-order:" + id).digest("hex");
 const items = [];
@@ -60,7 +63,11 @@ app.use((_q, r, n) => {
 app.get("/", (_q, r) => r.sendFile(resolve(import.meta.dirname, "page.html")));
 app.get("/api/items", async (_q, r) => {
   const done = await reviews();
-  r.json({ labels: LABELS, total: items.length, done: done.size, items: items.filter(i => !done.has(i.id)) });
+  const pending = items.filter(i => {
+    const d = done.get(i.id);
+    return !d || (rereview && d.label === "multicolor");
+  });
+  r.json({ labels: LABELS, colours: COLOURS, total: items.length, done: items.length - pending.length, items: pending });
 });
 app.get("/img/:id", (q, r) => {
   const file = imagePath.get(q.params.id);
@@ -68,10 +75,10 @@ app.get("/img/:id", (q, r) => {
   r.sendFile(file);
 });
 app.post("/api/review", async (q, r) => {
-  const { itemId, label, reviewer, note } = q.body ?? {};
-  if (!items.some(i => i.id === itemId) || !LABELS.includes(label) || typeof reviewer !== "string" || !reviewer.trim() || reviewer.length > 40)
+  const { itemId, label, secondary, reviewer, note } = q.body ?? {};
+  if (!items.some(i => i.id === itemId) || !LABELS.includes(label) || !(secondary === undefined || secondary === null || (COLOURS.includes(secondary) && secondary !== label && COLOURS.includes(label))) || typeof reviewer !== "string" || !reviewer.trim() || reviewer.length > 40)
     return r.status(400).json({ error: "invalid review" });
-  const row = { itemId, label, reviewer: reviewer.trim(), note: typeof note === "string" ? note.slice(0, 200) : "", at: new Date().toISOString() };
+  const row = { itemId, label, secondary: secondary ?? null, policy: "dominant+secondary-v1", reviewer: reviewer.trim(), note: typeof note === "string" ? note.slice(0, 200) : "", at: new Date().toISOString() };
   await appendFile(reviewsPath, JSON.stringify(row) + "\n", { flag: "a" });
   r.json({ ok: true });
 });

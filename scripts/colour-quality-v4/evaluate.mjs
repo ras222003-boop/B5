@@ -48,6 +48,8 @@ const wilson = (k, n) => {
   return [(c - m) / d, (c + m) / d];
 };
 const results = [];
+let unresolved = 0;
+const pairs = [];
 const times = [];
 for (const line of lines) {
   const frame = JSON.parse(line);
@@ -84,10 +86,22 @@ for (const line of lines) {
     const t0 = performance.now();
     const colour = analyze(pixels, detection, detections, mask);
     times.push(performance.now() - t0);
-    const multi = o.referenceColor === "multicolor";
+    // Policy: dominant + secondary. A reference "multicolor" with components accepts any component as dominant;
+    // a bare human "multicolor" has no dominant colour yet, so it is reported as unresolved and not scored.
+    const comps = o.referenceComponents ?? [];
+    const isMulti = o.referenceColor === "multicolor";
+    if (isMulti && !comps.length) {
+      unresolved++;
+      continue;
+    }
+    const accepted = isMulti ? comps : [o.referenceColor];
     const answered = !!colour.name;
-    const correct = answered && (multi ? colour.name === "multicolor" : colour.name === o.referenceColor);
+    const correct = answered && accepted.includes(colour.name);
+    const refSecondary = o.referenceSecondary ?? null;
+    const pair = refSecondary !== null && answered ? { agree: correct && colour.secondary === refSecondary } : null;
+    if (pair) pairs.push(pair.agree);
     results.push({
+      secondaryPredicted: colour.secondary ?? null,
       image: frame.id,
       group: frame.groupId,
       cocoClass: o.cocoClass,
@@ -136,6 +150,10 @@ const report = {
   engineSha256: createHash("sha256").update(engineBytes).digest("hex"),
   framesSha256: createHash("sha256").update(lines.join("\n")).digest("hex"),
   rowsEvaluated: lines.length,
+  unresolvedMulticolorReferences: unresolved,
+  secondaryPairAgreement: pairs.length ? pairs.filter(Boolean).length / pairs.length : null,
+  secondaryPairN: pairs.length,
+  secondaryReportedFraction: answered.length ? answered.filter(r => r.secondaryPredicted).length / answered.length : null,
   references: total,
   sourceGroups: new Set(results.map(r => r.group)).size,
   answered: answered.length,
