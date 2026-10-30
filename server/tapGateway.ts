@@ -34,7 +34,7 @@ function publicCallbackOrigin(value: string): string | null {
     const labels = hostname.split(".");
     if (hostname.length > 253 || labels.length < 2 ||
         !/[a-z]/.test(hostname) ||
-        /\\.(localhost|local|example|invalid|test)$/.test(hostname) ||
+        /\.(localhost|local|example|invalid|test)$/.test(hostname) ||
         labels.some(label => !/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(label))) return null;
     return url.origin;
   } catch {
@@ -106,7 +106,7 @@ export async function createTapSandboxHostedCharge(
   if (payload.live_mode !== false ||
       typeof payload.id !== "string" || !/^chg_[a-zA-Z0-9_-]{10,}$/.test(payload.id) ||
       !["INITIATED", "IN_PROGRESS"].includes(String(payload.status)) ||
-      !/^([a-z0-9-]+\\.)*tap\\.company$/i.test(checkout.hostname) ||
+      !/^([a-z0-9-]+\.)*tap\.company$/i.test(checkout.hostname) ||
       checkout.protocol !== "https:" || checkout.username || checkout.password ||
       checkout.port || checkout.hash || !checkoutUrl.startsWith("https://")) {
     throw new Error("tap_untrusted_checkout_response");
