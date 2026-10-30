@@ -108,6 +108,10 @@ test("web bundle receipt hashes real index and assets and ignores its own receip
     const src = path.join(cwd, "client", "src");
     const dist = path.join(cwd, "dist", "public");
     await mkdir(src, { recursive: true });
+    const nativeDir = path.join(cwd, "ios", "DepthCalibrationLab", "DepthCalibrationLab");
+    await mkdir(nativeDir, { recursive: true });
+    await writeFile(path.join(nativeDir, "BasiraFeatureCatalogue.swift"),
+      routes.map((route, i) => "case .feature" + i + ': return "' + route + '"').join("\n"));
     await mkdir(path.join(dist, "assets"), { recursive: true });
     await writeFile(path.join(src, "App.tsx"), routes.map(route => '<Route path="' + route + '" />').join("\n"));
     await writeFile(path.join(dist, "index.html"), webHTML);
