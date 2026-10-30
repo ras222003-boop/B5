@@ -1,0 +1,43 @@
+# Local staging only. Bind the HTTP listener to loopback and place your own
+# HTTPS reverse proxy in front. Nothing in this file publishes to Manus/Apple.
+name: basira-staging
+services:
+  mysql:
+    image: mysql:8.4
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: basira_staging
+      MYSQL_USER: basira_staging
+      MYSQL_PASSWORD: ${BASIRA_STAGE_DB_PASSWORD:?Configure staging DB password securely}
+      MYSQL_ROOT_PASSWORD: ${BASIRA_STAGE_ROOT_PASSWORD:?Configure staging root password securely}
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "MYSQL_PWD=\"$$MYSQL_PASSWORD\" mysql -h 127.0.0.1 -u basira_staging -D basira_staging --silent --skip-column-names -e 'SELECT 1' >/dev/null"]
+      interval: 10s
+      timeout: 8s
+      retries: 20
+      start_period: 30s
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        BASIRA_SOURCE_SHA: ${BASIRA_SOURCE_SHA:?Set the exact committed staging source SHA}
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+    env_file:
+      - .env.staging
+    environment:
+      NODE_ENV: production
+      PORT: "3000"
+      DATABASE_URL: "mysql://basira_staging:${BASIRA_STAGE_DB_PASSWORD}@mysql:3306/basira_staging"
+      BASIRA_PUBLIC_URL: ${BASIRA_STAGE_ORIGIN:?Set your approved independent HTTPS staging origin}
+    ports:
+      - "127.0.0.1:3101:3000"
+
+volumes:
+  mysql_data:
