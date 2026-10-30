@@ -22,6 +22,23 @@ describe("Tap checkout is confined to server-side sandbox and no live charges", 
     expect(validTapHostedChargeInput({ ...sample, webhookUrl: "https://example.org?token=1" })).toBe(false);
   });
 
+  it("rejects private callback targets, ports, credentials and mixed callback origins", () => {
+    for (const returnUrl of [
+      "https://localhost/billing/return",
+      "https://127.0.0.1/billing/return",
+      "https://service.local/billing/return",
+      "https://basira.example.org:8443/billing/return",
+      "https://user:pass@basira.example.org/billing/return",
+      "https://basira.example.org/billing/return?token=secret",
+    ]) {
+      expect(validTapHostedChargeInput({ ...sample, returnUrl })).toBe(false);
+    }
+    expect(validTapHostedChargeInput({
+      ...sample,
+      webhookUrl: "https://other.example.org/api/billing/tap-webhook",
+    })).toBe(false);
+  });
+
   it("rejects a live secret key before making a request", async () => {
     const request = vi.fn();
     await expect(createTapSandboxHostedCharge(sample,
@@ -57,6 +74,9 @@ describe("Tap checkout is confined to server-side sandbox and no live charges", 
     for (const payload of [
       { live_mode: true, transaction: { url: "https://checkout.payments.tap.company/" } },
       { live_mode: false, transaction: { url: "https://tap.company.attacker.example/" } },
+      { live_mode: false, transaction: { url: "https://user@checkout.payments.tap.company/" } },
+      { live_mode: false, transaction: { url: "https://checkout.payments.tap.company:444/" } },
+      { live_mode: false, transaction: { url: "https://checkout.payments.tap.company/#fragment" } },
     ]) {
       const request = vi.fn().mockResolvedValue(new Response(JSON.stringify({
         id: "chg_TS012520220955Rr950709475", status: "INITIATED", ...payload,

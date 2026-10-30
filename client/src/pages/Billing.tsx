@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "wouter";
 import Layout from "@/components/Layout";
 import { useI18n } from "@/i18n";
+import { fetchBillingAccountStatus, type BillingAccountState } from "@/lib/billingAccount";
 
 type Plan = {
   id: "basic" | "plus" | "premium";
@@ -19,34 +20,31 @@ type Catalog = {
     tapWeb: { checkoutEnabled: boolean };
   };
 };
-type AccountStatus = {
-  authenticated: boolean;
-  entitlement: { tier: string; activePaidSubscription: boolean; verifiedByServer: boolean };
-};
-
 export default function Billing() {
   const { lang } = useI18n();
   const ar = lang === "ar";
   const zh = lang === "zh-CN";
   const [catalog, setCatalog] = useState<Catalog | null>(null);
-  const [account, setAccount] = useState<AccountStatus | null>(null);
+  const [account, setAccount] = useState<BillingAccountState | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
 
   useEffect(() => {
     let mounted = true;
-    Promise.all([
-      fetch("/api/billing/catalog", { credentials: "same-origin", cache: "no-store" }),
-      fetch("/api/billing/me", { credentials: "include", cache: "no-store" }),
-    ]).then(async ([plans, me]) => {
-      if (!plans.ok) throw Error("catalog_unavailable");
-      const publicCatalog = (await plans.json()) as Catalog;
-      const status = me.ok ? await me.json() as AccountStatus : null;
-      if (!mounted) return;
-      setCatalog(publicCatalog);
-      setAccount(status);
-      setError(false);
-    }).catch(() => { if (mounted) setError(true); })
+    // A 401 means signed out; 5xx/offline means we cannot determine account
+    // status. The catalog is public and should still load independently.
+    void fetchBillingAccountStatus().then(status => {
+      if (mounted) setAccount(status);
+    });
+    void fetch("/api/billing/catalog", { credentials: "same-origin", cache: "no-store" })
+      .then(async response => {
+        if (!response.ok) throw Error("catalog_unavailable");
+        const publicCatalog = await response.json() as Catalog;
+        if (!mounted) return;
+        setCatalog(publicCatalog);
+        setError(false);
+      })
+      .catch(() => { if (mounted) setError(true); })
       .finally(() => { if (mounted) setLoading(false); });
     return () => { mounted = false; };
   }, []);
@@ -66,12 +64,20 @@ export default function Billing() {
         <section className="mt-8 rounded-2xl border border-amber-300/30 bg-card p-5" aria-label={ar ? "حالة الحساب" : "Account status"}>
           <h2 className="text-xl font-bold">{ar ? "الحساب" : "Account"}</h2>
           <p className="mt-2 text-sm text-muted-foreground" role="status">
-            {account?.authenticated
-              ? (ar ? "تم العثور على جلسة حساب. لا توجد صلاحيات مدفوعة مفعّلة حتى اكتمال التحقق الخادمي." : "Signed in. Paid entitlements are not yet enabled.")
-              : (ar ? "يمكنك إنشاء حساب أو تسجيل الدخول مجانًا." : "Create an account or sign in for free.")}
+            {account === null
+              ? (ar ? "جارٍ التحقق من حالة الحساب…" : "Checking account status…")
+              : account.kind === "unavailable"
+                ? (ar ? "تعذّر التأكد من حالة الحساب حاليًا. لا يعني ذلك تسجيل خروجك أو إلغاء اشتراكك." : "Account status is temporarily unavailable; this does not mean you are signed out or unsubscribed.")
+                : account.kind === "signed_out"
+                  ? (ar ? "يمكنك إنشاء حساب أو تسجيل الدخول مجانًا." : "Create an account or sign in for free.")
+                  : account.tier === "basic"
+                    ? (ar ? "أنت مسجل الدخول بالخطة الأساسية المجانية." : "Signed in with the free Basic plan.")
+                    : (ar
+                      ? `أنت مسجل الدخول، وقد تحقق خادم بصيرة من اشتراك ${account.tier === "premium" ? "المتقدمة" : "بلس"}.`
+                      : `Signed in with a server-verified ${account.tier === "premium" ? "Premium" : "Plus"} subscription.`)}
           </p>
           <Link href="/account" className="mt-4 inline-flex min-h-12 items-center rounded-lg border border-amber-400/60 px-5 font-semibold text-amber-700">
-            {ar ? "تسجيل الدخول أو إنشاء حساب" : "Sign in or sign up"}
+            {account?.kind === "signed_out" ? (ar ? "تسجيل الدخول أو إنشاء حساب" : "Sign in or sign up") : (ar ? "فتح الحساب" : "Open account")}
           </Link>
         </section>
 
