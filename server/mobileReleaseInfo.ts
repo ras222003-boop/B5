@@ -26,14 +26,14 @@ export function parseMobileManifest(raw: string): MobileManifest | null {
     if (!m.sourceVerified && m.sourceRevision !== null) return null;
     if (!m.webBundle || typeof m.webBundle !== "object") return null;
     const b = m.webBundle as Record<string, unknown>;
-    if (!Number.isSafeInteger(b.assetCount) || (b.assetCount as number) <= 0) return null;
-    if (!Number.isSafeInteger(b.totalBytes) || (b.totalBytes as number) <= 0) return null;
+    if (!Number.isSafeInteger(b.assetCount as number) || (b.assetCount as number) <= 0) return null;
+    if (!Number.isSafeInteger(b.totalBytes as number) || (b.totalBytes as number) <= 0) return null;
     if (typeof b.sha256 !== "string" || !sha256.test(b.sha256)) return null;
     if (typeof b.indexSha256 !== "string" || !sha256.test(b.indexSha256)) return null;
     if (!Array.isArray(m.declaredRoutes) || m.declaredRoutes.length === 0 ||
         m.declaredRoutes.some(x => typeof x !== "string" || !x.startsWith("/") || x.length > 200)) return null;
     if (typeof m.disclaimer !== "string") return null;
-    return m as MobileManifest;
+    return m as unknown as MobileManifest;
   } catch {
     return null;
   }
