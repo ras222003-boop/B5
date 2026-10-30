@@ -42,7 +42,7 @@ jobs:
         run: |
           set -euo pipefail
           SHA="$(git rev-parse HEAD)"
-          docker run --rm --entrypoint node basira-staging:ci -e '
+          docker run --rm --env BASIRA_SOURCE_SHA="$SHA" --entrypoint node basira-staging:ci -e '
             const { readFileSync } = require("node:fs");
             const r = JSON.parse(readFileSync("dist/public/basira-mobile-release.json", "utf8"));
             if (!r.sourceVerified || r.sourceRevision !== process.env.BASIRA_SOURCE_SHA)
@@ -51,5 +51,3 @@ jobs:
               process.exit(1);
             console.log("Docker staging source and app bundle are consistent");
           '
-        env:
-          BASIRA_SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
