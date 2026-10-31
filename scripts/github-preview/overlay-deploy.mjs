@@ -18,6 +18,8 @@ if (receipt.sourceWasClean !== true || receipt.privateMediaIncluded !== false ||
   throw Error("Build must come from a clean tree without private media or restricted models");
 if (oldSource.publishable !== true || oldSource.restrictedModelsIncluded !== false)
   throw Error("The retained deployment must itself be a verified publishable preview");
+// Keep naming the ORIGINAL verified deployment as the source of the retained model files across repeated overlays.
+const modelsFrom = oldSource.overlay?.modelsRetainedFrom ?? oldSource.sourceCommit;
 const keep = p => p.startsWith("api/vision/object-quality/") || p.startsWith("model-notices/");
 const retained = oldSource.files.filter(r => keep(r.path));
 const incoming = receipt.files.filter(r => !keep(r.path));
@@ -43,7 +45,7 @@ Object.assign(status, {
   sourceCommit: receipt.sourceCommit,
   developmentBuild: false,
   appBuiltWith: "--lite0-only (no model weights on the build machine)",
-  modelFilesRetainedFrom: { sourceCommit: oldSource.sourceCommit, meaning: "Tiny/V3 files kept byte-identical from the previously verified deployment" },
+  modelFilesRetainedFrom: { sourceCommit: modelsFrom, meaning: "Tiny/V3 files kept byte-identical from the previously verified deployment" },
   colourEngineV4Experimental: true,
   colourSpeechQualified: false,
   iphoneTested: false,
@@ -68,7 +70,8 @@ const source = {
   publishable: true,
   overlay: {
     app: "built from the source commit with scripts/github-preview/build.mjs --development --lite0-only on a clean tree",
-    models: "api/vision/object-quality/** and model-notices/** retained byte-identical from " + oldSource.sourceCommit,
+    modelsRetainedFrom: modelsFrom,
+    models: "api/vision/object-quality/** and model-notices/** retained byte-identical from " + modelsFrom,
   },
   files,
   bytes: files.reduce((n, r) => n + r.bytes, 0),
