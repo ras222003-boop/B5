@@ -43,7 +43,7 @@
     <label>اسم المراجع <input id="reviewer" type="text" maxlength="40" autocomplete="off"></label>
     <label>ملاحظة <input id="note" type="text" maxlength="300" autocomplete="off"></label>
   </div>
-  <div class="row"><button id="save" type="button"><b>حفظ والتالي</b></button><button id="skip" type="button">تخطي الصورة</button></div>
+  <div class="row"><button id="prev" type="button">السابق</button><button id="save" type="button"><b>حفظ والتالي</b></button><button id="next" type="button">التالي دون حفظ</button><label>انتقل إلى صورة رقم <input id="jump" type="number" min="1" style="width:5em"></label><button id="go" type="button">اذهب</button></div>
   <p id="status" role="status" aria-live="polite"></p>
   <dialog id="classDialog"><form method="dialog"><p>فئة المربع الجديد</p><select id="classPick"></select><div class="row"><button value="ok" id="classOk">إضافة</button><button value="cancel">إلغاء</button></div></form></dialog>
 </main>
@@ -52,6 +52,8 @@ const AR = {person:"شخص",bicycle:"دراجة",car:"سيارة",motorcycle:"د
 const name = c => AR[c] ?? c;
 let classes = [], targets = [], images = [], index = 0, total = 0, done = 0;
 let current = null, decisions = {}, added = [], selected = null, img = null, lastClass = 'chair', drag = null, scale = 1;
+const work = {}; // unsaved or saved state per image id, so moving around never loses a decision
+function stash() { if (current) work[current.id] = {decisions, added, complete: $('complete').checked, note: $('note').value}; }
 const $ = id => document.getElementById(id), cv = $('cv'), g = cv.getContext('2d');
 $('reviewer').value = localStorage.getItem('detReviewer') ?? '';
 $('reviewer').addEventListener('change', () => localStorage.setItem('detReviewer', $('reviewer').value.trim()));
@@ -81,9 +83,13 @@ function render() {
   draw();
 }
 async function show() {
-  current = images[index]; if (!current) { $('progress').textContent = 'اكتملت المراجعة: ' + done + ' من ' + total; cv.height = 40; g.clearRect(0, 0, cv.width, 40); $('list').innerHTML = ''; return; }
-  $('progress').textContent = (done + 1) + ' من ' + total; decisions = {}; added = []; selected = null; $('complete').checked = false; $('note').value = '';
-  img = new Image(); img.src = '/img/' + encodeURIComponent(current.id); await img.decode(); layout(); render();
+  index = Math.max(0, Math.min(images.length - 1, index)); current = images[index];
+  const w = work[current.id] ?? (current.review ? {decisions: {...current.review.decisions}, added: current.review.added.map(a => ({...a})), complete: current.review.complete, note: current.review.note || ''} : {decisions: {}, added: [], complete: false, note: ''});
+  decisions = w.decisions; added = w.added; selected = null; $('complete').checked = w.complete; $('note').value = w.note; $('jump').value = index + 1; $('jump').max = images.length;
+  const saved = images.filter(i => i.review).length;
+  $('progress').textContent = 'صورة ' + (index + 1) + ' من ' + images.length + ' · محفوظ ' + saved + (current.review ? ' · هذه الصورة محفوظة' : '');
+  $('prev').disabled = index === 0; $('next').disabled = index === images.length - 1;
+  img = new Image(); img.src = '/img/' + encodeURIComponent(current.id); try { await img.decode(); } catch { $('status').textContent = 'تعذر تحميل الصورة؛ أعد المحاولة بزر التالي ثم السابق.'; } layout(); render();
 }
 function pos(e) { const r = cv.getBoundingClientRect(); return {x: (e.clientX - r.left) * cv.width / r.width, y: (e.clientY - r.top) * cv.height / r.height}; }
 cv.addEventListener('pointerdown', e => { const p = pos(e); drag = {x0: p.x, y0: p.y, x1: p.x, y1: p.y}; cv.setPointerCapture(e.pointerId); });
@@ -103,10 +109,15 @@ async function save() {
   const complete = $('complete').checked; if (complete && current.proposals.some(p => !(p.id in decisions))) { $('status').textContent = 'احسم كل المربعات قبل تأكيد اكتمال الصورة.'; return; }
   const res = await fetch('/api/review', {method: 'POST', headers: {'content-type': 'application/json'}, body: JSON.stringify({imageId: current.id, reviewer, complete, decisions, added, note: $('note').value})});
   if (!res.ok) { $('status').textContent = 'تعذر الحفظ: ' + (await res.json()).error; return; }
-  $('status').textContent = 'حُفظت الصورة.'; done++; index++; show();
+  current.review = {decisions: {...decisions}, added: added.map(a => ({...a})), complete, note: $('note').value}; delete work[current.id];
+  $('status').textContent = 'حُفظت الصورة.'; if (index < images.length - 1) index++; else $('status').textContent = 'حُفظت. هذه آخر صورة.'; show();
 }
-$('save').addEventListener('click', save); $('skip').addEventListener('click', () => { index++; show(); });
-fetch('/api/images').then(r => r.json()).then(d => { classes = d.classes; targets = d.targets; images = d.images; total = d.total; done = d.done; $('targets').textContent = targets.slice(0, 12).map(name).join('، ') + '…'; show(); });
+const move = d => { stash(); index += d; show(); };
+$('save').addEventListener('click', save); $('prev').addEventListener('click', () => move(-1)); $('next').addEventListener('click', () => move(1));
+$('go').addEventListener('click', () => { const n = Number($('jump').value); if (Number.isInteger(n) && n >= 1 && n <= images.length) { stash(); index = n - 1; show(); } });
+$('jump').addEventListener('keydown', e => { if (e.key === 'Enter') $('go').click(); });
+addEventListener('keydown', e => { if (['INPUT', 'SELECT', 'TEXTAREA'].includes(document.activeElement?.tagName)) return; if (e.key === 'ArrowLeft') move(1); if (e.key === 'ArrowRight') move(-1); });
+fetch('/api/images').then(r => r.json()).then(d => { classes = d.classes; targets = d.targets; images = d.images; total = d.total; done = d.done; index = Math.max(0, images.findIndex(i => !i.review)); $('targets').textContent = targets.slice(0, 12).map(name).join('، ') + '…'; show(); });
 </script>
 </body>
 </html>

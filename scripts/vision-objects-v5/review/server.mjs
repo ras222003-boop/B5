@@ -42,7 +42,8 @@ app.use((_q, r, n) => {
 app.get("/", (_q, r) => r.sendFile(resolve(import.meta.dirname, "page.html")));
 app.get("/api/images", async (_q, r) => {
   const done = await latest();
-  r.json({ classes: COCO, targets: TARGETS, total: images.length, done: done.size, images: images.filter(i => !done.has(i.id)) });
+  // All images are returned so the reviewer can move freely (previous/next/jump) and re-open saved work.
+  r.json({ classes: COCO, targets: TARGETS, total: images.length, done: done.size, images: images.map(i => ({ ...i, review: done.get(i.id) ?? null })) });
 });
 app.get("/img/:id", (q, r) => {
   const f = files.get(q.params.id);
