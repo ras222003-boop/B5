@@ -40,7 +40,7 @@ def main():
     proposals = {i["id"]: i for i in json.loads((reviews_path.parent / "proposals.json").read_text(encoding="utf-8"))["images"]}
     truth = {}
     for image_id, r in latest.items():
-        if not r["complete"] or image_id not in paths:
+        if not r["complete"] or image_id not in paths or "decoy-accepted" in r.get("flags", []):
             continue
         info = proposals[image_id]
         boxes = []
@@ -55,7 +55,23 @@ def main():
         truth[image_id] = (info, boxes)
     if not truth:
         raise SystemExit("no complete reviewed images yet")
-    result = {"completeImages": len(truth), "truthObjects": sum(len(b) for _, b in truth.values()), "models": {}}
+    records = list(latest.values())
+    rejected = sum(1 for r in records for v in r["decisions"].values() if v == "no")
+    accepted = sum(1 for r in records for v in r["decisions"].values() if v == "ok")
+    checked = [r for r in records if "flags" in r]
+    result = {
+        "completeImages": len(truth),
+        "truthObjects": sum(len(b) for _, b in truth.values()),
+        "reviewQuality": {
+            "recordsWithAttentionChecks": len(checked),
+            "decoyAccepted": sum(1 for r in checked if "decoy-accepted" in r["flags"]),
+            "acceptedBoxes": accepted,
+            "rejectedBoxes": rejected,
+            "addedBoxes": sum(len(r["added"]) for r in records),
+            "caveat": "With no rejected and no added boxes the reference IS the union of the models' own proposals: recall is relative to what the models found, precision against it is not a measurement, and objects both models missed are unknowable here." if rejected == 0 and not any(r["added"] for r in records) else None,
+        },
+        "models": {},
+    }
     for name, path, size in models:
         session = ort.InferenceSession(path, providers=["CPUExecutionProvider"])
         stats = {t: {"tp": 0, "fp": 0, "fn": 0} for t in THRESHOLDS}

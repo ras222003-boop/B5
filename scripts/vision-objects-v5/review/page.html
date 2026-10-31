@@ -28,14 +28,10 @@
 <body>
 <main>
   <header><h1>مراجعة كشف الأجسام</h1><div class="meta" id="progress" role="status" aria-live="polite"></div></header>
-  <p class="meta">المربعات المقترحة من نماذج آلية وليست حقيقة. لكل مربع اختر <b>صحيح</b> (الفئة والموضع صحيحان)، أو <b>خطأ</b> (ليس جسمًا أو مكرر)، أو غيّر <b>الفئة</b>. إن فات النموذج جسمًا فارسم عليه مربعًا بالسحب على الصورة واختر فئته. أكّد «الصورة مكتملة» فقط إذا صارت كل الأجسام من الفئات المهمة (<span id="targets"></span>) موسومة.</p>
+  <p class="meta">المربعات المقترحة من نماذج آلية وليست حقيقة. لكل مربع اختر <b>صحيح</b> (الفئة والموضع صحيحان)، أو <b>خطأ</b> (ليس جسمًا أو مكرر)، أو غيّر <b>الفئة</b>. إن فات النموذج جسمًا فارسم عليه مربعًا بالسحب على الصورة واختر فئته. <b>بعض الصناديق اختبارات انتباه عمدًا</b> (جسم مستحيل مثل فيل أو زرافة في غرفة)؛ ارفضها، وقبولها يُسجَّل ولا تُحتسب الصورة. لا توجد أزرار «قبول الكل»: احسم كل صندوق بنفسك (اختصار: <kbd>Y</kbd> صحيح، <kbd>N</kbd> خطأ للصندوق المحدد). أكّد «الصورة مكتملة» فقط إذا صارت كل الأجسام من الفئات المهمة (<span id="targets"></span>) موسومة.</p>
   <canvas id="cv" width="900" height="600" role="img" aria-label="الصورة والمربعات"></canvas>
   <div class="row"><span><span class="sw" style="background:var(--pending)"></span> غير محسوم</span><span><span class="sw" style="background:var(--ok)"></span> صحيح</span><span><span class="sw" style="background:var(--no)"></span> خطأ</span><span><span class="sw" style="background:var(--add)"></span> مضاف</span></div>
   <ol id="list" aria-label="مربعات الصورة"></ol>
-  <div class="row">
-    <button id="acceptHigh" type="button">قبول المقترحات ذات الدرجة 80٪ فأكثر</button>
-    <button id="rejectRest" type="button">رفض غير المحسوم</button>
-  </div>
   <div class="row">
     <label><input type="checkbox" id="complete"> الصورة مكتملة: كل الأجسام من الفئات المهمة موسومة</label>
   </div>
@@ -52,8 +48,10 @@ const AR = {person:"شخص",bicycle:"دراجة",car:"سيارة",motorcycle:"د
 const name = c => AR[c] ?? c;
 let classes = [], targets = [], images = [], index = 0, total = 0, done = 0;
 let current = null, decisions = {}, added = [], selected = null, img = null, lastClass = 'chair', drag = null, scale = 1;
+let startedAt = Date.now(), spent = 0;
 const work = {}; // unsaved or saved state per image id, so moving around never loses a decision
-function stash() { if (current) work[current.id] = {decisions, added, complete: $('complete').checked, note: $('note').value}; }
+function elapsed() { return spent + (Date.now() - startedAt) / 1000; }
+function stash() { if (current) work[current.id] = {decisions, added, complete: $('complete').checked, note: $('note').value, spent: elapsed()}; }
 const $ = id => document.getElementById(id), cv = $('cv'), g = cv.getContext('2d');
 $('reviewer').value = localStorage.getItem('detReviewer') ?? '';
 $('reviewer').addEventListener('change', () => localStorage.setItem('detReviewer', $('reviewer').value.trim()));
@@ -85,7 +83,7 @@ function render() {
 async function show() {
   index = Math.max(0, Math.min(images.length - 1, index)); current = images[index];
   const w = work[current.id] ?? (current.review ? {decisions: {...current.review.decisions}, added: current.review.added.map(a => ({...a})), complete: current.review.complete, note: current.review.note || ''} : {decisions: {}, added: [], complete: false, note: ''});
-  decisions = w.decisions; added = w.added; selected = null; $('complete').checked = w.complete; $('note').value = w.note; $('jump').value = index + 1; $('jump').max = images.length;
+  spent = w.spent || 0; startedAt = Date.now(); decisions = w.decisions; added = w.added; selected = null; $('complete').checked = w.complete; $('note').value = w.note; $('jump').value = index + 1; $('jump').max = images.length;
   const saved = images.filter(i => i.review).length;
   $('progress').textContent = 'صورة ' + (index + 1) + ' من ' + images.length + ' · محفوظ ' + saved + (current.review ? ' · هذه الصورة محفوظة' : '');
   $('prev').disabled = index === 0; $('next').disabled = index === images.length - 1;
@@ -102,21 +100,26 @@ cv.addEventListener('pointerup', async e => {
   const sel = $('classPick'); sel.innerHTML = ''; const order = [...targets, ...classes.filter(c => !targets.includes(c))]; for (const c of order) { const o = document.createElement('option'); o.value = c; o.textContent = name(c) + (name(c) !== c ? ' · ' + c : ''); sel.appendChild(o); } sel.value = lastClass;
   const dlg = $('classDialog'); dlg.returnValue = ''; dlg.showModal(); dlg.addEventListener('close', () => { if (dlg.returnValue === 'ok') { lastClass = sel.value; added.push({box, class: sel.value}); render(); } else draw(); }, {once: true});
 });
-$('acceptHigh').addEventListener('click', () => { for (const p of current.proposals) if (!(p.id in decisions) && p.score >= 0.8) decisions[p.id] = 'ok'; render(); });
-$('rejectRest').addEventListener('click', () => { for (const p of current.proposals) if (!(p.id in decisions)) decisions[p.id] = 'no'; render(); });
 async function save() {
   const reviewer = $('reviewer').value.trim(); if (!reviewer) { $('status').textContent = 'اكتب اسم المراجع أولًا.'; $('reviewer').focus(); return; }
   const complete = $('complete').checked; if (complete && current.proposals.some(p => !(p.id in decisions))) { $('status').textContent = 'احسم كل المربعات قبل تأكيد اكتمال الصورة.'; return; }
-  const res = await fetch('/api/review', {method: 'POST', headers: {'content-type': 'application/json'}, body: JSON.stringify({imageId: current.id, reviewer, complete, decisions, added, note: $('note').value})});
+  const lows = current.proposals.filter(p => decisions[p.id] === 'ok' && p.score < 0.4);
+  if (lows.length && !confirm('قبلتَ ' + lows.length + ' صندوقًا درجته أقل من 40٪ (' + lows.slice(0, 4).map(p => name(p.class)).join('، ') + '). هل تأكدتَ بالنظر إلى الصورة أنها صحيحة؟')) return;
+  const seconds = elapsed(); const nBoxes = current.proposals.length;
+  if (seconds < 1.5 * nBoxes && !confirm('راجعتَ هذه الصورة بسرعة كبيرة (' + Math.round(seconds) + ' ثانية لـ' + nBoxes + ' صندوقًا). هل فحصتَ كل صندوق؟')) return;
+  const res = await fetch('/api/review', {method: 'POST', headers: {'content-type': 'application/json'}, body: JSON.stringify({imageId: current.id, reviewer, complete, decisions, added, note: $('note').value, seconds})});
   if (!res.ok) { $('status').textContent = 'تعذر الحفظ: ' + (await res.json()).error; return; }
-  current.review = {decisions: {...decisions}, added: added.map(a => ({...a})), complete, note: $('note').value}; delete work[current.id];
+  const flags = (await res.json()).flags ?? [];
+  current.review = {decisions: {...decisions}, added: added.map(a => ({...a})), complete, note: $('note').value, flags}; delete work[current.id];
+  if (flags.includes('decoy-accepted')) { $('status').textContent = 'تنبيه جودة: في هذه الصورة صندوق اختبار (جسم مستحيل) وقد قبلتَه، فلن تُحتسب الصورة. ارفضه وأعد الحفظ.'; work[current.id] = {decisions: {...decisions}, added: added.map(a => ({...a})), complete, note: $('note').value, spent: 0}; show(); return; }
   $('status').textContent = 'حُفظت الصورة.'; if (index < images.length - 1) index++; else $('status').textContent = 'حُفظت. هذه آخر صورة.'; show();
 }
 const move = d => { stash(); index += d; show(); };
 $('save').addEventListener('click', save); $('prev').addEventListener('click', () => move(-1)); $('next').addEventListener('click', () => move(1));
 $('go').addEventListener('click', () => { const n = Number($('jump').value); if (Number.isInteger(n) && n >= 1 && n <= images.length) { stash(); index = n - 1; show(); } });
 $('jump').addEventListener('keydown', e => { if (e.key === 'Enter') $('go').click(); });
-addEventListener('keydown', e => { if (['INPUT', 'SELECT', 'TEXTAREA'].includes(document.activeElement?.tagName)) return; if (e.key === 'ArrowLeft') move(1); if (e.key === 'ArrowRight') move(-1); });
+const decideSelected = v => { if (!selected || !(selected in {...Object.fromEntries(current.proposals.map(p => [p.id, 1]))})) return; decisions[selected] = v; const next = current.proposals.find(p => !(p.id in decisions)); selected = next ? next.id : selected; render(); };
+addEventListener('keydown', e => { if (['INPUT', 'SELECT', 'TEXTAREA'].includes(document.activeElement?.tagName)) return; if (e.key === 'y' || e.key === 'Y') decideSelected('ok'); if (e.key === 'n' || e.key === 'N') decideSelected('no'); if (e.key === 'ArrowLeft') move(1); if (e.key === 'ArrowRight') move(-1); });
 fetch('/api/images').then(r => r.json()).then(d => { classes = d.classes; targets = d.targets; images = d.images; total = d.total; done = d.done; index = Math.max(0, images.findIndex(i => !i.review)); $('targets').textContent = targets.slice(0, 12).map(name).join('، ') + '…'; show(); });
 </script>
 </body>
