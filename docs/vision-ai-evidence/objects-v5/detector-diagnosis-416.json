@@ -1,0 +1,338 @@
+{
+ "scope": "development+calibration photos of the colour cohort (44 images, all COCO boxes + 56 human-reviewed objects); onnxruntime CPU replay of the app pipeline",
+ "caveat": "Official Tiny was trained on COCO train2017; part of the photos are train2017, so absolute numbers are optimistic. Compare rows, not absolutes.",
+ "results": {
+  "tiny-dev": {
+   "medianMsDesktopCpu": 72,
+   "thresholds": {
+    "0.65": {
+     "precision": 0.9631901840490797,
+     "recall": 0.32983193277310924,
+     "tp": 157,
+     "fp": 6,
+     "fn": 319,
+     "humanReviewedObjectRecall": 0.6896551724137931,
+     "humanReviewedObjects": 58
+    },
+    "0.5": {
+     "precision": 0.8873873873873874,
+     "recall": 0.41386554621848737,
+     "tp": 197,
+     "fp": 25,
+     "fn": 279,
+     "humanReviewedObjectRecall": 0.7758620689655172,
+     "humanReviewedObjects": 58
+    },
+    "0.35": {
+     "precision": 0.7992957746478874,
+     "recall": 0.47689075630252103,
+     "tp": 227,
+     "fp": 57,
+     "fn": 249,
+     "humanReviewedObjectRecall": 0.8103448275862069,
+     "humanReviewedObjects": 58
+    },
+    "0.25": {
+     "precision": 0.725609756097561,
+     "recall": 0.5,
+     "tp": 238,
+     "fp": 90,
+     "fn": 238,
+     "humanReviewedObjectRecall": 0.8275862068965517,
+     "humanReviewedObjects": 58
+    },
+    "0.15": {
+     "precision": 0.5910112359550562,
+     "recall": 0.5525210084033614,
+     "tp": 263,
+     "fp": 182,
+     "fn": 213,
+     "humanReviewedObjectRecall": 0.8275862068965517,
+     "humanReviewedObjects": 58
+    },
+    "0.1": {
+     "precision": 0.5210237659963437,
+     "recall": 0.5987394957983193,
+     "tp": 285,
+     "fp": 262,
+     "fn": 191,
+     "humanReviewedObjectRecall": 0.896551724137931,
+     "humanReviewedObjects": 58
+    }
+   },
+   "perClassRecallAt035": {
+    "umbrella": 0.6363636363636364,
+    "person": 0.6106194690265486,
+    "tv": 1,
+    "bench": 0.4444444444444444,
+    "suitcase": 0.6,
+    "handbag": 0,
+    "bicycle": 0.6666666666666666,
+    "truck": 0.29411764705882354,
+    "bottle": 0.25,
+    "chair": 0.5555555555555556,
+    "wine glass": 0.06666666666666667,
+    "bowl": 0.7647058823529411,
+    "dining table": 0.5,
+    "car": 0.3469387755102041,
+    "cup": 0.7368421052631579,
+    "bus": 0.7,
+    "backpack": 0.5714285714285714,
+    "book": 0.024390243902439025,
+    "vase": 0.45,
+    "train": 1,
+    "potted plant": 0.6,
+    "traffic light": 0.3
+   }
+  },
+  "basira-v3-dev": {
+   "medianMsDesktopCpu": 74,
+   "thresholds": {
+    "0.65": {
+     "precision": 0.9662162162162162,
+     "recall": 0.3004201680672269,
+     "tp": 143,
+     "fp": 5,
+     "fn": 333,
+     "humanReviewedObjectRecall": 0.6379310344827587,
+     "humanReviewedObjects": 58
+    },
+    "0.5": {
+     "precision": 0.9,
+     "recall": 0.39705882352941174,
+     "tp": 189,
+     "fp": 21,
+     "fn": 287,
+     "humanReviewedObjectRecall": 0.7586206896551724,
+     "humanReviewedObjects": 58
+    },
+    "0.35": {
+     "precision": 0.7852112676056338,
+     "recall": 0.4684873949579832,
+     "tp": 223,
+     "fp": 61,
+     "fn": 253,
+     "humanReviewedObjectRecall": 0.8103448275862069,
+     "humanReviewedObjects": 58
+    },
+    "0.25": {
+     "precision": 0.7142857142857143,
+     "recall": 0.5042016806722689,
+     "tp": 240,
+     "fp": 96,
+     "fn": 236,
+     "humanReviewedObjectRecall": 0.8275862068965517,
+     "humanReviewedObjects": 58
+    },
+    "0.15": {
+     "precision": 0.5800865800865801,
+     "recall": 0.5630252100840336,
+     "tp": 268,
+     "fp": 194,
+     "fn": 208,
+     "humanReviewedObjectRecall": 0.8793103448275862,
+     "humanReviewedObjects": 58
+    },
+    "0.1": {
+     "precision": 0.48713550600343053,
+     "recall": 0.5966386554621849,
+     "tp": 284,
+     "fp": 299,
+     "fn": 192,
+     "humanReviewedObjectRecall": 0.9137931034482759,
+     "humanReviewedObjects": 58
+    }
+   },
+   "perClassRecallAt035": {
+    "umbrella": 0.5454545454545454,
+    "person": 0.6106194690265486,
+    "tv": 1,
+    "bench": 0.4444444444444444,
+    "suitcase": 0.6,
+    "handbag": 0,
+    "bicycle": 0.6666666666666666,
+    "truck": 0.29411764705882354,
+    "bottle": 0.25,
+    "chair": 0.5555555555555556,
+    "wine glass": 0.06666666666666667,
+    "bowl": 0.7647058823529411,
+    "dining table": 0.625,
+    "car": 0.3469387755102041,
+    "cup": 0.47368421052631576,
+    "bus": 0.7,
+    "backpack": 0.5714285714285714,
+    "book": 0.04878048780487805,
+    "vase": 0.45,
+    "train": 1,
+    "potted plant": 0.6,
+    "traffic light": 0.3
+   }
+  },
+  "tiny-dev-tiled": {
+   "medianMsDesktopCpu": 373,
+   "thresholds": {
+    "0.65": {
+     "precision": 0.8268398268398268,
+     "recall": 0.4012605042016807,
+     "tp": 191,
+     "fp": 40,
+     "fn": 285,
+     "humanReviewedObjectRecall": 0.7241379310344828,
+     "humanReviewedObjects": 58
+    },
+    "0.5": {
+     "precision": 0.740506329113924,
+     "recall": 0.49159663865546216,
+     "tp": 234,
+     "fp": 82,
+     "fn": 242,
+     "humanReviewedObjectRecall": 0.7931034482758621,
+     "humanReviewedObjects": 58
+    },
+    "0.35": {
+     "precision": 0.6275862068965518,
+     "recall": 0.5735294117647058,
+     "tp": 273,
+     "fp": 162,
+     "fn": 203,
+     "humanReviewedObjectRecall": 0.8793103448275862,
+     "humanReviewedObjects": 58
+    },
+    "0.25": {
+     "precision": 0.5328596802841918,
+     "recall": 0.6302521008403361,
+     "tp": 300,
+     "fp": 263,
+     "fn": 176,
+     "humanReviewedObjectRecall": 0.9137931034482759,
+     "humanReviewedObjects": 58
+    },
+    "0.15": {
+     "precision": 0.40694789081885857,
+     "recall": 0.6890756302521008,
+     "tp": 328,
+     "fp": 478,
+     "fn": 148,
+     "humanReviewedObjectRecall": 0.9310344827586207,
+     "humanReviewedObjects": 58
+    },
+    "0.1": {
+     "precision": 0.33978702807357214,
+     "recall": 0.7373949579831933,
+     "tp": 351,
+     "fp": 682,
+     "fn": 125,
+     "humanReviewedObjectRecall": 0.9482758620689655,
+     "humanReviewedObjects": 58
+    }
+   },
+   "perClassRecallAt035": {
+    "umbrella": 0.7272727272727273,
+    "person": 0.6991150442477876,
+    "tv": 1,
+    "bench": 0.5555555555555556,
+    "suitcase": 0.6,
+    "handbag": 0.09090909090909091,
+    "bicycle": 0.6666666666666666,
+    "truck": 0.29411764705882354,
+    "bottle": 0.25,
+    "chair": 0.5555555555555556,
+    "wine glass": 0.06666666666666667,
+    "bowl": 0.8235294117647058,
+    "dining table": 0.625,
+    "car": 0.5714285714285714,
+    "cup": 0.8947368421052632,
+    "bus": 0.9,
+    "backpack": 0.5714285714285714,
+    "book": 0.14634146341463414,
+    "vase": 0.6,
+    "train": 1,
+    "potted plant": 0.7,
+    "traffic light": 0.3
+   }
+  },
+  "basira-v3-dev-tiled": {
+   "medianMsDesktopCpu": 300,
+   "thresholds": {
+    "0.65": {
+     "precision": 0.7860262008733624,
+     "recall": 0.37815126050420167,
+     "tp": 180,
+     "fp": 49,
+     "fn": 296,
+     "humanReviewedObjectRecall": 0.6896551724137931,
+     "humanReviewedObjects": 58
+    },
+    "0.5": {
+     "precision": 0.7115987460815048,
+     "recall": 0.47689075630252103,
+     "tp": 227,
+     "fp": 92,
+     "fn": 249,
+     "humanReviewedObjectRecall": 0.7931034482758621,
+     "humanReviewedObjects": 58
+    },
+    "0.35": {
+     "precision": 0.6040268456375839,
+     "recall": 0.5672268907563025,
+     "tp": 270,
+     "fp": 177,
+     "fn": 206,
+     "humanReviewedObjectRecall": 0.896551724137931,
+     "humanReviewedObjects": 58
+    },
+    "0.25": {
+     "precision": 0.5109612141652614,
+     "recall": 0.6365546218487395,
+     "tp": 303,
+     "fp": 290,
+     "fn": 173,
+     "humanReviewedObjectRecall": 0.9137931034482759,
+     "humanReviewedObjects": 58
+    },
+    "0.15": {
+     "precision": 0.3857634902411022,
+     "recall": 0.7058823529411765,
+     "tp": 336,
+     "fp": 535,
+     "fn": 140,
+     "humanReviewedObjectRecall": 0.9310344827586207,
+     "humanReviewedObjects": 58
+    },
+    "0.1": {
+     "precision": 0.31140350877192985,
+     "recall": 0.7457983193277311,
+     "tp": 355,
+     "fp": 785,
+     "fn": 121,
+     "humanReviewedObjectRecall": 0.9482758620689655,
+     "humanReviewedObjects": 58
+    }
+   },
+   "perClassRecallAt035": {
+    "umbrella": 0.7272727272727273,
+    "person": 0.6991150442477876,
+    "tv": 1,
+    "bench": 0.5555555555555556,
+    "suitcase": 0.7,
+    "handbag": 0.09090909090909091,
+    "bicycle": 0.5555555555555556,
+    "truck": 0.29411764705882354,
+    "bottle": 0.25,
+    "chair": 0.5555555555555556,
+    "wine glass": 0.06666666666666667,
+    "bowl": 0.8235294117647058,
+    "dining table": 0.625,
+    "car": 0.5918367346938775,
+    "cup": 0.6842105263157895,
+    "bus": 0.9,
+    "backpack": 0.5714285714285714,
+    "book": 0.14634146341463414,
+    "vase": 0.55,
+    "train": 1,
+    "potted plant": 0.7,
+    "traffic light": 0.3
+   }
+  }
+ }
+}
