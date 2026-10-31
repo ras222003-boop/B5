@@ -1,0 +1,153 @@
+{
+ "feature": "958",
+ "trainImages": 840,
+ "classes": 14,
+ "realTestItems": 14,
+ "top1": 5,
+ "top3": 7,
+ "shuffledLabelControlTop1": 1,
+ "chanceTop1": 1.0,
+ "items": [
+  {
+   "truth": "air_fryer",
+   "top3": [
+    "water_dispenser",
+    "fridge",
+    "dishwasher"
+   ],
+   "bestSimilarity": 0.491,
+   "margin": 0.006
+  },
+  {
+   "truth": "kettle",
+   "top3": [
+    "fridge",
+    "water_dispenser",
+    "dishwasher"
+   ],
+   "bestSimilarity": 0.631,
+   "margin": 0.004
+  },
+  {
+   "truth": "trash_bin",
+   "top3": [
+    "robot_vacuum",
+    "water_dispenser",
+    "microwave_oven"
+   ],
+   "bestSimilarity": 0.666,
+   "margin": 0.013
+  },
+  {
+   "truth": "microwave_oven",
+   "top3": [
+    "dishwasher",
+    "fridge",
+    "wardrobe"
+   ],
+   "bestSimilarity": 0.582,
+   "margin": 0.016
+  },
+  {
+   "truth": "fridge",
+   "top3": [
+    "wardrobe",
+    "fridge",
+    "dishwasher"
+   ],
+   "bestSimilarity": 0.659,
+   "margin": 0.007
+  },
+  {
+   "truth": "water_dispenser",
+   "top3": [
+    "fridge",
+    "wardrobe",
+    "oil_heater"
+   ],
+   "bestSimilarity": 0.552,
+   "margin": 0.011
+  },
+  {
+   "truth": "split_ac",
+   "top3": [
+    "fridge",
+    "split_ac",
+    "dishwasher"
+   ],
+   "bestSimilarity": 0.581,
+   "margin": 0.004
+  },
+  {
+   "truth": "dishwasher",
+   "top3": [
+    "dishwasher",
+    "fridge",
+    "wardrobe"
+   ],
+   "bestSimilarity": 0.579,
+   "margin": 0.006
+  },
+  {
+   "truth": "wardrobe",
+   "top3": [
+    "wardrobe",
+    "fridge",
+    "dishwasher"
+   ],
+   "bestSimilarity": 0.654,
+   "margin": 0.005
+  },
+  {
+   "truth": "window_ac",
+   "top3": [
+    "pressure_cooker",
+    "microwave_oven",
+    "dishwasher"
+   ],
+   "bestSimilarity": 0.577,
+   "margin": 0.009
+  },
+  {
+   "truth": "bathroom_scale",
+   "top3": [
+    "microwave_oven",
+    "pressure_cooker",
+    "dishwasher"
+   ],
+   "bestSimilarity": 0.638,
+   "margin": 0.003
+  },
+  {
+   "truth": "robot_vacuum",
+   "top3": [
+    "robot_vacuum",
+    "air_fryer",
+    "split_ac"
+   ],
+   "bestSimilarity": 0.614,
+   "margin": 0.056
+  },
+  {
+   "truth": "pressure_cooker",
+   "top3": [
+    "pressure_cooker",
+    "water_dispenser",
+    "split_ac"
+   ],
+   "bestSimilarity": 0.59,
+   "margin": 0.001
+  },
+  {
+   "truth": "oil_heater",
+   "top3": [
+    "oil_heater",
+    "trash_bin",
+    "fridge"
+   ],
+   "bestSimilarity": 0.498,
+   "margin": 0.007
+  }
+ ],
+ "meaning": "Feasibility signal on 14 real photos only; trained on unapproved drawings; not an accuracy measurement."
+}
