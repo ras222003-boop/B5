@@ -1,0 +1,16 @@
+{
+  "what": "Self-test of the published preview code (local copy, index.html byte-identical) in the in-app browser on desktop CPU",
+  "images": 44, "referenceObjects": 56, "reference": "single human reviewer, dominant colour",
+  "split": "development+calibration photos only; frozen test split untouched",
+  "iouForMatching": 0.5,
+  "results": [
+    {"model": "Lite0", "engine": "V3", "detectedRefs": 20, "answered": 4, "correct": 0, "multicolorAnswers": 1, "msMedian": 375.9},
+    {"model": "Lite0", "engine": "V4", "detectedRefs": 20, "answered": 11, "correct": 7, "multicolorAnswers": 0, "msMedian": 381.2},
+    {"model": "Tiny", "engine": "V3", "detectedRefs": 44, "answered": 7, "correct": 0, "multicolorAnswers": 2, "msMedian": 511.4},
+    {"model": "Tiny", "engine": "V4", "detectedRefs": 44, "answered": 16, "correct": 8, "multicolorAnswers": 0, "msMedian": 396.7},
+    {"model": "V3", "engine": "V3", "detectedRefs": 44, "answered": 8, "correct": 0, "multicolorAnswers": 2, "msMedian": 365.1},
+    {"model": "V3", "engine": "V4", "detectedRefs": 44, "answered": 17, "correct": 8, "multicolorAnswers": 0, "msMedian": 380.1}
+  ],
+  "undetectedByV3Model": ["bench","backpack","car","bowl","umbrella","bottle","truck","chair","truck","car","chair","truck"],
+  "liveStream": "Camera hardware blocked in the in-app browser. A virtual camera (canvas.captureStream looping a moving real photo) drove the live pipeline: state WORKING, V3 engine said bus = multicolor (blue and purple), V4 engine said blue and held it across frames; small cars stayed unclear (abstained)."
+}
