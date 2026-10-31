@@ -165,20 +165,94 @@ def oil_heater(p, rng):
     p.paint(lambda d: (line(d, (80, 60), (60, 18), 2.5), line(d, (60, 18), (30, 24), 2.5)), (28, 28, 28))
 
 
+def dishwasher(p, rng):
+    body = jitter(rng, rng.choice([(238, 238, 240), (210, 210, 214), (60, 60, 64)]), 8)
+    p.paint(lambda d: rrect(d, (52, 24, 204, 236), 5), body, "vert", 0.22)
+    p.paint(lambda d: rrect(d, (52, 24, 204, 56), 4), jitter(rng, [v - 40 for v in body]), "vert", 0.15)
+    for x in (70, 96, 122):
+        p.paint(lambda d, x=x: ellipse(d, (x, 34, x + 10, 44)), jitter(rng, (230, 230, 230)))
+    p.paint(lambda d: rrect(d, (172, 36, 194, 46), 2), jitter(rng, (60, 200, 120)))
+    p.paint(lambda d: rrect(d, (76, 74, 180, 82), 3), jitter(rng, (150, 150, 155)), "cyl", 0.3)
+    p.paint(lambda d: rrect(d, (52, 216, 204, 236), 3), jitter(rng, (40, 40, 44)))
+
+
+def wardrobe(p, rng):
+    wood = jitter(rng, rng.choice([(190, 150, 100), (150, 100, 60), (225, 205, 170)]), 14)
+    p.paint(lambda d: rrect(d, (42, 10, 214, 244), 4), wood, "vert", 0.28)
+    p.paint(lambda d: line(d, (128, 14), (128, 240), 2.4), jitter(rng, [v - 60 for v in wood]))
+    p.paint(lambda d: rrect(d, (116, 112, 122, 152), 2), jitter(rng, (170, 170, 175)))
+    p.paint(lambda d: rrect(d, (134, 112, 140, 152), 2), jitter(rng, (170, 170, 175)))
+    p.paint(lambda d: rrect(d, (50, 18, 120, 34), 2), jitter(rng, [v - 25 for v in wood]))
+    p.paint(lambda d: rrect(d, (136, 18, 206, 34), 2), jitter(rng, [v - 25 for v in wood]))
+
+
+def window_ac(p, rng):
+    body = jitter(rng, rng.choice([(235, 230, 215), (220, 220, 222), (200, 190, 170)]), 10)
+    p.paint(lambda d: rrect(d, (26, 66, 230, 196), 8), body, "vert", 0.3)
+    p.paint(lambda d: rrect(d, (44, 86, 156, 176), 4), jitter(rng, [v - 45 for v in body]))
+    for x in range(50, 152, 7):
+        p.paint(lambda d, x=x: line(d, (x, 90), (x, 172), 1.6), jitter(rng, [v - 95 for v in body]))
+    p.paint(lambda d: ellipse(d, (176, 92, 202, 118)), jitter(rng, (150, 150, 150)), "dome", 0.5)
+    p.paint(lambda d: ellipse(d, (176, 132, 202, 158)), jitter(rng, (150, 150, 150)), "dome", 0.5)
+    p.paint(lambda d: rrect(d, (170, 168, 214, 178), 2), jitter(rng, (90, 90, 90)))
+
+
+def bathroom_scale(p, rng):
+    body = jitter(rng, rng.choice([(190, 195, 205), (230, 230, 232), (60, 60, 64)]), 12)
+    p.paint(lambda d: poly(d, [(60, 120), (196, 120), (214, 214), (42, 214)]), body, "vert", 0.3)
+    for y in range(140, 208, 9):
+        p.paint(lambda d, y=y: line(d, (56 - (y - 120) * 0.0, y), (200, y), 1.4), jitter(rng, [v - 40 for v in body]))
+    p.paint(lambda d: rrect(d, (96, 124, 160, 142), 5), jitter(rng, (235, 235, 230)), "dome", 0.25)
+    p.paint(lambda d: ellipse(d, (118, 126, 138, 140)), jitter(rng, (120, 120, 120)))
+
+
+def robot_vacuum(p, rng):
+    body = jitter(rng, rng.choice([(40, 40, 44), (220, 220, 224), (70, 50, 40)]), 10)
+    p.paint(lambda d: ellipse(d, (34, 96, 222, 214)), body, "dome", 0.45)
+    p.paint(lambda d: ellipse(d, (64, 112, 192, 196)), jitter(rng, [min(255, v + 18) for v in body]), "dome", 0.3)
+    p.paint(lambda d: ellipse(d, (112, 134, 144, 160)), jitter(rng, (190, 190, 195)), "dome", 0.4)
+    p.paint(lambda d: rrect(d, (84, 100, 172, 110), 4), jitter(rng, [v + 30 for v in body]))
+    p.paint(lambda d: ellipse(d, (118, 102, 138, 112)), jitter(rng, (30, 30, 30)))
+
+
+def pressure_cooker(p, rng):
+    metal = jitter(rng, rng.choice([(170, 172, 178), (120, 120, 124), (60, 60, 64)]), 12)
+    p.paint(lambda d: rrect(d, (62, 112, 194, 218), 8), metal, "cyl", 0.55)
+    p.paint(lambda d: rrect(d, (56, 90, 200, 124), 14), jitter(rng, [v + 18 for v in metal]), "dome", 0.5)
+    p.paint(lambda d: rrect(d, (118, 70, 138, 94), 5), jitter(rng, (40, 40, 40)))
+    p.paint(lambda d: rrect(d, (28, 138, 66, 152), 6), jitter(rng, (35, 35, 35)))
+    p.paint(lambda d: rrect(d, (190, 138, 228, 152), 6), jitter(rng, (35, 35, 35)))
+    p.paint(lambda d: ellipse(d, (150, 76, 168, 92)), jitter(rng, (200, 60, 50)), "dome", 0.5)
+
+
 CLASSES = {
     "air_fryer": air_fryer, "kettle": kettle, "trash_bin": trash_bin, "microwave_oven": microwave_oven,
     "fridge": fridge, "water_dispenser": water_dispenser, "split_ac": split_ac, "oil_heater": oil_heater,
+    "dishwasher": dishwasher, "wardrobe": wardrobe, "window_ac": window_ac, "bathroom_scale": bathroom_scale,
+    "robot_vacuum": robot_vacuum, "pressure_cooker": pressure_cooker,
 }
+
+
+def clean(crop):
+    """No annotation overlay: no mint-green outline, no red outline, no white label pill."""
+    a = np.asarray(crop, dtype=np.int16)
+    r, g, b = a[..., 0], a[..., 1], a[..., 2]
+    mint = ((r < 120) & (g > 200) & (b > 100) & (b < 200)).mean()
+    red = ((r > 215) & (g < 60) & (b < 60)).mean()
+    white = ((r > 246) & (g > 246) & (b > 246)).mean()
+    return mint < 0.0005 and red < 0.0005 and white < 0.004
 
 
 def background(rng, photos):
     if photos and rng.random() < 0.8:
         im = Image.open(rng.choice(photos)).convert("RGB")
         w, h = im.size
-        s = rng.randint(min(w, h) // 3, min(w, h))
-        x, y = rng.randint(0, w - s), rng.randint(0, h - s)
-        bg = im.crop((x, y, x + s, y + s)).resize((W, H), Image.BILINEAR)
-        return bg.filter(ImageFilter.GaussianBlur(rng.choice([0, 0.8, 1.6])))
+        for _ in range(40):
+            s = rng.randint(min(w, h) // 4, min(w, h) // 2)
+            x, y = rng.randint(0, w - s), rng.randint(0, h - s)
+            crop = im.crop((x, y, x + s, y + s)).resize((W, H), Image.BILINEAR)
+            if clean(crop):
+                return crop.filter(ImageFilter.GaussianBlur(rng.choice([0, 0.8, 1.6])))
     c = [rng.randint(60, 200) for _ in range(3)]
     arr = np.ones((H, W, 3)) * c + np.linspace(-25, 25, H)[:, None, None] + np.random.default_rng(rng.randint(0, 9999)).normal(0, 6, (H, W, 3))
     return Image.fromarray(np.clip(arr, 0, 255).astype(np.uint8))
