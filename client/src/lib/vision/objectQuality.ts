@@ -46,7 +46,10 @@ export class ObjectQualityProvider implements VisionProvider {
     const response = await fetch(
       (profile.id !== "objects-yolox-tiny"
         ? "/api/vision/object-quality/models/" + profile.id
-        : "/api/vision/object-quality") + "/assets/yolox/yolox_tiny.onnx",
+        : "/api/vision/object-quality") +
+        (profile.model === "yolox-s"
+          ? "/assets/yolox/yolox_s.onnx"
+          : "/assets/yolox/yolox_tiny.onnx"),
       { cache: "no-store" }
     );
     if (!response.ok) throw new Error("object_quality_model_unavailable");

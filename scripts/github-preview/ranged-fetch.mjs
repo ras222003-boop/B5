@@ -2,6 +2,7 @@
 const sizes = {
   "api/vision/object-quality/assets/yolox/yolox_tiny.onnx": 20219662,
   "api/vision/object-quality/models/objects-basira-v3/assets/yolox/yolox_tiny.onnx": 20258925,
+  "api/vision/object-quality/models/objects-yolox-s/assets/yolox/yolox_s.onnx": 35858002,
   "assets/ort-wasm-simd-threaded.jsep-B0T3yYHD.wasm": 21596019,
   "vision/efficientdet_lite0_int8.tflite": 4602795,
   "vision/mediapipe/vision_wasm_internal.wasm": 11756954,

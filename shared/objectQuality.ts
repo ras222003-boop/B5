@@ -1,8 +1,8 @@
 /** Local experimental object recognition. This contract never grants navigation eligibility. */
 export interface ObjectQualityProfile {
-  id: "objects-yolox-tiny" | "objects-basira-v1" | "objects-basira-v2" | "objects-basira-v3";
+  id: "objects-yolox-tiny" | "objects-yolox-s" | "objects-basira-v1" | "objects-basira-v2" | "objects-basira-v3";
   name: string;
-  model: "yolox-tiny";
+  model: "yolox-tiny" | "yolox-s";
   modelSha256: string;
   threshold: number;
   navigationEligible: false;
@@ -35,10 +35,11 @@ export function validObjectQualityProfile(
   return Boolean(
     p &&
       (p.id === "objects-yolox-tiny" ||
+        p.id === "objects-yolox-s" ||
         p.id === "objects-basira-v1" ||
         p.id === "objects-basira-v2" ||
         p.id === "objects-basira-v3") &&
-      p.model === "yolox-tiny" &&
+      p.model === (p.id === "objects-yolox-s" ? "yolox-s" : "yolox-tiny") &&
       p.navigationEligible === false &&
       p.productionEligible === false &&
       p.humanApproval === false &&
@@ -54,10 +55,13 @@ export function validObjectQualityProfile(
         : p.maskQualification === "REJECTED_FINAL") &&
       (p.id === "objects-basira-v3"
         ? [0.35,0.5,0.65].includes(p.threshold)
-        : p.threshold === 0.5) &&
+        : p.id === "objects-yolox-s"
+          ? [0.35,0.5].includes(p.threshold) && p.inputSize === 640
+          : p.threshold === 0.5) &&
       /^[a-f0-9]{64}$/.test(p.modelSha256) &&
-      p.assets?.["yolox/yolox_tiny.onnx"]?.sha256 === p.modelSha256 &&
+      p.assets?.[p.model === "yolox-s" ? "yolox/yolox_s.onnx" : "yolox/yolox_tiny.onnx"]?.sha256 === p.modelSha256 &&
       (p.id === "objects-yolox-tiny" ||
+        p.id === "objects-yolox-s" ||
         (p.maskForStills === false &&
           p.trainingEvidence?.finalUsedForSelection === false &&
           Number.isInteger(p.trainingEvidence.optimizerSteps) &&
