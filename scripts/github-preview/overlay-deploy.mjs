@@ -19,7 +19,10 @@ if (receipt.sourceWasClean !== true || receipt.privateMediaIncluded !== false ||
 if (oldSource.publishable !== true || oldSource.restrictedModelsIncluded !== false)
   throw Error("The retained deployment must itself be a verified publishable preview");
 // Keep naming the ORIGINAL verified deployment as the source of the retained model files across repeated overlays.
-const modelsFrom = oldSource.overlay?.modelsRetainedFrom ?? oldSource.sourceCommit;
+const modelsFrom =
+  oldSource.overlay?.modelsRetainedFrom ??
+  oldSource.overlay?.models?.match(/from ([a-f0-9]{40})/)?.[1] ??
+  oldSource.sourceCommit;
 const keep = p => p.startsWith("api/vision/object-quality/") || p.startsWith("model-notices/");
 const retained = oldSource.files.filter(r => keep(r.path));
 const incoming = receipt.files.filter(r => !keep(r.path));
