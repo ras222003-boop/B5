@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>مراجعة كشف الأجسام</title>
+<style>
+  :root { --bg:#fff; --fg:#1b1b1f; --muted:#5b5b66; --line:#d5d5dd; --accent:#2457d6; --ok:#1c9c4f; --no:#d03a3a; --add:#2b6be6; --pending:#e0a800; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#16161a; --fg:#f0f0f4; --muted:#a6a6b4; --line:#3a3a46; --accent:#7aa2ff; --ok:#46d07f; --no:#ff7676; --add:#7aa2ff; --pending:#ffd24d; } }
+  body { margin:0; background:var(--bg); color:var(--fg); font:16px/1.5 system-ui,"Segoe UI",Tahoma,sans-serif; }
+  main { max-width:980px; margin:0 auto; padding:16px; }
+  header { display:flex; gap:12px; align-items:center; justify-content:space-between; flex-wrap:wrap; }
+  h1 { font-size:20px; margin:0; } .meta { color:var(--muted); }
+  canvas { width:100%; height:auto; border:1px solid var(--line); border-radius:8px; background:#777; touch-action:none; cursor:crosshair; }
+  button, select, input[type=text] { font:inherit; padding:8px 10px; border:1px solid var(--line); border-radius:8px; background:transparent; color:var(--fg); }
+  button { cursor:pointer; } button:focus-visible, select:focus-visible { outline:3px solid var(--accent); outline-offset:2px; }
+  .row { display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin:8px 0; }
+  ol { list-style:none; padding:0; margin:8px 0; display:grid; gap:6px; }
+  li { border:1px solid var(--line); border-radius:8px; padding:8px; display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+  li.selected { outline:2px solid var(--accent); }
+  .tag { padding:1px 8px; border-radius:999px; font-size:13px; border:1px solid currentColor; }
+  .ok { color:var(--ok); } .no { color:var(--no); } .add { color:var(--add); } .pending { color:var(--pending); }
+  .sw { width:14px; height:14px; border-radius:3px; display:inline-block; }
+  #status { min-height:1.5em; color:var(--muted); }
+  dialog { border:1px solid var(--line); border-radius:12px; background:var(--bg); color:var(--fg); }
+</style>
+</head>
+<body>
+<main>
+  <header><h1>مراجعة كشف الأجسام</h1><div class="meta" id="progress" role="status" aria-live="polite"></div></header>
+  <p class="meta">المربعات المقترحة من نماذج آلية وليست حقيقة. لكل مربع اختر <b>صحيح</b> (الفئة والموضع صحيحان)، أو <b>خطأ</b> (ليس جسمًا أو مكرر)، أو غيّر <b>الفئة</b>. إن فات النموذج جسمًا فارسم عليه مربعًا بالسحب على الصورة واختر فئته. أكّد «الصورة مكتملة» فقط إذا صارت كل الأجسام من الفئات المهمة (<span id="targets"></span>) موسومة.</p>
+  <canvas id="cv" width="900" height="600" role="img" aria-label="الصورة والمربعات"></canvas>
+  <div class="row"><span><span class="sw" style="background:var(--pending)"></span> غير محسوم</span><span><span class="sw" style="background:var(--ok)"></span> صحيح</span><span><span class="sw" style="background:var(--no)"></span> خطأ</span><span><span class="sw" style="background:var(--add)"></span> مضاف</span></div>
+  <ol id="list" aria-label="مربعات الصورة"></ol>
+  <div class="row">
+    <button id="acceptHigh" type="button">قبول المقترحات ذات الدرجة 80٪ فأكثر</button>
+    <button id="rejectRest" type="button">رفض غير المحسوم</button>
+  </div>
+  <div class="row">
+    <label><input type="checkbox" id="complete"> الصورة مكتملة: كل الأجسام من الفئات المهمة موسومة</label>
+  </div>
+  <div class="row">
+    <label>اسم المراجع <input id="reviewer" type="text" maxlength="40" autocomplete="off"></label>
+    <label>ملاحظة <input id="note" type="text" maxlength="300" autocomplete="off"></label>
+  </div>
+  <div class="row"><button id="save" type="button"><b>حفظ والتالي</b></button><button id="skip" type="button">تخطي الصورة</button></div>
+  <p id="status" role="status" aria-live="polite"></p>
+  <dialog id="classDialog"><form method="dialog"><p>فئة المربع الجديد</p><select id="classPick"></select><div class="row"><button value="ok" id="classOk">إضافة</button><button value="cancel">إلغاء</button></div></form></dialog>
+</main>
+<script>
+const AR = {person:"شخص",bicycle:"دراجة",car:"سيارة",motorcycle:"دراجة نارية",bus:"حافلة",truck:"شاحنة",train:"قطار","traffic light":"إشارة مرور",bench:"مقعد",backpack:"حقيبة ظهر",umbrella:"مظلة",handbag:"حقيبة يد",suitcase:"حقيبة سفر",bottle:"زجاجة","wine glass":"كأس نبيذ",cup:"كوب",bowl:"وعاء",chair:"كرسي",couch:"أريكة","potted plant":"نبتة",bed:"سرير","dining table":"طاولة",tv:"تلفاز",laptop:"حاسوب محمول","cell phone":"هاتف",book:"كتاب",vase:"مزهرية",refrigerator:"ثلاجة",clock:"ساعة",microwave:"ميكروويف",oven:"فرن",sink:"حوض",toilet:"مرحاض",keyboard:"لوحة مفاتيح",mouse:"فأرة",remote:"جهاز تحكم"};
+const name = c => AR[c] ?? c;
+let classes = [], targets = [], images = [], index = 0, total = 0, done = 0;
+let current = null, decisions = {}, added = [], selected = null, img = null, lastClass = 'chair', drag = null, scale = 1;
+const $ = id => document.getElementById(id), cv = $('cv'), g = cv.getContext('2d');
+$('reviewer').value = localStorage.getItem('detReviewer') ?? '';
+$('reviewer').addEventListener('change', () => localStorage.setItem('detReviewer', $('reviewer').value.trim()));
+const color = s => getComputedStyle(document.documentElement).getPropertyValue('--' + s).trim();
+function layout() { const w = Math.min(cv.parentElement.clientWidth, 940); cv.width = 940; scale = 940 / current.width; cv.height = Math.round(current.height * scale); }
+function draw() {
+  if (!img) return; g.clearRect(0, 0, cv.width, cv.height); g.drawImage(img, 0, 0, cv.width, cv.height); g.lineWidth = 3; g.font = '16px sans-serif';
+  const box = (b, col, label, dashed, sel) => { const [x, y, w, h] = b; g.setLineDash(dashed ? [8, 6] : []); g.strokeStyle = col; g.lineWidth = sel ? 5 : 3; g.strokeRect(x * cv.width, y * cv.height, w * cv.width, h * cv.height); g.setLineDash([]); if (label) { const tx = x * cv.width, ty = Math.max(16, y * cv.height - 4); const wd = g.measureText(label).width + 8; g.fillStyle = col; g.fillRect(tx, ty - 16, wd, 20); g.fillStyle = '#000'; g.fillText(label, tx + 4, ty); } };
+  current.proposals.forEach((p, i) => { const d = decisions[p.id]; const col = d === 'no' ? color('no') : d ? color('ok') : color('pending'); const cls = d && d.startsWith('class:') ? d.slice(6) : p.class; box(p.box, col, (i + 1) + ' ' + name(cls), d === 'no', selected === p.id); });
+  added.forEach((a, i) => box(a.box, color('add'), '+' + (i + 1) + ' ' + name(a.class), false, selected === 'a' + i));
+  if (drag) { g.strokeStyle = color('add'); g.setLineDash([4, 4]); g.strokeRect(Math.min(drag.x0, drag.x1), Math.min(drag.y0, drag.y1), Math.abs(drag.x1 - drag.x0), Math.abs(drag.y1 - drag.y0)); g.setLineDash([]); }
+}
+function classSelect(value, onChange) { const s = document.createElement('select'); s.setAttribute('aria-label', 'الفئة'); const order = [...targets, ...classes.filter(c => !targets.includes(c))]; for (const c of order) { const o = document.createElement('option'); o.value = c; o.textContent = name(c) + (name(c) !== c ? ' · ' + c : ''); s.appendChild(o); } s.value = value; s.addEventListener('change', () => onChange(s.value)); return s; }
+function render() {
+  const list = $('list'); list.innerHTML = '';
+  current.proposals.forEach((p, i) => {
+    const d = decisions[p.id]; const li = document.createElement('li'); if (selected === p.id) li.className = 'selected';
+    const cls = d && d.startsWith('class:') ? d.slice(6) : p.class;
+    const state = d === 'no' ? '<span class="tag no">خطأ</span>' : d === 'ok' ? '<span class="tag ok">صحيح</span>' : d ? '<span class="tag ok">فئة: ' + name(cls) + '</span>' : '<span class="tag pending">غير محسوم</span>';
+    li.innerHTML = '<b>' + (i + 1) + '. ' + name(p.class) + '</b><span class="meta">' + Math.round(p.score * 100) + '٪ · ' + p.source + '</span>' + state;
+    const mk = (t, fn) => { const b = document.createElement('button'); b.type = 'button'; b.textContent = t; b.addEventListener('click', e => { e.stopPropagation(); fn(); }); li.appendChild(b); };
+    mk('صحيح', () => { decisions[p.id] = 'ok'; render(); }); mk('خطأ', () => { decisions[p.id] = 'no'; render(); });
+    li.appendChild(classSelect(cls, v => { decisions[p.id] = v === p.class ? 'ok' : 'class:' + v; render(); }));
+    li.addEventListener('click', () => { selected = p.id; draw(); }); list.appendChild(li);
+  });
+  added.forEach((a, i) => { const li = document.createElement('li'); li.innerHTML = '<b>+' + (i + 1) + ' ' + name(a.class) + '</b><span class="tag add">مضاف</span>'; const b = document.createElement('button'); b.type = 'button'; b.textContent = 'حذف'; b.addEventListener('click', () => { added.splice(i, 1); render(); }); li.appendChild(b); list.appendChild(li); });
+  draw();
+}
+async function show() {
+  current = images[index]; if (!current) { $('progress').textContent = 'اكتملت المراجعة: ' + done + ' من ' + total; cv.height = 40; g.clearRect(0, 0, cv.width, 40); $('list').innerHTML = ''; return; }
+  $('progress').textContent = (done + 1) + ' من ' + total; decisions = {}; added = []; selected = null; $('complete').checked = false; $('note').value = '';
+  img = new Image(); img.src = '/img/' + encodeURIComponent(current.id); await img.decode(); layout(); render();
+}
+function pos(e) { const r = cv.getBoundingClientRect(); return {x: (e.clientX - r.left) * cv.width / r.width, y: (e.clientY - r.top) * cv.height / r.height}; }
+cv.addEventListener('pointerdown', e => { const p = pos(e); drag = {x0: p.x, y0: p.y, x1: p.x, y1: p.y}; cv.setPointerCapture(e.pointerId); });
+cv.addEventListener('pointermove', e => { if (!drag) return; const p = pos(e); drag.x1 = p.x; drag.y1 = p.y; draw(); });
+cv.addEventListener('pointerup', async e => {
+  if (!drag) return; const d = drag; drag = null; const w = Math.abs(d.x1 - d.x0), h = Math.abs(d.y1 - d.y0);
+  if (w < 12 || h < 12) { // click: select the smallest proposal under the pointer
+    const px = d.x0 / cv.width, py = d.y0 / cv.height; const hit = current.proposals.filter(p => px >= p.box[0] && px <= p.box[0] + p.box[2] && py >= p.box[1] && py <= p.box[1] + p.box[3]).sort((a, b) => a.box[2] * a.box[3] - b.box[2] * b.box[3])[0]; selected = hit ? hit.id : null; draw(); return; }
+  const box = [Math.min(d.x0, d.x1) / cv.width, Math.min(d.y0, d.y1) / cv.height, w / cv.width, h / cv.height];
+  const sel = $('classPick'); sel.innerHTML = ''; const order = [...targets, ...classes.filter(c => !targets.includes(c))]; for (const c of order) { const o = document.createElement('option'); o.value = c; o.textContent = name(c) + (name(c) !== c ? ' · ' + c : ''); sel.appendChild(o); } sel.value = lastClass;
+  const dlg = $('classDialog'); dlg.returnValue = ''; dlg.showModal(); dlg.addEventListener('close', () => { if (dlg.returnValue === 'ok') { lastClass = sel.value; added.push({box, class: sel.value}); render(); } else draw(); }, {once: true});
+});
+$('acceptHigh').addEventListener('click', () => { for (const p of current.proposals) if (!(p.id in decisions) && p.score >= 0.8) decisions[p.id] = 'ok'; render(); });
+$('rejectRest').addEventListener('click', () => { for (const p of current.proposals) if (!(p.id in decisions)) decisions[p.id] = 'no'; render(); });
+async function save() {
+  const reviewer = $('reviewer').value.trim(); if (!reviewer) { $('status').textContent = 'اكتب اسم المراجع أولًا.'; $('reviewer').focus(); return; }
+  const complete = $('complete').checked; if (complete && current.proposals.some(p => !(p.id in decisions))) { $('status').textContent = 'احسم كل المربعات قبل تأكيد اكتمال الصورة.'; return; }
+  const res = await fetch('/api/review', {method: 'POST', headers: {'content-type': 'application/json'}, body: JSON.stringify({imageId: current.id, reviewer, complete, decisions, added, note: $('note').value})});
+  if (!res.ok) { $('status').textContent = 'تعذر الحفظ: ' + (await res.json()).error; return; }
+  $('status').textContent = 'حُفظت الصورة.'; done++; index++; show();
+}
+$('save').addEventListener('click', save); $('skip').addEventListener('click', () => { index++; show(); });
+fetch('/api/images').then(r => r.json()).then(d => { classes = d.classes; targets = d.targets; images = d.images; total = d.total; done = d.done; $('targets').textContent = targets.slice(0, 12).map(name).join('، ') + '…'; show(); });
+</script>
+</body>
+</html>

@@ -186,4 +186,5 @@ def main():
     Path(out_path).write_text(json.dumps({"model": model_path, "splits": splits, "result": result}, indent=1), encoding="utf-8")
 
 
-main()
+if __name__ == "__main__":
+    main()
