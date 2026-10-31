@@ -87,7 +87,7 @@ export default function Vision() {
   const [registryNotice,setRegistryNotice]=useState('');
   useEffect(()=>{
     const abort=new AbortController();let active=true;
-    const refresh=()=>experimentalModels(abort.signal).then(models=>{if(active){setResearchModels(models);setSelectedModel(current=>current==='original'||current==='objects-yolox-tiny'||current==='objects-basira-v1'||current==='objects-basira-v2'||current==='objects-basira-v3'||models.some(model=>model.id===current)?current:'original');setRegistryNotice(models.length?'النماذج التجريبية متاحة للاختيار؛ لم تتغير النسخة الأصلية.':'لا توجد نماذج تجريبية محلية مسجلة.');}}).catch(()=>{if(active)setRegistryNotice('قائمة التجربة غير متاحة؛ يبقى النموذج الأصلي متاحًا.');});
+    const refresh=()=>experimentalModels(abort.signal).then(models=>{if(active){setResearchModels(models);setSelectedModel(current=>current==='original'||current==='objects-yolox-tiny'||current==='objects-basira-v1'||current==='objects-basira-v2'||current==='objects-basira-v3'||current==='objects-yolox-s'||models.some(model=>model.id===current)?current:'original');setRegistryNotice(models.length?'النماذج التجريبية متاحة للاختيار؛ لم تتغير النسخة الأصلية.':'لا توجد نماذج تجريبية محلية مسجلة.');}}).catch(()=>{if(active)setRegistryNotice('قائمة التجربة غير متاحة؛ يبقى النموذج الأصلي متاحًا.');});
     void refresh();const timer=window.setInterval(()=>void refresh(),15000);
     return()=>{active=false;abort.abort();window.clearInterval(timer);};
   },[]);
