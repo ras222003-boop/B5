@@ -50,6 +50,27 @@ def embed(session, name, img):
     return v / (np.linalg.norm(v) + 1e-9)
 
 
+DINO = "C:/Users/Asus/basira-ml/data/dinov2/model_uint8.onnx"
+
+
+def dino_session():
+    return ort.InferenceSession(DINO, providers=["CPUExecutionProvider"])
+
+
+def dino_embed(session, img):
+    """Per preprocessor_config.json: resize shortest edge to 256 (bicubic), centre crop 224, ImageNet mean/std.
+    Embedding = the CLS token (fixed before any result was seen)."""
+    w, h = img.size
+    r = 256 / min(w, h)
+    img = img.resize((max(224, round(w * r)), max(224, round(h * r))), Image.BICUBIC)
+    w, h = img.size
+    img = img.crop(((w - 224) // 2, (h - 224) // 2, (w - 224) // 2 + 224, (h - 224) // 2 + 224))
+    x = (np.asarray(img, dtype=np.float32) / 255 - np.array([0.485, 0.456, 0.406], np.float32)) / np.array([0.229, 0.224, 0.225], np.float32)
+    out = session.run(None, {session.get_inputs()[0].name: x.transpose(2, 0, 1)[None].astype(np.float32)})[0]
+    v = out[0, 0]
+    return v / (np.linalg.norm(v) + 1e-9)
+
+
 def remove_overlay(path):
     """Inpaint the owner's mint/red outline and white label pill so the model cannot read the annotation."""
     bgr = cv2.imread(str(path))
@@ -61,12 +82,18 @@ def remove_overlay(path):
 
 def main():
     syn_dir, manifest_path, images_dir, extra, out_path = sys.argv[1:6]
-    session, name = build_extractor()
+    use_dino = "--dino" in sys.argv
+    if use_dino:
+        session, name = dino_session(), "dinov2-small-uint8-cls"
+        embed_fn = lambda im: dino_embed(session, im)
+    else:
+        session, name = build_extractor()
+        embed_fn = lambda im: embed(session, name, im)
     meta = json.loads((Path(syn_dir) / "index.json").read_text(encoding="utf-8"))
     classes = sorted({m["class"] for m in meta})
     train_x, train_y = [], []
     for m in meta:
-        train_x.append(embed(session, name, Image.open(Path(syn_dir) / m["file"]).convert("RGB")))
+        train_x.append(embed_fn(Image.open(Path(syn_dir) / m["file"]).convert("RGB")))
         train_y.append(classes.index(m["class"]))
     train_x, train_y = np.array(train_x), np.array(train_y)
     samples = json.loads(Path(manifest_path).read_text(encoding="utf-8"))["samples"]
@@ -82,7 +109,7 @@ def main():
     ctrl /= np.linalg.norm(ctrl, axis=1, keepdims=True)
     rows, ok1, ok3, okc = [], 0, 0, 0
     for cls, img in test:
-        e = embed(session, name, img)
+        e = embed_fn(img)
         sims = centroids @ e
         order = np.argsort(-sims)
         top = [classes[i] for i in order[:3]]
@@ -99,4 +126,5 @@ def main():
         print(f"{r['truth']:16s} -> {r['top3']}  sim={r['bestSimilarity']} margin={r['margin']}")
 
 
-main()
+if __name__ == "__main__":
+    main()

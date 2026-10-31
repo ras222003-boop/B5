@@ -1,0 +1,153 @@
+{
+ "feature": "dinov2-small-uint8-cls",
+ "trainImages": 840,
+ "classes": 14,
+ "realTestItems": 14,
+ "top1": 10,
+ "top3": 12,
+ "shuffledLabelControlTop1": 0,
+ "chanceTop1": 1.0,
+ "items": [
+  {
+   "truth": "air_fryer",
+   "top3": [
+    "air_fryer",
+    "kettle",
+    "robot_vacuum"
+   ],
+   "bestSimilarity": 0.303,
+   "margin": 0.02
+  },
+  {
+   "truth": "kettle",
+   "top3": [
+    "kettle",
+    "air_fryer",
+    "fridge"
+   ],
+   "bestSimilarity": 0.286,
+   "margin": 0.087
+  },
+  {
+   "truth": "trash_bin",
+   "top3": [
+    "trash_bin",
+    "air_fryer",
+    "kettle"
+   ],
+   "bestSimilarity": 0.292,
+   "margin": 0.129
+  },
+  {
+   "truth": "microwave_oven",
+   "top3": [
+    "microwave_oven",
+    "trash_bin",
+    "dishwasher"
+   ],
+   "bestSimilarity": 0.163,
+   "margin": 0.024
+  },
+  {
+   "truth": "fridge",
+   "top3": [
+    "fridge",
+    "wardrobe",
+    "dishwasher"
+   ],
+   "bestSimilarity": 0.322,
+   "margin": 0.023
+  },
+  {
+   "truth": "water_dispenser",
+   "top3": [
+    "air_fryer",
+    "fridge",
+    "pressure_cooker"
+   ],
+   "bestSimilarity": 0.28,
+   "margin": 0.003
+  },
+  {
+   "truth": "split_ac",
+   "top3": [
+    "fridge",
+    "split_ac",
+    "dishwasher"
+   ],
+   "bestSimilarity": 0.415,
+   "margin": 0.024
+  },
+  {
+   "truth": "dishwasher",
+   "top3": [
+    "dishwasher",
+    "wardrobe",
+    "fridge"
+   ],
+   "bestSimilarity": 0.321,
+   "margin": 0.031
+  },
+  {
+   "truth": "wardrobe",
+   "top3": [
+    "wardrobe",
+    "fridge",
+    "bathroom_scale"
+   ],
+   "bestSimilarity": 0.397,
+   "margin": 0.177
+  },
+  {
+   "truth": "window_ac",
+   "top3": [
+    "window_ac",
+    "oil_heater",
+    "microwave_oven"
+   ],
+   "bestSimilarity": 0.37,
+   "margin": 0.002
+  },
+  {
+   "truth": "bathroom_scale",
+   "top3": [
+    "window_ac",
+    "bathroom_scale",
+    "split_ac"
+   ],
+   "bestSimilarity": 0.407,
+   "margin": 0.037
+  },
+  {
+   "truth": "robot_vacuum",
+   "top3": [
+    "robot_vacuum",
+    "split_ac",
+    "bathroom_scale"
+   ],
+   "bestSimilarity": 0.189,
+   "margin": 0.053
+  },
+  {
+   "truth": "pressure_cooker",
+   "top3": [
+    "air_fryer",
+    "kettle",
+    "trash_bin"
+   ],
+   "bestSimilarity": 0.179,
+   "margin": 0.034
+  },
+  {
+   "truth": "oil_heater",
+   "top3": [
+    "oil_heater",
+    "window_ac",
+    "fridge"
+   ],
+   "bestSimilarity": 0.466,
+   "margin": 0.253
+  }
+ ],
+ "meaning": "Feasibility signal on 14 real photos only; trained on unapproved drawings; not an accuracy measurement."
+}
