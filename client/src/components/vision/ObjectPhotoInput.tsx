@@ -3,7 +3,7 @@ import type { VisionDetection, VisionProvider } from "@shared/vision";
 import { openObjectProvider } from "@/lib/vision/workerObjectProvider";
 import { DEFAULT_VISION_CONFIG } from "@/lib/vision/config";
 import { sampleColorFrame, colorDescription } from "@/lib/vision/objectColors";
-import { analyzeColour } from "@/lib/vision/colourEngine";
+import { analyzeColour, getColourEngine, colourEngineLabel } from "@/lib/vision/colourEngine";
 import { objectLabel } from "@/lib/vision/cocoLabels";
 import type { VisionCopy } from "@/lib/vision/scene";
 import type { ObjectQualityProfile } from "@shared/objectQuality";
@@ -38,7 +38,8 @@ export function ObjectPhotoInput({
     [notice, setNotice] = useState(""),
     [busy, setBusy] = useState(false),
     [rights, setRights] = useState(false),
-    [milliseconds, setMilliseconds] = useState<number | null>(null);
+    [milliseconds, setMilliseconds] = useState<number | null>(null),
+    [ranWith, setRanWith] = useState<{ model: string; engine: string } | null>(null);
   const [analysisId, setAnalysisId] = useState(0);
   const release = () => {
     generation.current++;
@@ -129,6 +130,10 @@ export function ObjectPhotoInput({
         }));
       setRows(result);
       setMilliseconds(performance.now() - started);
+      setRanWith({
+        model: profile?.name ?? "EfficientDet-Lite0 الأصلي",
+        engine: colourEngineLabel(getColourEngine()),
+      });
       const ctx = target.getContext("2d")!;
       ctx.strokeStyle = "#fde68a";
       ctx.lineWidth = Math.max(2, target.width / 250);
@@ -271,7 +276,8 @@ export function ObjectPhotoInput({
         ))}
       </ol>
       {milliseconds !== null && (
-        <p>
+        <p data-testid="photo-run-summary">
+          {ranWith ? `النموذج: ${ranWith.model} · محرك الألوان: ${ranWith.engine}. ` : ""}
           زمن الكشف وتحليل اللون: {milliseconds.toFixed(1)} ms. لون الصورة
           الواحدة تقدير دون تثبيت زمني.
         </p>
